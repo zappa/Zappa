@@ -1629,11 +1629,24 @@ class Zappa:
         )
         waiter.wait(LoadBalancerArns=[load_balancer_arn], WaiterConfig={"Delay": 3})
 
-        # Match the lambda timeout on the load balancer.
-        self.elbv2_client.modify_load_balancer_attributes(
-            LoadBalancerArn=load_balancer_arn,
-            Attributes=[{"Key": "idle_timeout.timeout_seconds", "Value": str(timeout)}],
-        )
+        if not 'LoadBalancerArn' in alb_vpc_config:# Match the lambda timeout on the load balancer.
+            self.elbv2_client.modify_load_balancer_attributes(
+                LoadBalancerArn=load_balancer_arn,
+                Attributes=[{
+                    'Key': 'idle_timeout.timeout_seconds',
+                    'Value': str(timeout)
+                }]
+            )
+        else:
+            response = self.elbv2_client.describe_load_balancer_attributes(
+                LoadBalancerArn=load_balancer_arn
+            )
+            if not "Attributes" in response:
+                raise EnvironmentError("Failed to check LoadBalancer Attributes")
+            alb_timeout = next( attrib for attrib in response["Attributes"] if attrib["Key"] == "idle_timeout.timeout_seconds")
+	    if alb_timeout["Value"] <> str(timeout):
+                print('Warning: The Lambda and ALB timeout values do not match, you might want to check this: lambda: {} secs, ALB: {} secs'.format(timeout, alb_timeout["Value"])
+)
 
         # Create/associate target group.
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/elbv2.html#ElasticLoadBalancingv2.Client.create_target_group
@@ -1789,7 +1802,8 @@ class Zappa:
                 )
             else:
                 listener_arn = response["Listeners"][0]["ListenerArn"]
-            if "LoadBalancerArn" not in alb_vpc_config:
+
+            if 'LoadBalancerArn' not in alb_vpc_config:
                 # Remove the listener. This explicit deletion of the listener seems necessary to avoid ResourceInUseExceptions when deleting target groups.
                 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/elbv2.html#ElasticLoadBalancingv2.Client.delete_listener
                 response = self.elbv2_client.delete_listener(ListenerArn=listener_arn)
