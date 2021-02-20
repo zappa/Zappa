@@ -9,6 +9,7 @@ Deploy arbitrary Python programs as serverless Zappa applications.
 """
 from past.builtins import basestring
 from builtins import input, bytes
+from typing import Dict
 
 import argcomplete
 import argparse
@@ -115,7 +116,7 @@ class ZappaCLI:
     xray_tracing = False
     aws_kms_key_arn = ''
     context_header_mappings = None
-    tags = []
+    tags: Dict[str, str] = {}
     layers = None
 
     stage_name_env_pattern = re.compile('^[a-zA-Z0-9_]+$')
