@@ -754,11 +754,11 @@ class Zappa:
         archivef.close()
 
         # Trash the temp directory
-        shutil.rmtree(temp_project_path)
-        shutil.rmtree(temp_package_path)
+        shutil.rmtree(temp_project_path, ignore_errors=True)
+        shutil.rmtree(temp_package_path, ignore_errors=True)
         if os.path.isdir(venv) and slim_handler:
             # Remove the temporary handler venv folder
-            shutil.rmtree(venv)
+            shutil.rmtree(venv, ignore_errors=True)
 
         return archive_fname
 
