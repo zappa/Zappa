@@ -7,4 +7,5 @@ nose
 nose-timer
 placebo
 mypy
+isort
 
