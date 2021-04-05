@@ -48,6 +48,8 @@ hjson==3.0.2
     # via -r requirements.in
 idna==2.10
     # via requests
+isort==5.8.0
+    # via -r test_requirements.in
 itsdangerous==1.1.0
     # via flask
 jinja2==2.11.3
