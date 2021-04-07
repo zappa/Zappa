@@ -160,7 +160,7 @@ class LambdaAsyncResponse:
         self.capture_response = capture_response
 
 
-    def send(self, task_path, args, kwargs):
+    def send(self, task_path, args, kwargs, qualifier):
         """
         Create the message object and pass it to the actual sender.
         """
@@ -171,10 +171,10 @@ class LambdaAsyncResponse:
                 'args': args,
                 'kwargs': kwargs
             }
-        self._send(message)
+        self._send(message, qualifier)
         return self
 
-    def _send(self, message):
+    def _send(self, message, qualifier):
         """
         Given a message, directly invoke the lamdba function for this task.
         """
@@ -185,7 +185,8 @@ class LambdaAsyncResponse:
         self.response = self.client.invoke(
                                     FunctionName=self.lambda_function_name,
                                     InvocationType='Event', #makes the call async
-                                    Payload=payload
+                                    Payload=payload,
+                                    Qualifier=qualifier if qualifier else os.environ.get('AWS_LAMBDA_FUNCTION_VERSION')
                                 )
         self.sent = (self.response.get('StatusCode', 0) == 202)
 
@@ -333,7 +334,7 @@ def run_message(message):
 
 
 def run(func, args=[], kwargs={}, service='lambda', capture_response=False,
-        remote_aws_lambda_function_name=None, remote_aws_region=None, **task_kwargs):
+        remote_aws_lambda_function_name=None, remote_aws_region=None, alias_or_version=None, **task_kwargs):
     """
     Instead of decorating a function with @task, you can just run it directly.
     If you were going to do func(*args, **kwargs), then you will call this:
@@ -354,7 +355,7 @@ def run(func, args=[], kwargs={}, service='lambda', capture_response=False,
     return ASYNC_CLASSES[service](lambda_function_name=lambda_function_name,
                                   aws_region=aws_region,
                                   capture_response=capture_response,
-                                  **task_kwargs).send(task_path, args, kwargs)
+                                  **task_kwargs).send(task_path, args, kwargs, alias_or_version)
 
 
 # Handy:
@@ -373,6 +374,7 @@ def task(*args, **kwargs):
         service (str): either 'lambda' or 'sns'
         remote_aws_lambda_function_name (str): the name of a remote lambda function to call with this task
         remote_aws_region (str): the name of a remote region to make lambda/sns calls against
+        alias_or_version (str): the alias or version to call if the service is 'lambda'
 
     Returns:
         A replacement function that dispatches func() to
@@ -387,11 +389,13 @@ def task(*args, **kwargs):
         service = 'lambda'
         lambda_function_name_arg = None
         aws_region_arg = None
+        alias_or_version = None
 
     else:  # Arguments were passed
         service = kwargs.get('service', 'lambda')
         lambda_function_name_arg = kwargs.get('remote_aws_lambda_function_name')
         aws_region_arg = kwargs.get('remote_aws_region')
+        alias_or_version = kwargs.get('alias_or_version')
 
     capture_response = kwargs.get('capture_response', False)
 
@@ -425,7 +429,7 @@ def task(*args, **kwargs):
             if (service in ASYNC_CLASSES) and (lambda_function_name):
                 send_result = ASYNC_CLASSES[service](lambda_function_name=lambda_function_name,
                                                      aws_region=aws_region,
-                                                     capture_response=capture_response).send(task_path, args, kwargs)
+                                                     capture_response=capture_response).send(task_path, args, kwargs, alias_or_version)
                 return send_result
             else:
                 return func(*args, **kwargs)
