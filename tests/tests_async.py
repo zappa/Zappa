@@ -89,4 +89,4 @@ class TestZappa(unittest.TestCase):
                                              capture_response=False,
                                              lambda_function_name="MyLambda")
         lambda_async_mock.return_value.send.assert_called_with(
-            get_func_task_path(async_me), ("qux",), {})
+            get_func_task_path(async_me), ("qux",), {}, None)
