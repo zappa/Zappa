@@ -1161,7 +1161,12 @@ class Zappa:
             versions_in_lambda.remove('$LATEST')
             # Delete older revisions if their number exceeds the specified limit
             for version in versions_in_lambda[::-1][num_revisions:]:
-                self.lambda_client.delete_function(FunctionName=function_name,Qualifier=version)
+                try:
+                    self.lambda_client.delete_function(FunctionName=function_name,Qualifier=version)
+                except botocore.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'ResourceConflictException':
+                        continue
+                    raise
 
         return resource_arn
 
