@@ -67,10 +67,12 @@ def create_wsgi_request(event_info,
 
         # Extract remote user from context if Authorizer is enabled
         remote_user = None
-        if event_info['requestContext'].get('authorizer'):
-            remote_user = event_info['requestContext']['authorizer'].get('principalId')
-        elif event_info['requestContext'].get('identity'):
-            remote_user = event_info['requestContext']['identity'].get('userArn')
+        # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
+        if event_info.get('requestContext', None):
+          if event_info['requestContext'].get('authorizer'):
+              remote_user = event_info['requestContext']['authorizer'].get('principalId')
+          elif event_info['requestContext'].get('identity'):
+              remote_user = event_info['requestContext']['identity'].get('userArn')
 
         # Related:  https://github.com/Miserlou/Zappa/issues/677
         #           https://github.com/Miserlou/Zappa/issues/683
@@ -153,9 +155,11 @@ def create_wsgi_request(event_info,
 
         if remote_user:
             environ['REMOTE_USER'] = remote_user
-
-        if event_info['requestContext'].get('authorizer'):
-            environ['API_GATEWAY_AUTHORIZER'] = event_info['requestContext']['authorizer']
+        
+        # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
+        if event_info.get('requestContext', None):
+          if event_info['requestContext'].get('authorizer'):
+              environ['API_GATEWAY_AUTHORIZER'] = event_info['requestContext']['authorizer']
 
         return environ
 
