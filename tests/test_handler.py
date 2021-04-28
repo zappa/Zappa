@@ -3,6 +3,7 @@ import unittest
 
 from mock import Mock
 
+from tests.utils import is_base64
 from zappa.handler import LambdaHandler
 from zappa.utilities import merge_headers
 
@@ -224,6 +225,66 @@ class TestZappa(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 500)
         mocked_exception_handler.assert_called()
+
+    def test_wsgi_script_binary_support_base64_behavior(self):
+        """
+        With Binary Support enabled, response mimetypes that are not text/* or application/json will be base64 encoded
+        """
+        lh = LambdaHandler("tests.test_binary_support_settings")
+
+        text_plain_event = {
+            "body": "",
+            "resource": "/{proxy+}",
+            "requestContext": {},
+            "queryStringParameters": {},
+            "headers": {
+                "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
+            },
+            "pathParameters": {"proxy": "return/request/url"},
+            "httpMethod": "GET",
+            "stageVariables": {},
+            "path": "/textplain_mimetype_response1",
+        }
+
+        response = lh.handler(text_plain_event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertNotIn("isBase64Encoded", response)
+        self.assertFalse(is_base64(response["body"]))
+
+        text_arbitrary_event = {
+            **text_plain_event,
+            **{"path": "/textarbitrary_mimetype_response1"},
+        }
+
+        response = lh.handler(text_arbitrary_event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertNotIn("isBase64Encoded", response)
+        self.assertFalse(is_base64(response["body"]))
+
+        application_json_event = {
+            **text_plain_event,
+            **{"path": "/json_mimetype_response1"},
+        }
+
+        response = lh.handler(application_json_event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertNotIn("isBase64Encoded", response)
+        self.assertFalse(is_base64(response["body"]))
+
+        arbitrary_binary_event = {
+            **text_plain_event,
+            **{"path": "/arbitrarybinary_mimetype_response1"},
+        }
+
+        response = lh.handler(arbitrary_binary_event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertIn("isBase64Encoded", response)
+        self.assertTrue(response["isBase64Encoded"])
+        self.assertTrue(is_base64(response["body"]))
 
     def test_wsgi_script_on_cognito_event_request(self):
         """
