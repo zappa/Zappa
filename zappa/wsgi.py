@@ -68,7 +68,7 @@ def create_wsgi_request(event_info,
         # Extract remote user from context if Authorizer is enabled
         remote_user = None
         # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
-        if event_info.get('requestContext', None):
+        if "requestContext" in event_info:
           if event_info['requestContext'].get('authorizer'):
               remote_user = event_info['requestContext']['authorizer'].get('principalId')
           elif event_info['requestContext'].get('identity'):
@@ -157,7 +157,7 @@ def create_wsgi_request(event_info,
             environ['REMOTE_USER'] = remote_user
         
         # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
-        if event_info.get('requestContext', None):
+        if "requestContext" in event_info:
           if event_info['requestContext'].get('authorizer'):
               environ['API_GATEWAY_AUTHORIZER'] = event_info['requestContext']['authorizer']
 
