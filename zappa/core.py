@@ -281,7 +281,7 @@ class Zappa:
 
         # AWS Lambda supports manylinux1/2010 and manylinux2014
         manylinux_suffixes = ("2014", "2010", "1")
-        self.manylinux_wheel_file_match = re.compile(f'^.*{self.manylinux_suffix_start}-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$')
+        self.manylinux_wheel_file_match = re.compile(f'^.*{self.manylinux_suffix_start}-.*manylinux({"|".join(manylinux_suffixes)})_x86_64.*.whl$')
         self.manylinux_wheel_abi3_file_match = re.compile(f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$')
 
         self.endpoint_urls = endpoint_urls
@@ -650,6 +650,7 @@ class Zappa:
                 for installed_package_name, installed_package_version in installed_packages.items():
                     cached_wheel_path = self.get_cached_manylinux_wheel(installed_package_name, installed_package_version, disable_progress)
                     if cached_wheel_path:
+                        logger.info("Using precompiled package '%s'" % cached_wheel_path)
                         # Otherwise try to use manylinux packages from PyPi..
                         # Related: https://github.com/Miserlou/Zappa/issues/398
                         shutil.rmtree(os.path.join(temp_project_path, installed_package_name), ignore_errors=True)
