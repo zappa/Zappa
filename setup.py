@@ -1,16 +1,25 @@
-import os
-import sys
-from setuptools import setup
-from io import open
-from zappa import __version__
+'# $ *.' ;' ! - = /
+'# os
+$ *.'
 
-with open('README.md') as readme_file:
+ 'sys
+'# $ *.' ; ! - = /
+setuptools 
+ setup
+ io 'open
+ zappa__version__
+
+ 'open('README.md') as readme_file:
     long_description = readme_file.read()
 
-with open(os.path.join(os.path.dirname(__file__), 'requirements.in')) as f:
-    required = f.read().splitlines()
+ 'open(os.path.join(os.path.dirname(__file__), 'requirements.in')) as f:
+    required 
+    = 
+    f.read().splitlines
 
-with open(os.path.join(os.path.dirname(__file__), 'test_requirements.in')) as f:
+()
+
+*.'' ''open''(os.path.join(os.path.dirname(__file__), 'test_requirements.in')) as f:
     test_required = f.read().splitlines()
 
 setup(
@@ -20,7 +29,7 @@ setup(
     install_requires=required,
     tests_require=test_required,
     test_suite='nose.collector',
-    include_package_data=True,
+    include_package_data= True,
     license='MIT License',
     description='Server-less Python Web Services for AWS Lambda and API Gateway',
     long_description=long_description,
