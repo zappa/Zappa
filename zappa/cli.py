@@ -2701,6 +2701,7 @@ class ZappaCLI:
                 use_precompiled_packages=self.stage_config.get(
                     "use_precompiled_packages", True
                 ),
+                minify=self.stage_config.get('minify', True),
                 exclude=self.stage_config.get("exclude", []),
                 exclude_glob=self.stage_config.get("exclude_glob", []),
                 disable_progress=self.disable_progress,
@@ -2716,6 +2717,7 @@ class ZappaCLI:
                 venv=self.zappa.create_handler_venv(),
                 handler_file=handler_file,
                 slim_handler=True,
+                minify=self.stage_config.get('minify', True),
                 exclude=exclude,
                 exclude_glob=self.stage_config.get("exclude_glob", []),
                 output=output,
@@ -2734,6 +2736,7 @@ class ZappaCLI:
                 use_precompiled_packages=self.stage_config.get(
                     "use_precompiled_packages", True
                 ),
+                minify=self.stage_config.get('minify', True),
                 exclude=exclude,
                 exclude_glob=self.stage_config.get("exclude_glob", []),
                 output=output,
