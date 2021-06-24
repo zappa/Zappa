@@ -1557,7 +1557,9 @@ class Zappa:
             raise EnvironmentError(
                 "When creating an ALB, alb_vpc_config must be filled out in zappa_settings."
             )
-        if "LoadBalancerArn" in alb_vpc_config:
+
+        load_balancer_arn = alb_vpc_config.get("LoadBalancerArn", None)
+        if load_balancer_arn is not None:
             if not "alb_listener_rule_conditions" in alb_vpc_config:
                 raise EnvironmentError(
                     "When Specifing an ALB, you must supply a Listener Rule conditions for the listener."
@@ -1567,7 +1569,7 @@ class Zappa:
                     "When Specifing an ALB, you must supply a Listener Rule priority for the listener."
                 )
 
-            kwargs = dict(LoadBalancerArns=[alb_vpc_config["LoadBalancerArn"]])
+            kwargs = dict(LoadBalancerArns=[load_balancer_arn])
             response = self.elbv2_client.describe_load_balancers(**kwargs)
             if not (response["LoadBalancers"]) or len(response["LoadBalancers"]) != 1:
                 raise EnvironmentError(
@@ -1618,9 +1620,9 @@ class Zappa:
                         response["LoadBalancers"][0]["State"]["Reason"]
                     )
                 )
-        load_balancer_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
+            load_balancer_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
         load_balancer_dns = response["LoadBalancers"][0]["DNSName"]
-        load_balancer_vpc = response["LoadBalancers"][0]["VpcId"]
+
         waiter = self.elbv2_client.get_waiter("load_balancer_available")
         print(
             "Waiting for load balancer [{}] to become active..".format(
@@ -1630,7 +1632,7 @@ class Zappa:
         waiter.wait(LoadBalancerArns=[load_balancer_arn], WaiterConfig={"Delay": 3})
 
         if (
-            not "LoadBalancerArn" in alb_vpc_config
+            "LoadBalancerArn" not in alb_vpc_config
         ):  # Match the lambda timeout on the load balancer.
             self.elbv2_client.modify_load_balancer_attributes(
                 LoadBalancerArn=load_balancer_arn,
