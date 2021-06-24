@@ -826,8 +826,9 @@ to change Zappa's behavior. Use these at your own risk!
             "CertificateArn": "your_acm_certificate_arn", // ACM certificate ARN for ALB  - not required if LoadBalancerArn is specified
             "SubnetIds": [], // list of subnets for ALB
             "SecurityGroupIds": [] // list of security groups for ALB
-            // To use an existing ALB set LoadBalancerArn, alb_listener_rule_conditions, alb_listener_rule_priority
+            // To use an existing ALB set LoadBalancerArn, ListenerArn, alb_listener_rule_conditions, alb_listener_rule_priority
             "LoadBalancerArn": "your_alb_arn"
+            "ListenerArn": "your_alb_listener_arn"  // optional unless >1 listener exists on LoadBalancerArn
             "alb_listener_rule_conditions": {
                 "Field": "path-pattern",  //  one of host-header or path-pattern
                 "Values": ["*"]  // host: "api.example.com" OR path route: "api/*",  "v1"

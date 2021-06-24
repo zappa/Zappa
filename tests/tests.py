@@ -2537,6 +2537,7 @@ USE_TZ = True
         loadbalancer_arn = kwargs["alb_vpc_config"]["LoadBalancerArn"]
         targetgroup_arn = str(uuid.uuid4())
         listener_arn = str(uuid.uuid4())
+        print(f"LISTENER_ARN = {listener_arn}")
 
         for _ in range(2):
             elbv2_stubber.add_response(

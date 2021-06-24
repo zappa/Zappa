@@ -1708,13 +1708,16 @@ class Zappa:
             kwargs = dict(
                 LoadBalancerArn=load_balancer_arn,
             )
-            response = self.elbv2_client.describe_listeners(**kwargs)
-            if not (response["Listeners"]) or len(response["Listeners"]) != 1:
-                raise EnvironmentError(
-                    "Failure to load listeners for ALB. or more than 1 found, Response was in unexpected format. Response was: {}".format(
-                        repr(response)
+            listener_arn = alb_vpc_config.get("ListenerArn", None)
+            if listener_arn is None:
+                response = self.elbv2_client.describe_listeners(**kwargs)
+                if not (response["Listeners"]) or len(response["Listeners"]) != 1:
+                    raise EnvironmentError(
+                        "Failure to load listeners for ALB. or more than 1 found, Response was in unexpected format. Response was: {}".format(
+                            repr(response)
+                        )
                     )
-                )
+                listener_arn = response["Listeners"][0]["ListenerArn"]
 
             kwargs = dict(
                 Actions=[
@@ -1723,7 +1726,7 @@ class Zappa:
                         "TargetGroupArn": target_group_arn,
                     }
                 ],
-                ListenerArn=response["Listeners"][0]["ListenerArn"],
+                ListenerArn=listener_arn,
                 Conditions=alb_vpc_config["alb_listener_rule_conditions"],
                 Priority=alb_vpc_config["alb_listener_rule_priority"],
             )
@@ -1798,19 +1801,20 @@ class Zappa:
                     )
                 load_balancer_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
 
-            # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/elbv2.html#ElasticLoadBalancingv2.Client.describe_listeners
-            response = self.elbv2_client.describe_listeners(
-                LoadBalancerArn=load_balancer_arn
-            )
-            if not (response["Listeners"]):
-                print("No listeners found.")
-            elif len(response["Listeners"]) > 1:
-                raise EnvironmentError(
-                    "Failure to locate/delete listener for ALB named [{}]. Response was: {}".format(
-                        lambda_name, repr(response)
-                    )
+            listener_arn = alb_vpc_config.get("ListenerArn", None)
+            if listener_arn is None:
+                # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/elbv2.html#ElasticLoadBalancingv2.Client.describe_listeners
+                response = self.elbv2_client.describe_listeners(
+                    LoadBalancerArn=load_balancer_arn
                 )
-            else:
+                if not (response["Listeners"]):
+                    print("No listeners found.")
+                elif len(response["Listeners"]) > 1:
+                    raise EnvironmentError(
+                        "Failure to locate/delete listener for ALB named [{}]. Response was: {}".format(
+                            lambda_name, repr(response)
+                        )
+                    )
                 listener_arn = response["Listeners"][0]["ListenerArn"]
 
             if "LoadBalancerArn" not in alb_vpc_config:
