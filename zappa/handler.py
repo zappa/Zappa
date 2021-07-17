@@ -583,7 +583,16 @@ class LambdaHandler:
                         )
 
                     if response.data:
-                        if (
+                        if settings.BINARY_SUPPORT and response.headers.get(
+                            "Content-Encoding"
+                        ):
+                            # We could have a text response that's gzip
+                            # encoded. Therefore, we base-64 encode it.
+                            zappa_returndict["body"] = base64.b64encode(
+                                response.data
+                            ).decode("utf-8")
+                            zappa_returndict["isBase64Encoded"] = True
+                        elif (
                             settings.BINARY_SUPPORT
                             and not response.mimetype.startswith("text/")
                             and response.mimetype != "application/json"
