@@ -449,6 +449,95 @@ class TestZappa(unittest.TestCase):
         }
         self.assertEqual("AWS SQS EVENT", lh.handler(event, None))
 
+        # Test AWS ActiveMQ event
+        event = {
+            "eventSource": "aws:amq",
+            "eventSourceArn": "arn:aws:mq:1",
+            "messages": [
+                {
+                    "messageID": "ID:b-9bcfa592-423a-4942-879d-eb284b418fc8-1.mq.us-west-2.amazonaws.com-37557-1234520418293-4:1:1:1:1",
+                    "messageType": "jms/text-message",
+                    "data": "QUJDOkFBQUE=",
+                    "connectionId": "myJMSCoID",
+                    "redelivered": False,
+                    "destination": {
+                    "physicalname": "testQueue" 
+                    }, 
+                    "timestamp": 1598827811958,
+                    "brokerInTime": 1598827811958,
+                    "brokerOutTime": 1598827811959
+                },
+                {
+                    "messageID": "ID:b-9bcfa592-423a-4942-879d-eb284b418fc8-1.mq.us-west-2.amazonaws.com-37557-1234520418293-4:1:1:1:1",
+                    "messageType":"jms/bytes-message",
+                    "data": "3DTOOW7crj51prgVLQaGQ82S48k=",
+                    "connectionId": "myJMSCoID1",
+                    "persistent": False,
+                    "destination": {
+                    "physicalname": "testQueue" 
+                    }, 
+                    "timestamp": 1598827811958,
+                    "brokerInTime": 1598827811958,
+                    "brokerOutTime": 1598827811959
+                }
+            ]
+        }
+        self.assertEqual("AWS MQ EVENT", lh.handler(event, None))
+
+        # Test AWS RabbitMQ event
+        event = {
+            "eventSource": "aws:rmq",
+            "eventSourceArn": "arn:aws:mq:1",
+            "rmqMessagesByQueue": {
+                "test::/": [
+                    {
+                        "basicProperties": {
+                        "contentType": "text/plain",
+                        "contentEncoding": None,
+                        "headers": {
+                            "header1": {
+                            "bytes": [
+                                118,
+                                97,
+                                108,
+                                117,
+                                101,
+                                49
+                            ]
+                            },
+                            "header2": {
+                            "bytes": [
+                                118,
+                                97,
+                                108,
+                                117,
+                                101,
+                                50
+                            ]
+                            },
+                            "numberInHeader": 10
+                        },
+                        "deliveryMode": 1,
+                        "priority": 34,
+                        "correlationId": None,
+                        "replyTo": None,
+                        "expiration": "60000",
+                        "messageId": None,
+                        "timestamp": "Jan 1, 1970, 12:33:41 AM",
+                        "type": None,
+                        "userId": "AIDACKCEVSQ6C2EXAMPLE",
+                        "appId": None,
+                        "clusterId": None,
+                        "bodySize": 80
+                        },
+                        "redelivered": False,
+                        "data": "eyJ0aW1lb3V0IjowLCJkYXRhIjoiQ1pybWYwR3c4T3Y0YnFMUXhENEUifQ=="
+                    }
+                ]
+            }
+        }
+        self.assertEqual("AWS MQ EVENT", lh.handler(event, None))
+
         # Test Authorizer event
         event = {
             "authorizationToken": "hubtoken1",
