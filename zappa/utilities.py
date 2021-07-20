@@ -370,8 +370,7 @@ def get_event_source(
             if self.filters:
                 self.add_filters(function)
 
-    # Mostly adapted from kappa - will probably be replaced by kappa support
-    class MQEventSource(kappa.event_source.base.EventSource):
+    class MqEventSource(kappa.event_source.base.EventSource):
         def __init__(self, context, config):
             super().__init__(context, config)
             self._lambda = kappa.awsclient.create_client("lambda", context.session)
@@ -482,7 +481,7 @@ def get_event_source(
         "sns": ExtendedSnsEventSource,
         "sqs": SqsEventSource,
         "events": kappa.event_source.cloudwatch.CloudWatchEventSource,
-        "mq": MQEventSource,
+        "mq": MqEventSource,
     }
 
     arn = event_source["arn"]
