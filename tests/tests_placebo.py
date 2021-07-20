@@ -451,7 +451,7 @@ class TestZappa(unittest.TestCase):
 
         # Test AWS ActiveMQ event
         event = {
-            "eventSource": "aws:amq",
+            "eventSource": "aws:mq",
             "eventSourceArn": "arn:aws:mq:1",
             "messages": [
                 {
@@ -486,7 +486,7 @@ class TestZappa(unittest.TestCase):
 
         # Test AWS RabbitMQ event
         event = {
-            "eventSource": "aws:rmq",
+            "eventSource": "aws:mq",
             "eventSourceArn": "arn:aws:mq:1",
             "rmqMessagesByQueue": {
                 "test::/": [

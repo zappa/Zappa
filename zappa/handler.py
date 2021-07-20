@@ -327,9 +327,7 @@ class LambdaHandler:
             arn = record.get("eventSourceARN")
         elif "eventSource" in record and record.get("eventSource") == "aws:sqs":
             arn = record.get("eventSourceARN")
-        elif "eventSource" in record and record.get("eventSource") == "aws:amq":
-            arn = record.get("eventSourceArn")
-        elif "eventSource" in record and record.get("eventSource") == "aws:rmq":
+        elif "eventSource" in record and record.get("eventSource") == "aws:mq":
             arn = record.get("eventSourceArn")
         elif "s3" in record:
             arn = record["s3"]["bucket"]["arn"]
