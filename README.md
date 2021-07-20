@@ -469,7 +469,7 @@ However, it's now far easier to use Route 53-based DNS authentication, which wil
 
 ## Executing in Response to AWS Events
 
-Similarly, you can have your functions execute in response to events that happen in the AWS ecosystem, such as S3 uploads, DynamoDB entries, Kinesis streams, SNS messages, and SQS queues.
+Similarly, you can have your functions execute in response to events that happen in the AWS ecosystem, such as S3 uploads, DynamoDB entries, Kinesis streams, SNS messages, and SQS/MQ queues.
 
 In your *zappa_settings.json* file, define your [event sources](http://docs.aws.amazon.com/lambda/latest/dg/invoking-lambda-function.html) and the function you wish to execute. For instance, this will execute `your_module.process_upload_function` in response to new objects in your `my-bucket` S3 bucket. Note that `process_upload_function` must accept `event` and `context` parameters.
 
@@ -578,6 +578,26 @@ Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/late
                     "batch_size": 10, // Max: 10. Use 1 to trigger immediate processing
                     "enabled": true // Default is false
                }
+           }
+       ]
+```
+
+[MQ](https://docs.aws.amazon.com/lambda/latest/dg/with-mq.html) simarly to SQS, is also pulling messages from a stream.
+
+```javascript
+       "events": [
+           {
+               "function": "your_module.process_messages",
+               "event_source": {
+                    "arn":  "arn:aws:mq:us-east-1:12341234:broker:broker-name:broker-id",
+                    "batch_size": 1,
+                    "enabled": true,
+                    "queues": ["queue-name"],
+                    "source_access_configuration": [{
+                        "Type": "BASIC_AUTH",
+                        "URI": "arn:aws:secretsmanager:us-east-1:12341234:secret:my-super-secret"
+                    }]
+                }
            }
        ]
 ```
