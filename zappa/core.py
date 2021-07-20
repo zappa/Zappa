@@ -2413,8 +2413,8 @@ class Zappa:
             auth_type = authorizer.get("type", "CUSTOM")
 
         # build a fresh template
-        self.cf_template = troposphere.Template()
-        self.cf_template.add_description("Automatically generated with Zappa")
+        self.cf_template = troposphere.Template(Description="Automatically generated with Zappa")
+        # self.cf_template.add_description("Automatically generated with Zappa")
         self.cf_api_resources = []
         self.cf_parameters = {}
 
