@@ -3,7 +3,7 @@ boto3>=1.17.28
 durationpy
 hjson
 jmespath
-kappa==0.7.0
+kappa==0.7.1
 pip>=9.0.1
 python-dateutil
 python-slugify

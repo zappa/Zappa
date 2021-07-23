@@ -73,7 +73,7 @@ jmespath==0.10.0
     #   -r requirements.in
     #   boto3
     #   botocore
-kappa==0.7.0
+kappa==0.7.1
     # via -r requirements.in
 markupsafe==1.1.1
     # via jinja2
