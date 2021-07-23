@@ -2928,20 +2928,25 @@ class Zappa:
         """
         Remove obsolete policy statements to prevent policy from bloating over the limit after repeated updates.
         """
+
+        # The permissions for s3 services are managed in kappa package
+        excluded_service = "s3.amazonaws.com"
+
         try:
             policy_response = self.lambda_client.get_policy(FunctionName=lambda_name)
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    delete_response = self.lambda_client.remove_permission(
-                        FunctionName=lambda_name, StatementId=s["Sid"]
-                    )
-                    if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
-                        logger.error(
-                            "Failed to delete an obsolete policy statement: {}".format(
-                                policy_response
-                            )
+                    if excluded_service not in str(s["Principal"]):
+                        delete_response = self.lambda_client.remove_permission(
+                            FunctionName=lambda_name, StatementId=s["Sid"]
                         )
+                        if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
+                            logger.error(
+                                "Failed to delete an obsolete policy statement: {}".format(
+                                    policy_response
+                                )
+                            )
             else:
                 logger.debug(
                     "Failed to load Lambda function policy: {}".format(policy_response)
@@ -3005,6 +3010,7 @@ class Zappa:
             events=events,
             excluded_source_services=pull_services,
         )
+
         for event in events:
             function = event["function"]
             expression = event.get("expression", None)  # single expression
@@ -3119,7 +3125,8 @@ class Zappa:
             elif event_source:
                 service = self.service_from_arn(event_source["arn"])
 
-                if service not in pull_services:
+                # The permissions for s3 services are managed in kappa package
+                if service != "s3" and service not in pull_services:
                     svc = ",".join(event["event_source"]["events"])
                     self.create_event_permission(
                         lambda_name,
