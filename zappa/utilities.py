@@ -449,7 +449,7 @@ def get_event_source(
         "s3": ImprovedS3EventSource,
         "sns": ExtendedSnsEventSource,
         "sqs": SqsEventSource,
-        "events": kappa.event_source.cloudwatch.CloudWatchEventSource
+        "events": kappa.event_source.cloudwatch.CloudWatchEventSource,
     }
 
     arn = event_source["arn"]
