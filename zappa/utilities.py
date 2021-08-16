@@ -380,10 +380,10 @@ def get_event_source(
     class ImprovedS3EventSource(kappa.event_source.base.EventSource):
         def __init__(self, context, config):
             super(ImprovedS3EventSource, self).__init__(context, config)
-            self._s3 = kappa.awsclient.create_client('s3', context.session)
+            self._s3 = kappa.awsclient.create_client("s3", context.session)
 
         def _get_bucket_name(self):
-            return self.arn.split(':')[-1]
+            return self.arn.split(":")[-1]
 
         # this method is overridden / implemented below but I wanted the placeholder here for clarity and to make IDEs
         # less cranky
@@ -392,64 +392,64 @@ def get_event_source(
 
         def add(self, function):
             event_config = {
-                'Id': self._make_notification_id(function.name),
-                'Events': [e for e in self._config['events']],
-                'LambdaFunctionArn': '%s:%s' % (function.arn, function._context.environment),
+                "Id": self._make_notification_id(function.name),
+                "Events": [e for e in self._config["events"]],
+                "LambdaFunctionArn": "%s:%s" % (function.arn, function._context.environment),
             }
 
             # Add S3 key filters
-            if 'key_filters' in self._config:
-                filters_spec = {'Key': {'FilterRules': []}}
-                for key_filter in self._config['key_filters']:
-                    if 'type' in key_filter and 'value' in key_filter and key_filter['type'] in ('prefix', 'suffix'):
-                        rule = {'Name': key_filter['type'], 'Value': key_filter['value']}
-                        filters_spec['Key']['FilterRules'].append(rule)
-                event_config['Filter'] = filters_spec
+            if "key_filters" in self._config:
+                filters_spec = {"Key": {"FilterRules": []}}
+                for key_filter in self._config["key_filters"]:
+                    if "type" in key_filter and "value" in key_filter and key_filter["type"] in ("prefix", "suffix"):
+                        rule = {"Name": key_filter["type"], "Value": key_filter["value"]}
+                        filters_spec["Key"]["FilterRules"].append(rule)
+                event_config["Filter"] = filters_spec
 
             try:
-                bucket_config = self._s3.call('get_bucket_notification_configuration', Bucket=self._get_bucket_name())
-                del bucket_config['ResponseMetadata']
-                if 'LambdaFunctionConfigurations' in bucket_config:
-                    bucket_config['LambdaFunctionConfigurations'].append(event_config)
+                bucket_config = self._s3.call("get_bucket_notification_configuration", Bucket=self._get_bucket_name())
+                del bucket_config["ResponseMetadata"]
+                if "LambdaFunctionConfigurations" in bucket_config:
+                    bucket_config["LambdaFunctionConfigurations"].append(event_config)
                 else:
-                    bucket_config['LambdaFunctionConfigurations'] = [event_config]
+                    bucket_config["LambdaFunctionConfigurations"] = [event_config]
                 response = self._s3.call(
-                    'put_bucket_notification_configuration',
+                    "put_bucket_notification_configuration",
                     Bucket=self._get_bucket_name(),
                     NotificationConfiguration=bucket_config)
                 LOG.debug(response)
             except Exception as exc:
                 LOG.debug(exc.response)
-                LOG.exception('Unable to add S3 event source')
+                LOG.exception("Unable to add S3 event source")
 
         def remove(self, function):
-            LOG.debug('removing s3 notification')
-            bucket_config = self._s3.call('get_bucket_notification_configuration', Bucket=self._get_bucket_name())
+            LOG.debug("removing s3 notification")
+            bucket_config = self._s3.call("get_bucket_notification_configuration", Bucket=self._get_bucket_name())
             LOG.debug(bucket_config)
 
             new_config = []
-            for configuration in bucket_config.get('LambdaFunctionConfigurations', []):
-                if configuration['Id'] != self._make_notification_id(function.name):
+            for configuration in bucket_config.get("LambdaFunctionConfigurations", []):
+                if configuration["Id"] != self._make_notification_id(function.name):
                     new_config.append(configuration)
-            response = self._s3.call('put_bucket_notification_configuration', Bucket=self._get_bucket_name(),
-                                     NotificationConfiguration={'LambdaFunctionConfigurations': new_config})
+            response = self._s3.call("put_bucket_notification_configuration", Bucket=self._get_bucket_name(),
+                                     NotificationConfiguration={"LambdaFunctionConfigurations": new_config})
             LOG.debug(response)
 
         def status(self, function):
-            LOG.debug('status for s3 notification for %s', function.name)
-            bucket_config = self._s3.call('get_bucket_notification_configuration', Bucket=self._get_bucket_name())
+            LOG.debug("status for s3 notification for %s", function.name)
+            bucket_config = self._s3.call("get_bucket_notification_configuration", Bucket=self._get_bucket_name())
             LOG.debug(bucket_config)
-            for configuration in bucket_config.get('LambdaFunctionConfigurations', []):
-                if configuration['Id'] == self._make_notification_id(function.name):
-                    return {'LambdaFunctionConfiguration': configuration, 'State': 'Enabled'}
+            for configuration in bucket_config.get("LambdaFunctionConfigurations", []):
+                if configuration["Id"] == self._make_notification_id(function.name):
+                    return {"LambdaFunctionConfiguration": configuration, "State": "Enabled"}
 
     event_source_map = {
-        'dynamodb': kappa.event_source.dynamodb_stream.DynamoDBStreamEventSource,
-        'kinesis': kappa.event_source.kinesis.KinesisEventSource,
-        's3': ImprovedS3EventSource,
-        'sns': ExtendedSnsEventSource,
-        'sqs': SqsEventSource,
-        'events': kappa.event_source.cloudwatch.CloudWatchEventSource
+        "dynamodb": kappa.event_source.dynamodb_stream.DynamoDBStreamEventSource,
+        "kinesis": kappa.event_source.kinesis.KinesisEventSource,
+        "s3": ImprovedS3EventSource,
+        "sns": ExtendedSnsEventSource,
+        "sqs": SqsEventSource,
+        "events": kappa.event_source.cloudwatch.CloudWatchEventSource
     }
 
     arn = event_source["arn"]
