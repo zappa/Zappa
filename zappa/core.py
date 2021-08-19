@@ -481,6 +481,7 @@ class Zappa:
         zappa_things = [
             z for z in os.listdir(current_site_packages_dir) if z.lower()[:5] == "zappa"
         ]
+
         for z in zappa_things:
             copytree(
                 os.path.join(current_site_packages_dir, z),

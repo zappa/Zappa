@@ -31,6 +31,29 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+import gzip
+
+# Django uses 200 bytes, but we're going to use 2k
+MIN_GZIP_LENGTH = 2_048
+
+# Return (body, content_length) tuple
+def _get_gzipped_body(response):
+    # Not sure this should ever be there?
+    if response.headers.get("Content-Encoding"):
+        print("Already have Content-Encoding in response")
+        return None, None
+
+    # Don't waste time
+    if len(response.data) < MIN_GZIP_LENGTH:
+        # print("Small response")
+        return None, None
+
+    gzipped_body = gzip.compress(response.data)
+
+    return base64.b64encode(
+        gzipped_body
+    ).decode("utf-8"), len(gzipped_body)
+
 
 class LambdaHandler:
     """
@@ -100,10 +123,12 @@ class LambdaHandler:
             # checks if we are the slim_handler since this is not needed otherwise
             # https://github.com/Miserlou/Zappa/issues/776
             is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
+
             if is_slim_handler:
                 included_libraries = getattr(
                     self.settings, "INCLUDE", ["libmysqlclient.so.18"]
                 )
+
                 try:
                     from ctypes import cdll, util
 
@@ -582,6 +607,9 @@ class LambdaHandler:
                             "statusDescription", response.status
                         )
 
+                    content_encoding = None
+                    content_length = None
+
                     if response.data:
                         if (
                             settings.BINARY_SUPPORT
@@ -593,19 +621,39 @@ class LambdaHandler:
                             ).decode("utf-8")
                             zappa_returndict["isBase64Encoded"] = True
                         else:
-                            zappa_returndict["body"] = response.get_data(as_text=True)
+
+                            gzipped_body, gzipped_content_length = _get_gzipped_body(response)
+                            un_gzipped_body = response.get_data(as_text=True)
+
+                            if gzipped_body is not None and len(gzipped_body) < len(un_gzipped_body):
+                                print(f"Gzipping: {len(un_gzipped_body)} -> {len(gzipped_body)}")
+                                zappa_returndict["body"] = gzipped_body
+                                zappa_returndict["isBase64Encoded"] = True
+                                content_encoding = 'gzip'
+                                content_length = gzipped_content_length
+                            else:
+                                print(f"Skipping gzip: {len(un_gzipped_body)} -> {len(gzipped_body)}")
+                                zappa_returndict["body"] = un_gzipped_body
 
                     zappa_returndict["statusCode"] = response.status_code
                     if "headers" in event:
                         zappa_returndict["headers"] = {}
                         for key, value in response.headers:
                             zappa_returndict["headers"][key] = value
+                        if content_encoding is not None:
+                            zappa_returndict["headers"]["Content-Encoding"] = content_encoding
+                        if content_length is not None:
+                            zappa_returndict["headers"]['Content-Length'] = str(content_length)
                     if "multiValueHeaders" in event:
                         zappa_returndict["multiValueHeaders"] = {}
                         for key, value in response.headers:
                             zappa_returndict["multiValueHeaders"][
                                 key
                             ] = response.headers.getlist(key)
+                        if content_encoding is not None:
+                            zappa_returndict["multiValueHeaders"]["Content-Encoding"] = [content_encoding]
+                        if content_length is not None:
+                            zappa_returndict["multiValueHeaders"]['Content-Length'] = [str(content_length)]
 
                     # Calculate the total response time,
                     # and log it in the Common Log format.
