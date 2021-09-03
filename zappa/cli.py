@@ -173,6 +173,11 @@ class ZappaCLI:
         if "delete_zip" in settings:
             settings["delete_local_zip"] = settings.get("delete_zip")
 
+        # Backwards compatibility for endpoint_configuration property that was list instead of dict
+        # https://github.com/zappa/Zappa/issues/1024
+        if "endpoint_configuration" in settings and isinstance(settings["endpoint_configuration"], list):
+            settings["endpoint_configuration"] = {"Types": settings["endpoint_configuration"]}
+
         settings.update(self.stage_config_overrides)
 
         return settings
@@ -3326,7 +3331,8 @@ class ZappaCLI:
         # connect to the service, print a warning and let the user know
         # to check it manually.
         # See: https://github.com/Miserlou/Zappa/pull/1719#issuecomment-471341565
-        if "PRIVATE" in self.stage_config.get("endpoint_configuration", []):
+        endpoint_configuration = self.stage_config.get("endpoint_configuration", {})
+        if "Types" in endpoint_configuration and "PRIVATE" in endpoint_configuration["Types"]:
             print(
                 click.style("Warning!", fg="yellow", bold=True)
                 + " Since you're deploying a private API Gateway endpoint,"

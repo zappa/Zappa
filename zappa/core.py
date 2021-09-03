@@ -1803,13 +1803,17 @@ class Zappa:
             description = "Created automatically by Zappa."
         restapi.Description = description
         endpoint_configuration = (
-            [] if endpoint_configuration is None else endpoint_configuration
+            {} if endpoint_configuration is None else endpoint_configuration
         )
         if self.boto_session.region_name == "us-gov-west-1":
-            endpoint_configuration.append("REGIONAL")
+            endpoint_configuration['Types'] = endpoint_configuration.get('Types', []) + ["REGIONAL"]
         if endpoint_configuration:
             endpoint = troposphere.apigateway.EndpointConfiguration()
-            endpoint.Types = list(set(endpoint_configuration))
+            # EndpointConfiguration property type has two properties: Types and VpcEndpointIds
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-apigateway-restapi-endpointconfiguration.html
+            # https://github.com/zappa/Zappa/issues/1024
+            endpoint.Types = list(set(endpoint_configuration.get('Types', [])))
+            endpoint.VpcEndpointIds = endpoint_configuration.get('VpcEndpointIds', [])
             restapi.EndpointConfiguration = endpoint
         if self.apigateway_policy:
             restapi.Policy = json.loads(self.apigateway_policy)

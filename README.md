@@ -892,7 +892,10 @@ to change Zappa's behavior. Use these at your own risk!
                 }
             }
         ],
-        "endpoint_configuration": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
+        "endpoint_configuration": {  // Optional endpoint configuration for API Gateway
+            "Types": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
+            "VpcEndpointIds": [ "vpce-12345678" ] // VPC endpoint IDs for which to create public Route53 aliases (Supported for `PRIVATE` endpoint type only)
+        }
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
         "exclude": ["*.gz", "*.rar"], // A list of regex patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
