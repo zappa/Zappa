@@ -1375,7 +1375,6 @@ class Zappa:
         lambda_aws_config = self.lambda_client.get_function_configuration(
             FunctionName=function_name
         )
-
         if "Environment" in lambda_aws_config:
             lambda_aws_environment_variables = lambda_aws_config["Environment"].get(
                 "Variables", {}
