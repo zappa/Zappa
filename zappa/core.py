@@ -1366,11 +1366,27 @@ class Zappa:
         if not layers:
             layers = []
 
+        # If the LastUpdateStatus isn't 'Successful', the function is still initializing.
+        # Continue polling until it is initialized, otherwise expected keys will be missing
+        # from 'lambda_aws_config. Related: https://github.com/zappa/Zappa/issues/1035
+        last_update_status = None
+        attempts = 1
+        while last_update_status != "Successful":
+            lambda_aws_config = self.lambda_client.get_function_configuration(
+                FunctionName=function_name
+            )
+            last_update_status = lambda_aws_config["LastUpdateStatus"]
+            time.sleep(1)
+            attempts += 1
+            if attempts > 60:
+                raise EnvironmentError(
+                    "Failed to initialize Lambda function within 60 seconds. Reason: {}".format(
+                        lambda_aws_config.get("LastUpdateStatusReason", "No reason provided in response"),
+                    )
+                )
+
         # Check if there are any remote aws lambda env vars so they don't get trashed.
         # https://github.com/Miserlou/Zappa/issues/987,  Related: https://github.com/Miserlou/Zappa/issues/765
-        lambda_aws_config = self.lambda_client.get_function_configuration(
-            FunctionName=function_name
-        )
         if "Environment" in lambda_aws_config:
             lambda_aws_environment_variables = lambda_aws_config["Environment"].get(
                 "Variables", {}
