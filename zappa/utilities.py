@@ -392,7 +392,11 @@ def get_event_source(
             )
             LOG.debug(response)
             if len(response["EventSourceMappings"]) > 0:
-                uuid = response["EventSourceMappings"][0]["UUID"]
+                # Consider the same mapping if the event source arn and queues are the same.
+                for m in response["EventSourceMappings"]:
+                    if self.arn == m['EventSourceArn'] and self.queues == m['Queues']:
+                        uuid = m["UUID"]
+                        break
             return uuid
 
         def add(self, function):
