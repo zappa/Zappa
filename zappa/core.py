@@ -1366,8 +1366,8 @@ class Zappa:
         if not layers:
             layers = []
 
-        # Wait until function is ready, otherwise expected keys will be missing
-        # from 'lambda_aws_config'. Related: https://github.com/zappa/Zappa/issues/1035
+        # Wait until function is ready, otherwise expected keys will be missing from 'lambda_aws_config'.
+        # https://github.com/zappa/Zappa/issues/1035
         self.wait_until_lambda_function_is_ready(function_name=function_name)
 
         # Check if there are any remote aws lambda env vars so they don't get trashed.
