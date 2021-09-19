@@ -587,6 +587,13 @@ class LambdaHandler:
                             settings.BINARY_SUPPORT
                             and not response.mimetype.startswith("text/")
                             and response.mimetype != "application/json"
+                            and response.mimetype != "application/javascript"
+                            and response.mimetype != "application/ecmascript"
+                            and response.mimetype != "application/xml"
+                            and response.mimetype != "application/xml-external-parsed-entity"
+                            and response.mimetype != "application/xml-dtd"
+                            and response.mimetype != "image/svg+xml"
+                            and not (response.mimetype.startswith("application/") and response.mimetype.endswith("+xml"))
                         ):
                             zappa_returndict["body"] = base64.b64encode(
                                 response.data
