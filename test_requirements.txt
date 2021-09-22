@@ -91,7 +91,7 @@ typing-extensions==3.10.0.0
     # via
     #   django-stubs
     #   mypy
-urllib3==1.26.4
+urllib3==1.26.5
     # via requests
 werkzeug==0.16.1
     # via flask
