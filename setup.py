@@ -4,7 +4,7 @@ from setuptools import setup
 from io import open
 from zappa import __version__
 
-with open('README.md') as readme_file:
+with open('README.md', "r", encoding="utf-8") as readme_file:
     long_description = readme_file.read()
 
 with open(os.path.join(os.path.dirname(__file__), 'requirements.in')) as f:
@@ -16,7 +16,7 @@ with open(os.path.join(os.path.dirname(__file__), 'test_requirements.in')) as f:
 setup(
     name='zappa2',
     version=__version__,
-    packages=['zappa2'],
+    packages=['zappa'],
     install_requires=required,
     tests_require=test_required,
     test_suite='nose.collector',
@@ -26,8 +26,8 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/ghostmaster-ai/Zappa2',
-    author='Rich Jones',
-    author_email='rich@openwatch.net',
+    author='ghostmaster-ai',
+    author_email='spranav97@hotmail.com',
     entry_points={
         'console_scripts': [
             'zappa=zappa.cli:handle',
