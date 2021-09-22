@@ -76,7 +76,7 @@ tqdm==4.59.0
     # via -r requirements.in
 troposphere==2.7.0
     # via -r requirements.in
-urllib3==1.26.4
+urllib3==1.26.5
     # via
     #   botocore
     #   requests
