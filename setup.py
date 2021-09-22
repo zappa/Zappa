@@ -14,9 +14,9 @@ with open(os.path.join(os.path.dirname(__file__), 'test_requirements.in')) as f:
     test_required = f.read().splitlines()
 
 setup(
-    name='zappa',
+    name='zappa2',
     version=__version__,
-    packages=['zappa'],
+    packages=['zappa2'],
     install_requires=required,
     tests_require=test_required,
     test_suite='nose.collector',
@@ -25,7 +25,7 @@ setup(
     description='Server-less Python Web Services for AWS Lambda and API Gateway',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/zappa/Zappa',
+    url='https://github.com/ghostmaster-ai/Zappa2',
     author='Rich Jones',
     author_email='rich@openwatch.net',
     entry_points={
