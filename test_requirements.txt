@@ -24,7 +24,7 @@ coverage==5.5
     # via coveralls
 coveralls==3.0.1
     # via -r test_requirements.in
-django==3.1.7
+django==3.1.13
     # via
     #   -r test_requirements.in
     #   django-stubs
