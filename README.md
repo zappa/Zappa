@@ -1,7 +1,7 @@
 ## Zappa2 - This project was originally maintained by zappa
 Since the deprication of Zappa by the original maintainers it is now maintained here.
 
-### We rely on your donation so if you can pls sponsor this project using the sponsorship link.
+#### We rely on your donation so if you can, please sponsor this project using the sponsorship link.
 
 <hr />
 
