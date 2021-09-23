@@ -1,3 +1,10 @@
+## Zappa2 - This project was originally maintained by zappa
+Since the deprication of zappa by the original maintainers it is now maintained here.
+
+<form><script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_I0ndeTw7Pij1dY" async> </script> </form>
+
+<hr />
+
 <p align="center">
   <img src="http://i.imgur.com/oePnHJn.jpg" alt="Zappa Rocks!"/>
 </p>
