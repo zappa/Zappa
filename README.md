@@ -11,12 +11,7 @@ Since the deprication of Zappa by the original maintainers it is now maintained 
 
 ## Zappa - Serverless Python
 
-[![Build Status](https://travis-ci.org/zappa/Zappa.svg)](https://travis-ci.org/zappa/Zappa)
-[![Coverage](https://img.shields.io/coveralls/zappa/Zappa.svg)](https://coveralls.io/github/zappa/Zappa)
-[![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa)
-[![Slack](https://img.shields.io/badge/chat-slack-ff69b4.svg)](https://zappateam.slack.com/)
-[![Gun.io](https://img.shields.io/badge/made%20by-gun.io-blue.svg)](https://gun.io/)
-[![Patreon](https://img.shields.io/badge/support-patreon-brightgreen.svg)](https://patreon.com/zappa)
+[![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa2)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
