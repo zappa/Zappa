@@ -206,7 +206,7 @@ class ZappaCLI:
             "-v",
             "--version",
             action="version",
-            version=pkg_resources.get_distribution("zappa").version,
+            version=pkg_resources.get_distribution("zappa2").version,
             help="Print the zappa version",
         )
         parser.add_argument(

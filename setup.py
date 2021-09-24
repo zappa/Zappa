@@ -49,4 +49,7 @@ setup(
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
+    project_urls={
+        'Funding': 'https://rzp.io/l/zappa2',
+    }
 )
