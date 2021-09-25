@@ -2446,7 +2446,7 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            version = pkg_resources.require("zappa")[0].version
+            version = pkg_resources.require("zappa2")[0].version
             updateable = check_new_version_available(version)
             if updateable:
                 click.echo(
