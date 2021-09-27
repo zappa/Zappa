@@ -996,7 +996,7 @@ class ZappaCLI:
                     )
 
             if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_ready(
+                self.zappa.wait_until_lambda_function_is_updated(
                     function_name=self.lambda_name
                 )
                 self.touch_endpoint(endpoint_url)
@@ -1260,7 +1260,7 @@ class ZappaCLI:
                     deployed_string = deployed_string + " (" + api_url + ")"
 
             if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_ready(
+                self.zappa.wait_until_lambda_function_is_updated(
                     function_name=self.lambda_name
                 )
                 if api_url:

@@ -1248,7 +1248,7 @@ class Zappa:
             )
 
         # Wait for lambda to become active, otherwise many operations will fail
-        self.wait_until_lambda_function_is_ready(function_name)
+        self.wait_until_lambda_function_is_active(function_name)
 
         return resource_arn
 
@@ -1370,7 +1370,7 @@ class Zappa:
             layers = []
 
         # Wait until function is ready, otherwise expected keys will be missing from 'lambda_aws_config'.
-        self.wait_until_lambda_function_is_ready(function_name)
+        self.wait_until_lambda_function_is_updated(function_name)
 
         # Check if there are any remote aws lambda env vars so they don't get trashed.
         # https://github.com/Miserlou/Zappa/issues/987,  Related: https://github.com/Miserlou/Zappa/issues/765
@@ -1489,18 +1489,23 @@ class Zappa:
 
         return response["FunctionArn"]
 
-    def wait_until_lambda_function_is_ready(self, function_name):
+    def wait_until_lambda_function_is_active(self, function_name):
         """
-        Wait until lambda State=Active and LastUpdateStatus=Successful
+        Wait until lambda State=Active
         """
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/lambda.html#waiters
-        kwargs = {"FunctionName": function_name}
         waiter = self.lambda_client.get_waiter("function_active")
         print(f"Waiting for lambda function [{function_name}] to become active...")
-        waiter.wait(**kwargs)
+        waiter.wait(FunctionName=function_name)
+
+    def wait_until_lambda_function_is_updated(self, function_name):
+        """
+        Wait until lambda LastUpdateStatus=Successful
+        """
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/lambda.html#waiters
         waiter = self.lambda_client.get_waiter("function_updated")
         print(f"Waiting for lambda function [{function_name}] to be updated...")
-        waiter.wait(**kwargs)
+        waiter.wait(FunctionName=function_name)
 
     def get_lambda_function(self, function_name):
         """
