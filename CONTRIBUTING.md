@@ -15,8 +15,7 @@ We actively welcome your pull requests:
 2. If you've added code that should be tested, add tests.
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. Issue that pull request!
+5. Issue that pull request!
 
 ## Any contributions you make will be under the MIT Software License
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
@@ -26,15 +25,15 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 
 ## Write bug reports with detail, background, and sample code
 Here are two great examples:
-- [A](http://stackoverflow.com/q/12488905/180626) 
-- [B](http://www.openradar.me/11905408)
+- [http://stackoverflow.com/q/12488905/180626](http://stackoverflow.com/q/12488905/180626) 
+- [http://www.openradar.me/11905408](http://www.openradar.me/11905408)
 
 **Great Bug Reports** tend to have:
 
 - A quick summary and/or background
 - Steps to reproduce
   - Be specific!
-  - Give sample code if you can. [My stackoverflow question](http://stackoverflow.com/q/12488905/180626) includes sample code that *anyone* with a base R setup can run to reproduce what I was seeing
+  - Give sample code if you can
 - What you expected would happen
 - What actually happens
 - Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
