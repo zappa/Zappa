@@ -1336,6 +1336,8 @@ class Zappa:
                     FunctionName=function_name, Qualifier=version
                 )
 
+        self.wait_until_lambda_function_is_updated(function_name)
+
         return resource_arn
 
     def update_lambda_configuration(
@@ -1352,6 +1354,7 @@ class Zappa:
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
+        wait=True,
     ):
         """
         Given an existing function ARN, update the configuration variables.
@@ -1369,8 +1372,9 @@ class Zappa:
         if not layers:
             layers = []
 
-        # Wait until function is ready, otherwise expected keys will be missing from 'lambda_aws_config'.
-        self.wait_until_lambda_function_is_updated(function_name)
+        if wait:
+            # Wait until function is ready, otherwise expected keys will be missing from 'lambda_aws_config'.
+            self.wait_until_lambda_function_is_updated(function_name)
 
         # Check if there are any remote aws lambda env vars so they don't get trashed.
         # https://github.com/Miserlou/Zappa/issues/987,  Related: https://github.com/Miserlou/Zappa/issues/765
