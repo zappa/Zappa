@@ -965,7 +965,7 @@ class Zappa:
         else:
             # Check if we already have a cached copy
             wheel_name = re.sub("[^\w\d.]+", "_", package_name, re.UNICODE)
-            wheel_file = f"{wheel_name}-{package_version}-*_x86_64.whl"
+            wheel_file = f"{wheel_name}-{package_version}-*_{self.architectures[0]}.whl"
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
