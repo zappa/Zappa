@@ -102,7 +102,7 @@ class LambdaHandler:
             is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
             if is_slim_handler:
                 included_libraries = getattr(
-                    self.settings, "INCLUDE", ["libmysqlclient.so.18"]
+                    self.settings, "INCLUDE", []
                 )
                 try:
                     from ctypes import cdll, util
