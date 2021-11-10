@@ -1858,7 +1858,7 @@ class TestZappa(unittest.TestCase):
             "HostedZones": [{"Id": "somezone"}],
         }
         zappa_core.route53.list_resource_record_sets.return_value = {
-            "ResourceRecordSets": [{"Type": "CNAME", "Name": "test_domain1"}]
+            "ResourceRecordSets": [{"Type": "A", "Name": "test_domain1"}]
         }
 
         record = zappa_core.get_domain_name("test_domain")
