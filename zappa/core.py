@@ -2659,32 +2659,17 @@ class Zappa:
             self.route53.get_hosted_zone(Id=zone_id)["HostedZone"]["Name"][:-1]
             == domain_name
         )
-        if is_apex:
-            record_set = {
-                "Name": domain_name,
-                "Type": "A",
-                "AliasTarget": {
-                    "HostedZoneId": "Z2FDTNDATAQYW2",  # This is a magic value that means "CloudFront"
-                    "DNSName": dns_name,
-                    "EvaluateTargetHealth": False,
-                },
-            }
-        else:
-            record_set = {
-                "Name": domain_name,
-                "Type": "CNAME",
-                "ResourceRecords": [{"Value": dns_name}],
-                "TTL": 60,
-            }
 
-        # Related: https://github.com/boto/boto3/issues/157
-        # and: http://docs.aws.amazon.com/Route53/latest/APIReference/CreateAliasRRSAPI.html
-        # and policy: https://spin.atomicobject.com/2016/04/28/route-53-hosted-zone-managment/
-        # pure_zone_id = zone_id.split('/hostedzone/')[1]
+        record_set = {
+            "Name": domain_name,
+            "Type": "A" if is_apex else "CNAME",
+            "AliasTarget": {
+                "HostedZoneId": "Z2FDTNDATAQYW2",  # This is a magic value that means "CloudFront"
+                "DNSName": dns_name,
+                "EvaluateTargetHealth": False,
+            },
+        }
 
-        # XXX: ClientError: An error occurred (InvalidChangeBatch) when calling the ChangeResourceRecordSets operation:
-        # Tried to create an alias that targets d1awfeji80d0k2.cloudfront.net., type A in zone Z1XWOQP59BYF6Z,
-        # but the alias target name does not lie within the target zone
         response = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={
