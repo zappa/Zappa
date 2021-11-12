@@ -132,8 +132,9 @@ class LambdaHandler:
             elif hasattr(self.settings, "APP_MODULE"):
                 if self.settings.DJANGO_SETTINGS:
                     sys.path.append("/var/task")
-                    from django.conf import \
-                        ENVIRONMENT_VARIABLE as SETTINGS_ENVIRONMENT_VARIABLE
+                    from django.conf import (
+                        ENVIRONMENT_VARIABLE as SETTINGS_ENVIRONMENT_VARIABLE,
+                    )
 
                     # add the Lambda root path into the sys.path
                     self.trailing_slash = True

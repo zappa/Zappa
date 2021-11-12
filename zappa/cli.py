@@ -41,12 +41,19 @@ from dateutil import parser
 from past.builtins import basestring
 
 from .core import API_GATEWAY_REGIONS, Zappa, logger
-from .utilities import (InvalidAwsLambdaName, check_new_version_available,
-                        detect_django_settings, detect_flask_apps,
-                        get_runtime_from_python_version,
-                        get_venv_from_python_version, human_size,
-                        is_valid_bucket_name, parse_s3_url,
-                        string_to_timestamp, validate_name)
+from .utilities import (
+    InvalidAwsLambdaName,
+    check_new_version_available,
+    detect_django_settings,
+    detect_flask_apps,
+    get_runtime_from_python_version,
+    get_venv_from_python_version,
+    human_size,
+    is_valid_bucket_name,
+    parse_s3_url,
+    string_to_timestamp,
+    validate_name,
+)
 
 CUSTOM_SETTINGS = [
     "apigateway_policy",

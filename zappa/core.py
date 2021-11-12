@@ -34,10 +34,16 @@ from botocore.exceptions import ClientError
 from setuptools import find_packages
 from tqdm import tqdm
 
-from .utilities import (add_event_source, conflicts_with_a_neighbouring_module,
-                        contains_python_files_or_subdirs, copytree,
-                        get_topic_name, get_venv_from_python_version,
-                        human_size, remove_event_source)
+from .utilities import (
+    add_event_source,
+    conflicts_with_a_neighbouring_module,
+    contains_python_files_or_subdirs,
+    copytree,
+    get_topic_name,
+    get_venv_from_python_version,
+    human_size,
+    remove_event_source,
+)
 
 ##
 # Logging Config
