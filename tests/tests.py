@@ -22,34 +22,20 @@ from click.globals import resolve_color_default
 from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
 from zappa.core import ALB_LAMBDA_ALIAS, ASSUME_POLICY, ATTACH_POLICY, Zappa
 from zappa.ext.django_zappa import get_django_wsgi
-from zappa.letsencrypt import (
-    cleanup,
-    create_chained_certificate,
-    create_domain_csr,
-    create_domain_key,
-    encode_certificate,
-    get_cert_and_update_domain,
-    gettempdir,
-    parse_account_key,
-    parse_csr,
-    register_account,
-    sign_certificate,
-    verify_challenge,
-)
-from zappa.utilities import (
-    InvalidAwsLambdaName,
-    conflicts_with_a_neighbouring_module,
-    contains_python_files_or_subdirs,
-    detect_django_settings,
-    detect_flask_apps,
-    get_venv_from_python_version,
-    human_size,
-    is_valid_bucket_name,
-    parse_s3_url,
-    string_to_timestamp,
-    titlecase_keys,
-    validate_name,
-)
+from zappa.letsencrypt import (cleanup, create_chained_certificate,
+                               create_domain_csr, create_domain_key,
+                               encode_certificate, get_cert_and_update_domain,
+                               gettempdir, parse_account_key, parse_csr,
+                               register_account, sign_certificate,
+                               verify_challenge)
+from zappa.utilities import (InvalidAwsLambdaName,
+                             conflicts_with_a_neighbouring_module,
+                             contains_python_files_or_subdirs,
+                             detect_django_settings, detect_flask_apps,
+                             get_venv_from_python_version, human_size,
+                             is_valid_bucket_name, parse_s3_url,
+                             string_to_timestamp, titlecase_keys,
+                             validate_name)
 from zappa.wsgi import common_log, create_wsgi_request
 
 
