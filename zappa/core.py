@@ -2967,7 +2967,7 @@ class Zappa:
             "Adding new permission to invoke Lambda function: {}".format(lambda_name)
         )
 
-        account_id: str = self.sts_client.get_caller_identity().get('Account')
+        account_id: str = self.sts_client.get_caller_identity().get("Account")
 
         permission_response = self.lambda_client.add_permission(
             FunctionName=lambda_name,
@@ -2982,7 +2982,7 @@ class Zappa:
             # deleted, another AWS account can create a bucket with the same name and potentially trigger the original
             # lambda function, since bucket names are global.
             # https://github.com/zappa/Zappa/issues/1039
-            SourceAccount=account_id
+            SourceAccount=account_id,
         )
 
         if permission_response["ResponseMetadata"]["HTTPStatusCode"] != 201:
