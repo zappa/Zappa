@@ -596,7 +596,7 @@ class ZappaCLI:
         Given a command to execute and stage,
         execute that command.
         """
-
+        self.check_stage_name(stage)
         self.api_stage = stage
 
         if command not in ["status", "manage"]:
@@ -996,7 +996,7 @@ class ZappaCLI:
                     )
 
             if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_ready(
+                self.zappa.wait_until_lambda_function_is_updated(
                     function_name=self.lambda_name
                 )
                 self.touch_endpoint(endpoint_url)
@@ -1140,9 +1140,6 @@ class ZappaCLI:
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
             self.lambda_arn = self.zappa.update_lambda_function(**kwargs)
-            self.zappa.wait_until_lambda_function_is_ready(
-                function_name=self.lambda_name
-            )
         elif source_zip and source_zip.startswith("s3://"):
             bucket, key_name = parse_s3_url(source_zip)
             kwargs.update(dict(bucket=bucket, s3_key=key_name))
@@ -1174,6 +1171,7 @@ class ZappaCLI:
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
+            wait=False,
         )
 
         # Finally, delete the local copy our zip package
@@ -1263,7 +1261,7 @@ class ZappaCLI:
                     deployed_string = deployed_string + " (" + api_url + ")"
 
             if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_ready(
+                self.zappa.wait_until_lambda_function_is_updated(
                     function_name=self.lambda_name
                 )
                 if api_url:
@@ -1537,16 +1535,7 @@ class ZappaCLI:
             invocation_type="RequestResponse",
         )
 
-        if "LogResult" in response:
-            if no_color:
-                print(base64.b64decode(response["LogResult"]))
-            else:
-                decoded = base64.b64decode(response["LogResult"]).decode()
-                formatted = self.format_invoke_command(decoded)
-                colorized = self.colorize_invoke_command(formatted)
-                print(colorized)
-        else:
-            print(response)
+        print(self.format_lambda_response(response, not no_color))
 
         # For a successful request FunctionError is not in response.
         # https://github.com/Miserlou/Zappa/pull/1254/
@@ -1556,6 +1545,22 @@ class ZappaCLI:
                     response["FunctionError"]
                 )
             )
+
+    def format_lambda_response(self, response, colorize=True):
+        if "LogResult" in response:
+            logresult_bytes = base64.b64decode(response["LogResult"])
+            try:
+                decoded = logresult_bytes.decode()
+            except UnicodeDecodeError:
+                return logresult_bytes
+            else:
+                if colorize and sys.stdout.isatty():
+                    formatted = self.format_invoke_command(decoded)
+                    return self.colorize_invoke_command(formatted)
+                else:
+                    return decoded
+        else:
+            return response
 
     def format_invoke_command(self, string):
         """
@@ -1789,9 +1794,15 @@ class ZappaCLI:
         calling the CreateDeployment operation: Stage name only allows
         a-zA-Z0-9_" if the pattern does not match)
         """
+        if not self.use_apigateway:
+            return True
         if self.stage_name_env_pattern.match(stage_name):
             return True
-        raise ValueError("AWS requires stage name to match a-zA-Z0-9_")
+        raise ValueError(
+            "API stage names must match a-zA-Z0-9_ ; '{0!s}' does not.".format(
+                stage_name
+            )
+        )
 
     def check_environment(self, environment):
         """
@@ -2482,17 +2493,6 @@ class ZappaCLI:
 
         # Load up file
         self.load_settings_file(settings_file)
-
-        # Make sure that the stages are valid names:
-        for stage_name in self.zappa_settings.keys():
-            try:
-                self.check_stage_name(stage_name)
-            except ValueError:
-                raise ValueError(
-                    "API stage names must match a-zA-Z0-9_ ; '{0!s}' does not.".format(
-                        stage_name
-                    )
-                )
 
         # Make sure that this stage is our settings
         if self.api_stage not in self.zappa_settings.keys():

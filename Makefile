@@ -27,9 +27,9 @@ clean:
 	rm -f .coverage
 
 requirements:
-	./requirements.sh
-	pip install -r requirements.txt
-	pip install -r test_requirements.txt
+	pip install pipenv==2021.11.09
+	pipenv lock
+	pipenv sync --dev
 
 build: clean requirements-install
 	python setup.py sdist
@@ -39,14 +39,17 @@ mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict zappa tests
 
 black:
-	black zappa tests
+	black .
 
 black-check:
-	black zappa tests --check
+	black . --check
 	@echo "If this fails, simply run: make black"
 
 isort:
-	isort --recursive . 
+	isort . --profile=black
+
+isort-check:
+	isort --check . --profile=black
 
 flake:
 	flake8 zappa --count --select=E9,F63,F7,F82 --show-source --statistics

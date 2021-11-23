@@ -1,16 +1,17 @@
 # -*- coding: utf8 -*-
-import mock
 import os
 import random
 import string
 import unittest
 
-from .utils import placebo_session
+import mock
 
 from zappa.cli import ZappaCLI
+from zappa.core import Zappa
 from zappa.handler import LambdaHandler
 from zappa.utilities import add_event_source, remove_event_source
-from zappa.core import Zappa
+
+from .utils import placebo_session
 
 
 def random_string(length):
@@ -174,13 +175,6 @@ class TestZappa(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             z.rollback_lambda_function_version(function_name)
-
-    @placebo_session
-    def test_is_lambda_function_ready(self, session):
-        z = Zappa(session)
-        z.credentials_arn = "arn:aws:iam::724336686645:role/ZappaLambdaExecution"
-        function_name = "django-helloworld-unicode"
-        z.is_lambda_function_ready(function_name)
 
     @placebo_session
     def test_invoke_lambda_function(self, session):

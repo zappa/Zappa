@@ -1,58 +1,58 @@
 # -*- coding: utf8 -*-
+import base64
 import collections
+import hashlib
 import json
-
+import os
+import random
+import shutil
+import string
+import sys
+import tempfile
+import unittest
+import uuid
+import zipfile
 from io import BytesIO
+
 import botocore
 import botocore.stub
 import flask
 import mock
-import os
-import random
-import string
-import zipfile
-import unittest
-import shutil
-import sys
-import tempfile
-import uuid
-
-from click.globals import resolve_color_default
 from click.exceptions import ClickException
+from click.globals import resolve_color_default
 
-from zappa.cli import ZappaCLI, shamelessly_promote, disable_click_colors
-from zappa.core import ALB_LAMBDA_ALIAS
+from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
+from zappa.core import ALB_LAMBDA_ALIAS, ASSUME_POLICY, ATTACH_POLICY, Zappa
 from zappa.ext.django_zappa import get_django_wsgi
 from zappa.letsencrypt import (
-    get_cert_and_update_domain,
-    create_domain_key,
-    create_domain_csr,
-    create_chained_certificate,
     cleanup,
+    create_chained_certificate,
+    create_domain_csr,
+    create_domain_key,
+    encode_certificate,
+    get_cert_and_update_domain,
+    gettempdir,
     parse_account_key,
     parse_csr,
-    sign_certificate,
-    encode_certificate,
     register_account,
+    sign_certificate,
     verify_challenge,
-    gettempdir,
 )
 from zappa.utilities import (
+    InvalidAwsLambdaName,
     conflicts_with_a_neighbouring_module,
     contains_python_files_or_subdirs,
     detect_django_settings,
     detect_flask_apps,
     get_venv_from_python_version,
     human_size,
-    InvalidAwsLambdaName,
+    is_valid_bucket_name,
     parse_s3_url,
     string_to_timestamp,
     titlecase_keys,
-    is_valid_bucket_name,
     validate_name,
 )
-from zappa.wsgi import create_wsgi_request, common_log
-from zappa.core import Zappa, ASSUME_POLICY, ATTACH_POLICY
+from zappa.wsgi import common_log, create_wsgi_request
 
 
 def random_string(length):
@@ -221,6 +221,33 @@ class TestZappa(unittest.TestCase):
             return_value=mock_installed_packages,
         ):
             z = Zappa(runtime="python3.8")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+    def test_get_manylinux_python39(self):
+        z = Zappa(runtime="python3.9")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.1"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg2-binary": "2.9.1"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.9")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "2.8"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.9")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -1258,6 +1285,54 @@ class TestZappa(unittest.TestCase):
         colorized_string = zappa_cli.colorize_invoke_command(plain_string)
         self.assertEqual(final_string, colorized_string)
 
+    @mock.patch("zappa.cli.ZappaCLI.colorize_invoke_command")
+    @mock.patch("zappa.cli.ZappaCLI.format_invoke_command")
+    def test_cli_format_lambda_response(self, mock_format, mock_colorize):
+        format_msg = "formatted string"
+        colorize_msg = "colorized string"
+        mock_format.return_value = format_msg
+        mock_colorize.return_value = colorize_msg
+        zappa_cli = ZappaCLI()
+
+        response_without_logresult = {"StatusCode": 200, "FunctionError": "some_err"}
+        self.assertEqual(
+            zappa_cli.format_lambda_response(response_without_logresult),
+            response_without_logresult,
+        )
+
+        bad_utf8 = b"\xfc\xfc\xfc"
+        bad_utf8_logresult = {
+            "StatusCode": 200,
+            "LogResult": base64.b64encode(bad_utf8),
+        }
+        self.assertEqual(zappa_cli.format_lambda_response(bad_utf8_logresult), bad_utf8)
+
+        log_msg = "Function output logs go here"
+        regular_logresult = {
+            "StatusCode": 200,
+            "LogResult": base64.b64encode(log_msg.encode()),
+        }
+        with mock.patch.object(sys.stdout, "isatty") as mock_isatty:
+            mock_isatty.return_value = True
+            formatted = zappa_cli.format_lambda_response(regular_logresult, True)
+        mock_format.assert_called_once_with(log_msg)
+        mock_colorize.assert_called_once_with(format_msg)
+        self.assertEqual(formatted, colorize_msg)
+        mock_format.reset_mock()
+        mock_colorize.reset_mock()
+
+        with mock.patch.object(sys.stdout, "isatty") as mock_isatty:
+            mock_isatty.return_value = False
+            formatted = zappa_cli.format_lambda_response(regular_logresult, True)
+        mock_format.assert_not_called()
+        mock_colorize.assert_not_called()
+        self.assertEqual(formatted, log_msg)
+
+        formatted = zappa_cli.format_lambda_response(regular_logresult, False)
+        mock_format.assert_not_called()
+        mock_colorize.assert_not_called()
+        self.assertEqual(formatted, log_msg)
+
     def test_cli_save_python_settings_file(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
@@ -1424,11 +1499,9 @@ class TestZappa(unittest.TestCase):
 
     def test_bad_stage_name_catch(self):
         zappa_cli = ZappaCLI()
-        self.assertRaises(
-            ValueError,
-            zappa_cli.load_settings,
-            "tests/test_bad_stage_name_settings.json",
-        )
+        zappa_cli.api_stage = "ttt-888"
+        zappa_cli.load_settings("tests/test_bad_stage_name_settings.json")
+        self.assertRaises(ValueError, zappa_cli.dispatch_command, "deploy", "ttt-888")
 
     def test_bad_environment_vars_catch(self):
         zappa_cli = ZappaCLI()
@@ -2025,22 +2098,80 @@ USE_TZ = True
         self.assertTrue(len(truncated) <= 64)
         self.assertEqual(truncated, "a-b")
 
-    def test_hashed_rule_name(self):
+    def test_get_scheduled_event_name(self):
         zappa = Zappa()
-        truncated = zappa.get_event_name(
-            "basldfkjalsdkfjalsdkfjaslkdfjalsdkfjadlsfkjasdlfkjasdlfkjasdflkjasdf-asdfasdfasdfasdfasdf",
-            "this.is.my.dang.function.wassup.yeah.its.long",
+        event = {}
+        function = "foo"
+        lambda_name = "bar"
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"{lambda_name}-{function}",
         )
-        self.assertTrue(len(truncated) == 64)
 
-        rule_name = zappa.get_hashed_rule_name(
-            event=dict(name="some-event-name"),
-            function="this.is.my.dang.function.wassup.yeah.its.long",
-            lambda_name="basldfkjalsdkfjalsdkfjaslkdfjalsdkfjadlsfkjasdlfkjasdlfkjasdflkjasdf-asdfasdfasdfasdfasdf",
+    def test_get_scheduled_event_name__has_name(self):
+        zappa = Zappa()
+        event = {"name": "my_event"}
+        function = "foo"
+        lambda_name = "bar"
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"{lambda_name}-{event['name']}-{function}",
         )
-        self.assertTrue(len(rule_name) <= 64)
-        self.assertTrue(
-            rule_name.endswith("-this.is.my.dang.function.wassup.yeah.its.long")
+
+    def test_get_scheduled_event_name__has_index(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo"
+        lambda_name = "bar"
+        index = 1
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name, index),
+            f"{lambda_name}-{index}-{function}",
+        )
+
+    def test_get_scheduled_event_name__has_name__has_index(self):
+        zappa = Zappa()
+        event = {"name": "my_event"}
+        function = "foo"
+        lambda_name = "bar"
+        index = 1
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name, index),
+            f"{lambda_name}-{index}-{event['name']}-{function}",
+        )
+
+    def test_get_scheduled_event_name__truncated(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo"
+        lambda_name = "bar" * 100
+        hashed_lambda_name = hashlib.sha1(lambda_name.encode()).hexdigest()
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"{hashed_lambda_name}-{function}",
+        )
+
+    def test_get_scheduled_event_name__truncated__has_name(self):
+        zappa = Zappa()
+        event = {"name": "my_event"}
+        function = "foo"
+        lambda_name = "bar" * 100
+        hashed_lambda_name = hashlib.sha1(lambda_name.encode()).hexdigest()
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"{hashed_lambda_name}-{event['name']}-{function}",
+        )
+
+    def test_get_scheduled_event_name__truncated__has_name__has_index(self):
+        zappa = Zappa()
+        event = {"name": "my_event"}
+        function = "foo"
+        lambda_name = "bar" * 100
+        index = 1
+        hashed_lambda_name = hashlib.sha1(lambda_name.encode()).hexdigest()
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name, index),
+            f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
 
     def test_detect_dj(self):
