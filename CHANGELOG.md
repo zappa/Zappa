@@ -5,7 +5,7 @@
 * Support Newest Manylinux Version for dependencies (#1083)
 * Decode zappa invoke output regardless of --no-color option (#1069)
 * Convert project to using 'pipenv' to manage dependencies (#1077)
-* Ensure unique schedtuled event names (#1080)
+* Ensure unique scheduled event names (#1080)
 * Check isort in CI (#1078) 
 * Use 'black' everywhere (#1076)
 * Update setup.py README encoding (#1050) 
