@@ -1,6 +1,5 @@
 # Zappa Changelog
 
-
 ## 0.54.2
 * Support Newest Manylinux Version for dependencies (#1083)
 * Decode zappa invoke output regardless of --no-color option (#1069)
