@@ -1,5 +1,15 @@
 # Zappa Changelog
 
+
+## 0.54.2
+* Support Newest Manylinux Version for dependencies (#1083)
+* Decode zappa invoke output regardless of --no-color option (#1069)
+* Convert project to using 'pipenv' to manage dependencies (#1077)
+* Ensure unique schedtuled event names (#1080)
+* Check isort in CI (#1078) 
+* Use 'black' everywhere (#1076)
+* Update setup.py README encoding (#1050) 
+
 ## 0.54.1
 * Increase Lambda client read timeout to 15m (#1065)
 * Unpin `Werkzeug` from `v0.x` (#1067)
