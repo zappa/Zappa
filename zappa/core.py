@@ -309,15 +309,17 @@ class Zappa:
             self.manylinux_suffix_start = "cp36m"
         elif self.runtime == "python3.7":
             self.manylinux_suffix_start = "cp37m"
-        else:
+        elif self.runtime == "python3.8":
             # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
             # See https://github.com/pypa/manylinux for a more detailed explanation
             self.manylinux_suffix_start = "cp38"
+        else:
+            self.manylinux_suffix_start = "cp39"
 
-        # AWS Lambda supports manylinux1/2010 and manylinux2014
-        manylinux_suffixes = ("2014", "2010", "1")
+        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
+        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
         self.manylinux_wheel_file_match = re.compile(
-            f'^.*{self.manylinux_suffix_start}-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
+            f'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'
         )
         self.manylinux_wheel_abi3_file_match = re.compile(
             f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
@@ -329,13 +331,14 @@ class Zappa:
         # Some common invocations, such as DB migrations,
         # can take longer than the default.
 
-        # Note that this is set to 300s, but if connected to
-        # APIGW, Lambda will max out at 30s.
+        # Config used for direct invocations of Lambda functions from the Zappa CLI.
+        # Note that the maximum configurable Lambda function execution time (15 minutes)
+        # is longer than the maximum timeout configurable in API Gateway (30 seconds).
         # Related: https://github.com/Miserlou/Zappa/issues/205
         long_config_dict = {
             "region_name": aws_region,
             "connect_timeout": 5,
-            "read_timeout": 300,
+            "read_timeout": 900,
         }
         long_config = botocore.client.Config(**long_config_dict)
 
@@ -3028,17 +3031,12 @@ class Zappa:
 
             if expressions:
                 for index, expression in enumerate(expressions):
-                    name = self.get_scheduled_event_name(
-                        event, function, lambda_name, index
+                    rule_name = self.get_scheduled_event_name(
+                        event,
+                        function,
+                        lambda_name,
+                        index,
                     )
-                    # if it's possible that we truncated name, generate a unique, shortened name
-                    # https://github.com/Miserlou/Zappa/issues/970
-                    if len(name) >= 64:
-                        rule_name = self.get_hashed_rule_name(
-                            event, function, lambda_name
-                        )
-                    else:
-                        rule_name = name
 
                     rule_response = self.events_client.put_rule(
                         Name=rule_name,
@@ -3155,12 +3153,15 @@ class Zappa:
             else:
                 print(
                     "Could not create event {} - Please define either an expression or an event source".format(
-                        name
+                        rule_name,
                     )
                 )
 
-    @staticmethod
-    def get_scheduled_event_name(event, function, lambda_name, index=0):
+    def get_scheduled_event_name(self, event, function, lambda_name, index=0):
+        """
+        Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
+        This allows support for rule names that may be longer than the 64 char limit.
+        """
         name = event.get("name", function)
         if name != function:
             # a custom event name has been provided, make sure function name is included as postfix,
@@ -3172,7 +3173,14 @@ class Zappa:
             # Related: https://github.com/Miserlou/Zappa/pull/1051
             name = "{}-{}".format(index, name)
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
-        return Zappa.get_event_name(lambda_name, name)
+        event_name = self.get_event_name(lambda_name, name)
+        # if it's possible that we truncated name, generate a unique, shortened name
+        # https://github.com/Miserlou/Zappa/issues/970
+        if len(event_name) >= 64:
+            lambda_name = self.get_hashed_lambda_name(lambda_name)
+            event_name = self.get_event_name(lambda_name, name)
+
+        return event_name
 
     @staticmethod
     def get_event_name(lambda_name, name):
@@ -3184,16 +3192,8 @@ class Zappa:
         )[:64]
 
     @staticmethod
-    def get_hashed_rule_name(event, function, lambda_name):
-        """
-        Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
-        This allows support for rule names that may be longer than the 64 char limit.
-        """
-        event_name = event.get("name", function)
-        name_hash = hashlib.sha1(
-            "{}-{}".format(lambda_name, event_name).encode("UTF-8")
-        ).hexdigest()
-        return Zappa.get_event_name(name_hash, function)
+    def get_hashed_lambda_name(lambda_name):
+        return hashlib.sha1(lambda_name.encode()).hexdigest()
 
     def delete_rule(self, rule_name):
         """
