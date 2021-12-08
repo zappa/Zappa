@@ -584,6 +584,7 @@ class LambdaHandler:
 
                     if response.data:
                         content_encoding = response.headers.get("Content-Encoding", None)
+                        print(content_encoding)
                         binary_encodings = ("gzip", "compress", "deflate", "br")
                         if (
                             settings.BINARY_SUPPORT
