@@ -584,12 +584,11 @@ class LambdaHandler:
 
                     if response.data:
                         content_encoding = response.headers.get("Content-Encoding", None)
-                        print(content_encoding)
                         binary_encodings = ("gzip", "compress", "deflate", "br")
                         if (
                             settings.BINARY_SUPPORT
                             and not response.mimetype.startswith("text/")
-                            and response.mimetype not in ("application/json", "application/font-woff")
+                            and response.mimetype != "application/json"
                         ):
                             zappa_returndict["body"] = base64.b64encode(
                                 response.data
