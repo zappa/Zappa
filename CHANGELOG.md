@@ -1,6 +1,6 @@
 # Zappa Changelog
 
-## 0.54.2
+## 0.55.0
 * Support Newest Manylinux Version for dependencies (#1083)
 * Decode zappa invoke output regardless of --no-color option (#1069)
 * Convert project to using 'pipenv' to manage dependencies (#1077)
