@@ -3136,7 +3136,7 @@ class Zappa:
                     svc = service
 
                 rule_response = add_event_source(
-                    event_source, lambda_arn, function, self.boto_session
+                    event_source, lambda_arn, function, lambda_name, self.boto_session
                 )
 
                 if rule_response == "successful":
@@ -3288,7 +3288,7 @@ class Zappa:
             # update or zappa schedule.
             if service not in excluded_source_services:
                 remove_event_source(
-                    event_source, lambda_arn, function, self.boto_session
+                    event_source, lambda_arn, function, lambda_name, self.boto_session
                 )
                 print(
                     "Removed event {}{}.".format(
@@ -3323,6 +3323,7 @@ class Zappa:
             event_source={"arn": topic_arn, "events": ["sns:Publish"]},
             lambda_arn=lambda_arn,
             target_function="zappa.asynchronous.route_task",
+            lambda_name=lambda_name,
             boto_session=self.boto_session,
         )
         return topic_arn

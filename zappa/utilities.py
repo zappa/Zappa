@@ -222,7 +222,7 @@ def get_topic_name(lambda_name):
 
 
 def get_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+    event_source, lambda_arn, target_function, lambda_name, boto_session, dry=False
 ):
     """
 
@@ -397,7 +397,7 @@ def get_event_source(
     ctx.session = boto_session
 
     funk = PseudoFunction()
-    funk.name = lambda_arn
+    funk.name = lambda_name
 
     # Kappa 0.6.0 requires this nasty hacking,
     # hopefully we can remove at least some of this soon.
@@ -425,20 +425,23 @@ def get_event_source(
 
 
 def add_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+    event_source, lambda_arn, target_function, lambda_name, boto_session, dry=False
 ):
     """
     Given an event_source dictionary, create the object and add the event source.
     """
 
     event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, lambda_name, boto_session, dry=False
     )
     # TODO: Detect changes in config and refine exists algorithm
     if not dry:
         if not event_source_obj.status(funk):
             event_source_obj.add(funk)
-            return "successful" if event_source_obj.status(funk) else "failed"
+            result = "successful" if event_source_obj.status(funk) else "failed"
+            if result == "successful":
+                event_source_obj.enable(funk)
+            return result
         else:
             return "exists"
 
@@ -446,14 +449,14 @@ def add_event_source(
 
 
 def remove_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+    event_source, lambda_arn, target_function, lambda_name, boto_session, dry=False
 ):
     """
     Given an event_source dictionary, create the object and remove the event source.
     """
 
     event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, lambda_name, boto_session, dry=False
     )
 
     # This is slightly dirty, but necessary for using Kappa this way.

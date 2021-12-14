@@ -615,6 +615,20 @@ def your_recurring_function(event, context):
 
 ```
 
+[EventBridge] AWS can configure filtered events using AWS Event Bridge.   Zappa allows for a default handler for these configured like so
+```javascript
+       "events": [
+            {
+                "function": "your_module.your_default_event_handler", // The function to execute
+                "event_source": {
+                    "arn": "arn:aws:events:REGION:ACCOUNT_ID:event-bus/default/default_event_handler", 
+                    "pattern": '{"source": ["aws.glue", "my.event"]}', // Pattern as defined https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+                    "events": ["default"] // Default handler
+                    }  
+            }
+       ]
+```
+
 
 You can find more [example event sources here](http://docs.aws.amazon.com/lambda/latest/dg/eventsources.html).
 

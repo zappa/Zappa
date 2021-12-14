@@ -381,7 +381,7 @@ class LambdaHandler:
 
         # This is the result of a keep alive, recertify
         # or scheduled event.
-        if event.get("detail-type") == "Scheduled Event":
+        if event.get('source') == 'aws.events' and event.get("detail-type") == "Scheduled Event":
 
             whole_function = event["resources"][0].split("/")[-1].split("-")[-1]
 
@@ -391,8 +391,6 @@ class LambdaHandler:
 
                 # Execute the function!
                 return self.run_function(app_function, event, context)
-
-            # Else, let this execute as it were.
 
         # This is a direct command invocation.
         elif event.get("command", None):
@@ -501,6 +499,27 @@ class LambdaHandler:
                 logger.debug(result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
+            return result
+
+        elif event.get('source', None) and event.get("detail-type", None):
+            # We have a source and detail-type so it's some, unhandled, Eventbridge event
+            # on the default event handler
+            result = None
+            whole_function = None
+            for key, value in settings.AWS_EVENT_MAPPING.items():
+                if 'event-bus/default' in key:
+                    whole_function = value
+                    break
+            if whole_function:
+                app_function = self.import_module_and_get_function(whole_function)
+                if app_function:
+                    result = self.run_function(app_function, event, context)
+                    logger.debug("Result of %s:" % whole_function)
+                    logger.debug(result)
+                else:
+                    logger.error("Cannot find a function to process the triggered event.")
+            else:
+                logger.error("Cannot find a default handler to handle event")
             return result
 
         # Normal web app flow

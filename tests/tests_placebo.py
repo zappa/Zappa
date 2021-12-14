@@ -523,7 +523,7 @@ class TestZappa(unittest.TestCase):
         # Sanity. This should fail.
         try:
             es = add_event_source(
-                event_source, "blah:blah:blah:blah", "test_settings.callback", session
+                event_source, "blah:blah:blah:blah", "test_settings.callback", "test-function", session
             )
             self.fail("Success should have failed.")
         except ValueError:
@@ -534,6 +534,7 @@ class TestZappa(unittest.TestCase):
             event_source,
             "lambda:lambda:lambda:lambda",
             "test_settings.callback",
+            "test-function",
             session,
             dry=True,
         )
@@ -541,6 +542,7 @@ class TestZappa(unittest.TestCase):
             event_source,
             "lambda:lambda:lambda:lambda",
             "test_settings.callback",
+            "test-function",
             session,
             dry=True,
         )
