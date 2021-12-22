@@ -1,0 +1,10 @@
+{
+    "dev": {
+        "app_function": "main.app",
+        "aws_region": "eu-central-1",
+        "profile_name": "default",
+        "project_name": "dash-hello-world",
+        "runtime": "python3.9",
+        "environment_variables": {"DASH_REQUESTS_PATHNAME_PREFIX": "/dev/"}
+    }
+}

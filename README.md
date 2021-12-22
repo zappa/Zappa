@@ -259,7 +259,7 @@ If you want to cancel these, you can simply use the `unschedule` command:
 
 And now your scheduled event rules are deleted.
 
-See the [example](example/) for more details.
+See the [example](examples/simple_flask_app/) for more details.
 
 #### Advanced Scheduling
 
