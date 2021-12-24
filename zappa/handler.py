@@ -248,6 +248,7 @@ class LambdaHandler:
 
     @classmethod
     def lambda_handler(cls, event, context):  # pragma: no cover
+        global handler
         if not os.environ.get("INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT"):
             handler = cls()
         exception_handler = handler.settings.EXCEPTION_HANDLER
