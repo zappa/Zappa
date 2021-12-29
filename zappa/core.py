@@ -316,8 +316,8 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
-        # AWS Lambda supports manylinux1/2010 and manylinux2014
-        manylinux_suffixes = ("2014", "2010", "1")
+        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
+        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
         self.manylinux_wheel_file_match = re.compile(
             f'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'
         )
@@ -2966,6 +2966,9 @@ class Zappa:
         logger.debug(
             "Adding new permission to invoke Lambda function: {}".format(lambda_name)
         )
+
+        account_id: str = self.sts_client.get_caller_identity().get("Account")
+
         permission_response = self.lambda_client.add_permission(
             FunctionName=lambda_name,
             StatementId="".join(
@@ -2974,6 +2977,12 @@ class Zappa:
             Action="lambda:InvokeFunction",
             Principal=principal,
             SourceArn=source_arn,
+            # The SourceAccount argument ensures that only the specified AWS account can invoke the lambda function.
+            # This prevents a security issue where if a lambda is triggered off of s3 bucket events and the bucket is
+            # deleted, another AWS account can create a bucket with the same name and potentially trigger the original
+            # lambda function, since bucket names are global.
+            # https://github.com/zappa/Zappa/issues/1039
+            SourceAccount=account_id,
         )
 
         if permission_response["ResponseMetadata"]["HTTPStatusCode"] != 201:
