@@ -3025,6 +3025,7 @@ class Zappa:
             )  # optional dict of keyword arguments for the event
             event_source = event.get("event_source", None)
             description = event.get("description", function)
+            enabled = event.get("enabled", True)
 
             #   - If 'cron' or 'rate' in expression, use ScheduleExpression
             #   - Else, use EventPattern
@@ -3050,7 +3051,7 @@ class Zappa:
                     rule_response = self.events_client.put_rule(
                         Name=rule_name,
                         ScheduleExpression=expression,
-                        State="ENABLED",
+                        State="ENABLED" if enabled else "DISABLED",
                         Description=description,
                         RoleArn=self.credentials_arn,
                     )
