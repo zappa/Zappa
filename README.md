@@ -25,6 +25,8 @@
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
+      - [Multiple Expressions](#multiple-expressions)
+      - [Disabled Event](#disabled-event)
   - [Undeploy](#undeploy)
   - [Package](#package)
     - [How Zappa Makes Packages](#how-zappa-makes-packages)
