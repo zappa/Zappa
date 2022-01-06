@@ -27,7 +27,7 @@ clean:
 	rm -f .coverage
 
 requirements:
-	pip install pipenv==2021.11.09
+	pip install pipenv==2021.11.23
 	pipenv lock
 	pipenv sync --dev
 
