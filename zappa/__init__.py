@@ -12,5 +12,3 @@ if sys.version_info[:2] not in SUPPORTED_VERSIONS:
         formatted_supported_versions
     )
     raise RuntimeError(err_msg)
-
-__version__ = "0.54.1"

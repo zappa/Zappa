@@ -19,21 +19,22 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
+      - name: Setup Poetry
+        uses: snok/install-poetry@v1.1.2
+        with:
+          virtualenvs-in-project: true
       - uses: actions/cache@v2
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
       - name: Setup Virtualenv
-        run: python -m venv .venv
-      - name: Install
-        run: source .venv/bin/activate && make requirements && python setup.py install
+        run: poetry install
       - name: Lint
-        run: source .venv/bin/activate && make flake black-check isort-check
+        run: poetry run make flake black-check isort-check
       - name: Test
-        run: source .venv/bin/activate && make tests
+        run: poetry run make tests
       - name: Upload Coverage
-        run: .venv/bin/coveralls --service=github
+        run: poetry run coveralls --service=github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_FLAG_NAME: py${{ matrix.python }}
