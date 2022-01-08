@@ -1,0 +1,70 @@
+[tool.poetry]
+name = "zappa"
+version = "0.54.1"
+description = "Server-less Python Web Services for AWS Lambda and API Gateway"
+authors = ["Rich Jones <rich@openwatch.net>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/zappa/zappa"
+classifiers = [
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Framework :: Django",
+  "Framework :: Django :: 1.11",
+  "Framework :: Django :: 2.0",
+  "Framework :: Django :: 3.0",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+
+[tool.poetry.scripts]
+zappa = "zappa.cli:handle"
+z = "zappa.cli:handle"
+
+[tool.poetry.dependencies]
+python = "~3.6.2 || ~3.7 || ~3.8 || ~3.9"
+argcomplete = "^1.12.3"
+boto3 = "^1.17.28"
+durationpy = "^0.5"
+future = "^0.18.2"
+hjson = "^3.0.2"
+jmespath = "^0.10.0"
+kappa = "0.6.0"
+pip = ">=9.0.1"
+placebo = "<0.10"
+python-dateutil = "^2.8.1"
+python-slugify = "^5.0.2"
+PyYAML = "^5.4.1"
+requests = ">=2.20.0"
+six = "^1.16.0"
+toml = "^0.10.2"
+tqdm = "^4.61.2"
+troposphere = "^3"
+Werkzeug = "<1.0"
+wheel = "^0.36.2"
+wsgi-request-logger = "^0.4.6"
+
+[tool.poetry.dev-dependencies]
+black = "^21.6b0"
+coveralls = "^3.1.0"
+flake8 = "^3.9.2"
+mypy = "^0.910"
+nose = "^1.3.7"
+nose-timer = "^1.0.1"
+placebo = "^0.9.0"
+isort = "^5.9.2"
+mock = "^4.0.3"
+boto3-stubs = "^1.17.109"
+django-stubs = "^1.8.0"
+Flask = "^1"
+Django = "<4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

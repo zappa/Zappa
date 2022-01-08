@@ -27,13 +27,10 @@ clean:
 	rm -f .coverage
 
 requirements:
-	pip install pipenv==2021.11.09
-	pipenv lock
-	pipenv sync --dev
+	poetry install
 
-build: clean requirements-install
-	python setup.py sdist
-	python setup.py bdist_wheel 
+build: clean requirements
+	poetry build
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict zappa tests

@@ -14,11 +14,15 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
-      - name: Install `pypa/build`
-        run: python -m pip install build
-      - name: Build sdist and wheel
-        run: python -m build --sdist --wheel --outdir ./dist/
-      - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Setup Poetry
+        uses: snok/install-poetry@v1.1.2
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          virtualenvs-in-project: true
+      - name: Build sdist and wheel
+        run: poetry build
+      - name: Publish package to PyPI
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          poetry config pypi-token.pypi $PYPI_API_TOKEN
+          poetry publish
