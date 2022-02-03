@@ -436,6 +436,12 @@ def task(*args, **kwargs):
                 When outside of Lambda, the func passed to @task is run and we
                 return the actual value.
             """
+            try:
+                json.dumps(args)
+                json.dumps(kwargs)
+            except (TypeError, OverflowError):
+                raise AsyncException("@task requires JSON serializable args and kwargs")
+
             lambda_function_name = lambda_function_name_arg or os.environ.get(
                 "AWS_LAMBDA_FUNCTION_NAME"
             )
