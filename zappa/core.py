@@ -1405,7 +1405,7 @@ class Zappa:
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
         }
 
-        if lambda_aws_config["PackageType"] != "Image":
+        if lambda_aws_config.get("PackageType",None) != "Image":
             kwargs.update(
                 {
                     "Handler": handler,
