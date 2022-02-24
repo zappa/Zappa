@@ -1896,16 +1896,7 @@ class Zappa:
         authorizer_resource.Name = authorizer.get("name", "ZappaAuthorizer")
         authorizer_resource.Type = authorizer_type
         authorizer_resource.AuthorizerUri = uri
-        authorizer_resource.TokenSource = (
-            "method.request.header.%s" % authorizer.get("token_header", "Authorization")
-        )
-        authorizer_resource.IdentitySources = [(
-            "method.request.header.%s" % authorizer.get("identity_source", "Authorization")
-        ),
-        (
-            "method.request.header.%s" % authorizer.get("identity_source", "Host")
-        )
-        ]
+
         if identity_validation_expression:
             authorizer_resource.IdentityValidationExpression = (
                 identity_validation_expression
@@ -1917,6 +1908,9 @@ class Zappa:
             authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
                 "result_ttl", 300
             )
+            authorizer_resource.IdentitySource = (
+                "method.request.header.%s" % authorizer.get("token_header", "Authorization")
+            )
             authorizer_resource.AuthorizerCredentials = self.credentials_arn
         if authorizer_type == "COGNITO_USER_POOLS":
             authorizer_resource.ProviderARNs = authorizer.get("provider_arns")
@@ -1925,6 +1919,9 @@ class Zappa:
                 self.get_credentials_arn()
             authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
                 "result_ttl", 300
+            )
+            authorizer_resource.IdentitySource = (
+                "method.request.header.%s" % authorizer.get("identity_sources", {"header": "Authorization"})
             )
 
         self.cf_api_resources.append(authorizer_resource.title)
