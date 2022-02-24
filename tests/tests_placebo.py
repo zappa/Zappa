@@ -443,11 +443,69 @@ class TestZappa(unittest.TestCase):
         }
         self.assertEqual("AWS SQS EVENT", lh.handler(event, None))
 
-        # Test Authorizer event
+        # Test Authorizer event of type TOKEN
         event = {
             "authorizationToken": "hubtoken1",
             "methodArn": "arn:aws:execute-api:us-west-2:1234:xxxxx/dev/GET/v1/endpoint/param",
             "type": "TOKEN",
+        }
+        self.assertEqual("AUTHORIZER_EVENT", lh.handler(event, None))
+
+        # Test Authorizer event of type REQUEST
+        event = {
+            "type": "REQUEST",
+            "methodArn": "arn:aws:execute-api:us-west-2:1234:xxxxx/dev/GET/v1/endpoint/param",
+            "resource": "/",
+            "path": "/",
+            "httpMethod": "GET",
+            "headers": {
+                "Authorization": "Basic dXNlcm5hbWU6cGFzc3dvcmQ=",
+                "Host": "example.com"
+            },
+            "multiValueHeaders": {
+                "Authorization": [
+                    "Basic dXNlcm5hbWU6cGFzc3dvcmQ="
+                ],
+                "Host": [
+                    "example.com"
+                ]
+            },
+            "queryStringParameters": {},
+            "multiValueQueryStringParameters": {},
+            "pathParameters": {},
+            "stageVariables": {},
+            "requestContext": {
+                "resourceId": "test-invoke-resource-id",
+                "resourcePath": "/",
+                "httpMethod": "GET",
+                "extendedRequestId": "ODtjMEaurPEFpbQ=",
+                "requestTime": "24/Feb/2022: 17: 39: 45 +0000",
+                "path": "/",
+                "accountId": "429480868624",
+                "protocol": "HTTP/1.1",
+                "stage": "test-invoke-stage",
+                "domainPrefix": "testPrefix",
+                "requestTimeEpoch": 1645724385013,
+                "requestId": "13e8a7e1-1b24-467a-afd1-854d7268db1b",
+                "identity": {
+                    "cognitoIdentityPoolId": None,
+                    "cognitoIdentityId": None,
+                    "apiKey": "test-invoke-api-key",
+                    "principalOrgId": None,
+                    "cognitoAuthenticationType": None,
+                    "userArn": "arn:aws:iam::fooo:user/my.username",
+                    "apiKeyId": "test-invoke-api-key-id",
+                    "userAgent": "aws-internal/3 aws-sdk-java/1.12.159 Linux/5.4.172-100.336.amzn2int.x86_64 OpenJDK_64-Bit_Server_VM/25.322-b06 java/1.8.0_322 vendor/Oracle_Corporation cfg/retry-mode/standard",
+                    "accountId": "429480868624",
+                    "caller": "AIDAWH7YN7MIM5EMI2SCJ",
+                    "sourceIp": "test-invoke-source-ip",
+                    "accessKey": "ASIAWH7YN7MIOMF3BO7W",
+                    "cognitoAuthenticationProvider": None,
+                    "user": None
+                },
+                "domainName": "testPrefix.testDomainName",
+                "apiId": "nyfueqhql3"
+            }
         }
         self.assertEqual("AUTHORIZER_EVENT", lh.handler(event, None))
 

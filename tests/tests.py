@@ -495,6 +495,7 @@ class TestZappa(unittest.TestCase):
 
         # Authorizer and IAM
         authorizer = {
+            "type": "token",
             "function": "runapi.authorization.gateway_authorizer.evaluate_token",
             "result_ttl": 300,
             "token_header": "Authorization",
@@ -588,6 +589,22 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(
             "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:my-function/invocations",
             parsable_template["Resources"]["Authorizer"]["Properties"]["AuthorizerUri"],
+        )
+
+        # Authorizer of type request
+        authorizer = {
+            "type": "request",
+            "function": "runapi.authorization.gateway_authorizer.evaluate_token",
+            "result_ttl": 300,
+            "identity_sources": [
+                "Authorization",
+                "Host"
+            ]
+        }
+        z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)
+        parsable_template = json.loads(z.cf_template.to_json())
+        self.assertEqual(
+            "REQUEST", parsable_template["Resources"]["Authorizer"]["Properties"]["Type"]
         )
 
     def test_policy_json(self):
