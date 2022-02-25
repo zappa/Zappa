@@ -1920,6 +1920,7 @@ class Zappa:
             authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
                 "result_ttl", 300
             )
+            authorizer_resource.IdentitySource = ""
             identity_sources = authorizer.get("identity_sources", {'header': 'Authorization'})
             for source_key in identity_sources:
                 if source_key == "header":
