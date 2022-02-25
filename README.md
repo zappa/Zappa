@@ -903,19 +903,18 @@ to change Zappa's behavior. Use these at your own risk!
         "iam_authorization": false, // optional, use IAM to require request signing. Default false. Note that enabling this will override the authorizer configuration.
         "include": ["your_special_library_to_load_at_handler_init"], // load special libraries into PYTHONPATH at handler init that certain modules cannot find on path
         "authorizer": {
-            "type": "request", // Authorizer type, request or token (Default 'token')
+            "type": "REQUEST", // Authorizer type, REQUEST or TOKEN (Default 'TOKEN')
             "function": "your_module.your_auth_function", // Local function to run for token validation. For more information about the function see below.
             "arn": "arn:aws:lambda:<region>:<account_id>:function:<function_name>", // Existing Lambda function to run for token validation.
             "result_ttl": 300, // Optional. Default 300. The time-to-live (TTL) period, in seconds, that specifies how long API Gateway caches authorizer results. Currently, the maximum TTL value is 3600 seconds.
             "token_header": "Authorization", // Optional. Default 'Authorization'. The name of a custom authorization header containing the token that clients submit as part of their requests.
             "validation_expression": "^Bearer \\w+$", // Optional. A validation expression for the incoming token, specify a regular expression.
-            "identity_sources": { // Optional. Default to header 'Authorization'. The name of the custom request info destined for the authorizer.
+            "identity_sources": { // Optional. Default to { 'header' : 'Authorization'}. The names of the custom request expressions destined for the authorizer.
                 "header": "Authorization",
                 "query_string": "token",
-                "multi_value_query_string": "token",
                 "stage_variable": "test",
-                "context": "httpMethod",
-            }]
+                "context": "principalId",
+            }
         },
         "keep_warm": true, // Create CloudWatch events to keep the server warm. Default true. To remove, set to false and then `unschedule`.
         "keep_warm_expression": "rate(4 minutes)", // How often to execute the keep-warm, in cron and rate format. Default 4 minutes.

@@ -1920,9 +1920,19 @@ class Zappa:
             authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
                 "result_ttl", 300
             )
-            authorizer_resource.IdentitySource = (
-                "method.request.header.%s" % authorizer.get("identity_sources", {"header": "Authorization"})
-            )
+            identity_sources = authorizer.get("identity_sources", {'header': 'Authorization'})
+            for source_key in identity_sources:
+                if source_key == "header":
+                    authorizer_resource.IdentitySource += "method.request.header.%s," % identity_sources[source_key]
+                elif source_key == "query_string":
+                    authorizer_resource.IdentitySource += "method.request.querystring.%s," % identity_sources[source_key]
+                elif source_key == "stage_variable":
+                    authorizer_resource.IdentitySource += "method.stageVariables.%s," % identity_sources[source_key]
+                elif source_key == "context":
+                    authorizer_resource.IdentitySource += "method.context.%s," % identity_sources[source_key]
+
+            if authorizer_resource.IdentitySource[-1] == ',':
+                authorizer_resource.IdentitySource = authorizer_resource.IdentitySource[:-1]
 
         self.cf_api_resources.append(authorizer_resource.title)
         self.cf_template.add_resource(authorizer_resource)
@@ -2422,7 +2432,9 @@ class Zappa:
         elif iam_authorization:
             auth_type = "AWS_IAM"
         elif authorizer:
-            auth_type = authorizer.get("type", "CUSTOM")
+            auth_type = authorizer.get("type", "TOKEN").upper()
+            if auth_type in ["TOKEN", "REQUEST"]:
+                auth_type = "CUSTOM"
 
         # build a fresh template
         self.cf_template = troposphere.Template()
