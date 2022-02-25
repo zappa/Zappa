@@ -591,14 +591,16 @@ class TestZappa(unittest.TestCase):
             parsable_template["Resources"]["Authorizer"]["Properties"]["AuthorizerUri"],
         )
 
-        # Authorizer of type request
+        # Authorizer of type request with identity sources
         authorizer = {
             "type": "REQUEST",
             "function": "runapi.authorization.gateway_authorizer.evaluate_token",
             "result_ttl": 300,
             "identity_sources": {
                 "header": "Authorization",
-                "header": "Host"
+                "query_string": "token",
+                "stage_variable": "test",
+                "context": "principalId",
             }
         }
         z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)
@@ -613,6 +615,34 @@ class TestZappa(unittest.TestCase):
         )
         self.assertEqual(
             "REQUEST", parsable_template["Resources"]["Authorizer"]["Properties"]["Type"]
+        )
+        self.assertEqual(
+            "method.request.header.Authorization,method.request.querystring.token,method.stageVariables.test,method.context.principalId",
+            parsable_template["Resources"]["Authorizer"]["Properties"]["IdentitySource"]
+        )
+
+        # Authorizer of type request without identity sources
+        authorizer = {
+            "type": "REQUEST",
+            "function": "runapi.authorization.gateway_authorizer.evaluate_token",
+            "result_ttl": 300,
+        }
+        z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)
+        parsable_template = json.loads(z.cf_template.to_json())
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET0"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET1"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "REQUEST", parsable_template["Resources"]["Authorizer"]["Properties"]["Type"]
+        )
+        self.assertEqual(
+            "",
+            parsable_template["Resources"]["Authorizer"]["Properties"]["IdentitySource"]
         )
 
     def test_policy_json(self):

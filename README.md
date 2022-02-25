@@ -909,7 +909,7 @@ to change Zappa's behavior. Use these at your own risk!
             "result_ttl": 300, // Optional. Default 300. The time-to-live (TTL) period, in seconds, that specifies how long API Gateway caches authorizer results. Currently, the maximum TTL value is 3600 seconds.
             "token_header": "Authorization", // Optional. Default 'Authorization'. The name of a custom authorization header containing the token that clients submit as part of their requests.
             "validation_expression": "^Bearer \\w+$", // Optional. A validation expression for the incoming token, specify a regular expression.
-            "identity_sources": { // Optional. Default to { 'header' : 'Authorization'}. The names of the custom request expressions destined for the authorizer.
+            "identity_sources": { // Optional. The names of the custom request expressions destined for the authorizer.
                 "header": "Authorization",
                 "query_string": "token",
                 "stage_variable": "test",

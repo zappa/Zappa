@@ -1921,7 +1921,7 @@ class Zappa:
                 "result_ttl", 300
             )
             authorizer_resource.IdentitySource = ""
-            identity_sources = authorizer.get("identity_sources", {'header': 'Authorization'})
+            identity_sources = authorizer.get("identity_sources", {})
             for source_key in identity_sources:
                 if source_key == "header":
                     authorizer_resource.IdentitySource += "method.request.header.%s," % identity_sources[source_key]
@@ -1932,7 +1932,7 @@ class Zappa:
                 elif source_key == "context":
                     authorizer_resource.IdentitySource += "method.context.%s," % identity_sources[source_key]
 
-            if authorizer_resource.IdentitySource[-1] == ',':
+            if len(authorizer_resource.IdentitySource) > 1 and authorizer_resource.IdentitySource[-1] == ',':
                 authorizer_resource.IdentitySource = authorizer_resource.IdentitySource[:-1]
 
         self.cf_api_resources.append(authorizer_resource.title)
