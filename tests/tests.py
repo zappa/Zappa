@@ -597,10 +597,10 @@ class TestZappa(unittest.TestCase):
             "function": "runapi.authorization.gateway_authorizer.evaluate_token",
             "result_ttl": 300,
             "identity_sources": {
-                "header": "Authorization",
-                "query_string": "token",
-                "stage_variable": "test",
-                "context": "principalId",
+                "headers": ["Authorization"],
+                "query_strings": ["token"],
+                "stage_variables": ["test"],
+                "contexts": ["principalId"],
             }
         }
         z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)

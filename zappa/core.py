@@ -1923,14 +1923,18 @@ class Zappa:
             authorizer_resource.IdentitySource = ""
             identity_sources = authorizer.get("identity_sources", {})
             for source_key in identity_sources:
-                if source_key == "header":
-                    authorizer_resource.IdentitySource += "method.request.header.%s," % identity_sources[source_key]
-                elif source_key == "query_string":
-                    authorizer_resource.IdentitySource += "method.request.querystring.%s," % identity_sources[source_key]
-                elif source_key == "stage_variable":
-                    authorizer_resource.IdentitySource += "method.stageVariables.%s," % identity_sources[source_key]
-                elif source_key == "context":
-                    authorizer_resource.IdentitySource += "method.context.%s," % identity_sources[source_key]
+                if source_key == "headers":
+                    for header in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.request.header.%s," % header
+                elif source_key == "query_strings":
+                    for query_string in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.request.querystring.%s," % query_string
+                elif source_key == "stage_variables":
+                    for stage_variable in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.stageVariables.%s," % stage_variable
+                elif source_key == "contexts":
+                    for context in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.context.%s," % context
 
             if len(authorizer_resource.IdentitySource) > 1 and authorizer_resource.IdentitySource[-1] == ',':
                 authorizer_resource.IdentitySource = authorizer_resource.IdentitySource[:-1]

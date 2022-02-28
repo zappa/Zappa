@@ -910,10 +910,10 @@ to change Zappa's behavior. Use these at your own risk!
             "token_header": "Authorization", // Optional. Default 'Authorization'. The name of a custom authorization header containing the token that clients submit as part of their requests.
             "validation_expression": "^Bearer \\w+$", // Optional. A validation expression for the incoming token, specify a regular expression.
             "identity_sources": { // Optional. The names of the custom request expressions destined for the authorizer.
-                "header": "Authorization",
-                "query_string": "token",
-                "stage_variable": "test",
-                "context": "principalId",
+                "headers": ["Authorization", "Host"],
+                "query_strings": ["token"],
+                "stage_variables": ["test"],
+                "contexts": ["principalId"],
             }
         },
         "keep_warm": true, // Create CloudWatch events to keep the server warm. Default true. To remove, set to false and then `unschedule`.
