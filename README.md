@@ -833,6 +833,7 @@ to change Zappa's behavior. Use these at your own risk!
         "assume_policy": "my_assume_policy.json", // optional, IAM assume policy JSON file
         "attach_policy": "my_attach_policy.json", // optional, IAM attach policy JSON file
         "apigateway_policy": "my_apigateway_policy.json", // optional, API Gateway resource policy JSON file
+        "architectures": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
         "async_response_table": "your_dynamodb_table_name",  // the DynamoDB table name to use for captured async responses; defaults to None (can't capture)
