@@ -126,6 +126,7 @@ class ZappaCLI:
     context_header_mappings = None
     tags = []
     layers = None
+    architecture = None
 
     stage_name_env_pattern = re.compile("^[a-zA-Z0-9_]+$")
 
@@ -911,6 +912,7 @@ class ZappaCLI:
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
+                architecture=self.architecture,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -1136,6 +1138,7 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
+            architecture=self.architecture,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1172,6 +1175,8 @@ class ZappaCLI:
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
             wait=False,
+            architecture=self.architecture,
+
         )
 
         # Finally, delete the local copy our zip package
@@ -2544,7 +2549,7 @@ class ZappaCLI:
         self.num_retained_versions = self.stage_config.get(
             "num_retained_versions", None
         )
-
+        self.architecture = [self.stage_config.get("architecture", "x86_64")]
         # Check for valid values of num_retained_versions
         if (
             self.num_retained_versions is not None
@@ -2615,6 +2620,9 @@ class ZappaCLI:
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
 
+        # Architectures
+        self.architecture = [self.stage_config.get("architecture", "x86_64")]
+
         desired_role_name = self.lambda_name + "-ZappaLambdaExecutionRole"
         self.zappa = Zappa(
             boto_session=session,
@@ -2627,6 +2635,7 @@ class ZappaCLI:
             tags=self.tags,
             endpoint_urls=self.stage_config.get("aws_endpoint_urls", {}),
             xray_tracing=self.xray_tracing,
+            architecture=self.architecture
         )
 
         for setting in CUSTOM_SETTINGS:
