@@ -919,6 +919,7 @@ to change Zappa's behavior. Use these at your own risk!
         "log_level": "DEBUG", // Set the Zappa log level. Can be one of CRITICAL, ERROR, WARNING, INFO and DEBUG. Default: DEBUG
         "manage_roles": true, // Have Zappa automatically create and define IAM execution roles and policies. Default true. If false, you must define your own IAM Role and role_name setting.
         "memory_size": 512, // Lambda function memory in MB. Default 512.
+        "ephemeral_storage": { "Size": 512 }, // Lambda ephemeral storage memory in MB. Default 512. Max 10240.
         "num_retained_versions":null, // Indicates the number of old versions to retain for the lambda. If absent, keeps all the versions of the function.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
@@ -1005,7 +1006,7 @@ You can also simply handle CORS directly in your application. Your web framework
 
 ### Large Projects
 
-AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS currently [limits](https://docs.aws.amazon.com/lambda/latest/dg/limits.html) the `/tmp` directory storage to 512 MB, so your project must still be smaller than that.
+AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS [supports](https://aws.amazon.com/blogs/compute/using-larger-ephemeral-storage-for-aws-lambda/) custom `/tmp` directory storage size in a range of 512 - 10240 MB. Use `ephemeral_storage` in `zappa_settings.json` to adjust to your needs if your project is larger than default 512 MB.
 
 ### Enabling Bash Completion
 
