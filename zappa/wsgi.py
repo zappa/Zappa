@@ -102,6 +102,7 @@ def create_wsgi_request(
     if "," in x_forwarded_for:
         # The last one is the cloudfront proxy ip. The second to last is the real client ip.
         # Everything else is user supplied and untrustworthy.
+        x_forwarded_for = x_forwarded_for.replace(", ", ",")
         remote_addr = x_forwarded_for.split(", ")[-2]
     else:
         remote_addr = x_forwarded_for or "127.0.0.1"
