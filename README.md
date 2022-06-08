@@ -769,7 +769,7 @@ It is possible to capture the responses of Asynchronous tasks.
 
 Zappa uses DynamoDB as the backend for these.
 
-To capture responses, you must configure a `async_response_table` in `zappa_settings`. This is the DynamoDB table name. Then, when decorating with `@task`, pass `capture_response=True`.
+To capture responses, you must configure a `async_response_table` in `zappa_settings` or pass `async_response_table` argument to `@task` decorator or `run` method. `async_response_table` argument passed to `@task` decorator or `run` method will override the `async_response_table` value specified in `zappa_settings`. This is the DynamoDB table name. Then, when decorating with `@task`, pass `capture_response=True`.
 
 Async responses are assigned a `response_id`. This is returned as a property of the `LambdaAsyncResponse` (or `SnsAsyncResponse`) object that is returned by the `@task` decorator.
 
@@ -811,6 +811,57 @@ def longrunner(delay):
     return {'MESSAGE': "It took {} seconds to generate this.".format(delay)}
 
 ```
+
+Passing `async_response_table` argument to `@task` decorator or `run` method is useful when you are invoking your aws lambda function remotely from outside of aws lambda environment and also retrieving the task results from outside of aws lambda environment. When retrieving the task results from outside of aws lambda environment, `zappa_settings.py` file will not be present in your environment and hence `ASYNC_RESPONSE_TABLE` will be `None`. 
+
+Passing `async_response_table` argument to `@task` decorator or `run` method will then override the value of `ASYNC_RESPONSE_TABLE` and you will be able to capture the response from outside of aws lambda environment.  
+
+Example:
+
+```python
+from zappa.asynchronous import run, get_async_response
+from flask import Flask, make_response, abort, url_for, redirect, request, jsonify
+from time import sleep
+
+app = Flask(__name__)
+
+@app.route('/payload')
+def payload():
+    delay = request.args.get('delay', 60)
+    x = run(
+        longrunner,
+        args=(delay,),
+        remote_aws_lambda_function_name='your-remote-lambda-function-name',
+        remote_aws_region='your-remote-aws-region',
+        capture_response=True,
+        async_response_table='your-async-response-table'
+    )
+    return redirect(url_for('response', response_id=x.response_id))
+
+
+@app.route('/async-response/<response_id>')
+def response(response_id):
+    response = get_async_response(response_id, async_response_table='your-async-response-table')
+    if response is None:
+        abort(404)
+
+    if response['status'] == 'complete':
+        return jsonify(response['response'])
+
+    sleep(5)
+
+    return "Not yet ready. Redirecting.", 302, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Location': url_for('response', response_id=response_id, backoff=5),
+        'X-redirect-reason': "Not yet ready.",
+    }
+
+def longrunner(delay):
+    sleep(float(delay))
+    return {'MESSAGE': "It took {} seconds to generate this.".format(delay)}
+
+```
+ 
 
 ## Advanced Settings
 
