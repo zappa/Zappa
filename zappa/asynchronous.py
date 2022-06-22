@@ -151,11 +151,14 @@ class LambdaAsyncResponse:
 
         self.lambda_function_name = lambda_function_name
         self.aws_region = aws_region
+        self.async_response_table = kwargs.get("async_response_table") or ASYNC_RESPONSE_TABLE
+
         if capture_response:
-            if ASYNC_RESPONSE_TABLE is None:
+            if self.async_response_table is None:
                 print(
                     "Warning! Attempted to capture a response without "
-                    "async_response_table configured in settings (you won't "
+                    "specifying async_response_table in arguments or "
+                    "configuring async_response_table in settings (you won't "
                     "capture async responses)."
                 )
                 capture_response = False
@@ -175,6 +178,7 @@ class LambdaAsyncResponse:
         message = {
             "task_path": task_path,
             "capture_response": self.capture_response,
+            "async_response_table": self.async_response_table,
             "response_id": self.response_id,
             "args": args,
             "kwargs": kwargs,
@@ -237,11 +241,14 @@ class SnsAsyncResponse(LambdaAsyncResponse):
         # Issue: https://github.com/Miserlou/Zappa/issues/1209
         # TODO: Refactor
         self.capture_response = capture_response
+        self.async_response_table = kwargs.get("async_response_table") or ASYNC_RESPONSE_TABLE
+
         if capture_response:
-            if ASYNC_RESPONSE_TABLE is None:
+            if self.async_response_table is None:
                 print(
                     "Warning! Attempted to capture a response without "
-                    "async_response_table configured in settings (you won't "
+                    "specifying async_response_table in arguments or "
+                    "configuring async_response_table in settings (you won't "
                     "capture async responses)."
                 )
                 capture_response = False
@@ -301,9 +308,10 @@ def run_message(message):
     'task_path', 'args', and 'kwargs' used by lambda routing
     and a 'command' in handler.py
     """
+    async_response_table = message.get("async_response_table") or ASYNC_RESPONSE_TABLE 
     if message.get("capture_response", False):
         DYNAMODB_CLIENT.put_item(
-            TableName=ASYNC_RESPONSE_TABLE,
+            TableName=async_response_table,
             Item={
                 "id": {"S": str(message["response_id"])},
                 "ttl": {"N": str(int(time.time() + 600))},
@@ -320,7 +328,7 @@ def run_message(message):
 
     if message.get("capture_response", False):
         DYNAMODB_CLIENT.update_item(
-            TableName=ASYNC_RESPONSE_TABLE,
+            TableName=async_response_table,
             Key={"id": {"S": str(message["response_id"])}},
             UpdateExpression="SET async_response = :r, async_status = :s",
             ExpressionAttributeValues={
@@ -345,6 +353,7 @@ def run(
     capture_response=False,
     remote_aws_lambda_function_name=None,
     remote_aws_region=None,
+    async_response_table=None,
     **task_kwargs
 ):
     """
@@ -370,6 +379,7 @@ def run(
         lambda_function_name=lambda_function_name,
         aws_region=aws_region,
         capture_response=capture_response,
+        async_response_table=async_response_table,
         **task_kwargs
     ).send(task_path, args, kwargs)
 
@@ -411,6 +421,7 @@ def task(*args, **kwargs):
         aws_region_arg = kwargs.get("remote_aws_region")
 
     capture_response = kwargs.get("capture_response", False)
+    async_response_table = kwargs.get("async_response_table") or ASYNC_RESPONSE_TABLE
 
     def func_wrapper(func):
 
@@ -446,6 +457,7 @@ def task(*args, **kwargs):
                     lambda_function_name=lambda_function_name,
                     aws_region=aws_region,
                     capture_response=capture_response,
+                    async_response_table=async_response_table
                 ).send(task_path, args, kwargs)
                 return send_result
             else:
@@ -495,12 +507,13 @@ def get_func_task_path(func):
     return task_path
 
 
-def get_async_response(response_id):
+def get_async_response(response_id, async_response_table=None):
     """
     Get the response from the async table
     """
+    async_response_table = async_response_table or ASYNC_RESPONSE_TABLE
     response = DYNAMODB_CLIENT.get_item(
-        TableName=ASYNC_RESPONSE_TABLE, Key={"id": {"S": str(response_id)}}
+        TableName=async_response_table, Key={"id": {"S": str(response_id)}}
     )
     if "Item" not in response:
         return None
