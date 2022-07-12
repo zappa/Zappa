@@ -1,7 +1,7 @@
 # Zappa Changelog
 
 ## 0.54.2
-* Update documentation to reflect python 3.9 support
+* Update documentation to reflect python 3.9 support (#1137)
 
 ## 0.54.1
 * Increase Lambda client read timeout to 15m (#1065)
@@ -11,6 +11,7 @@
 * Pin troposphere version and update to 3.x (#1029)
 * Relax stage name restrictions when not using apigateway (#993)
 * Wait for lambda to become active during deploy/update (#992)
+* add support for Python 3.9 (#1026)
 
 ## 0.53.0
 * Deprecated ACME v1 for Lets Encrypt
