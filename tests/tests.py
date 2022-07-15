@@ -2208,7 +2208,12 @@ USE_TZ = True
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "slim_handler"
         zappa_cli.load_settings("test_settings.json")
-        zappa_cli.create_package()
+
+        # create_package builds the package from the latest zappa pypi release
+        # If the *current* minor release is not available on pypi create_package() will fail
+        # Specify the latest pypi release here
+        latest_pypi_release = "0.54.2"
+        zappa_cli.create_package(use_zappa_release=latest_pypi_release)
 
         self.assertTrue(os.path.isfile(zappa_cli.handler_path))
         self.assertTrue(os.path.isfile(zappa_cli.zip_path))

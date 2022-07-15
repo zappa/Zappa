@@ -23,6 +23,7 @@ import time
 import zipfile
 from builtins import bytes, input
 from datetime import datetime, timedelta
+from typing import Optional
 
 import argcomplete
 import botocore
@@ -2396,7 +2397,7 @@ class ZappaCLI:
                 except ValueError:  # pragma: no cover
                     raise ValueError("Unable to load the Zappa settings JSON. It may be malformed.")
 
-    def create_package(self, output=None):
+    def create_package(self, output=None, use_zappa_release: Optional[str] = None):
         """
         Ensure that the package can be properly configured,
         and then create it.
@@ -2427,7 +2428,7 @@ class ZappaCLI:
             exclude.append(cur_venv.split("/")[-1])
             self.handler_path = self.zappa.create_lambda_zip(
                 prefix="handler_{0!s}".format(self.lambda_name),
-                venv=self.zappa.create_handler_venv(),
+                venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),
                 handler_file=handler_file,
                 slim_handler=True,
                 exclude=exclude,

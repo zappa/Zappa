@@ -24,6 +24,7 @@ import zipfile
 from builtins import bytes, int
 from distutils.dir_util import copy_tree
 from io import open
+from typing import Optional
 
 import boto3
 import botocore
@@ -437,7 +438,7 @@ class Zappa:
                     deps += self.get_deps_list(pkg_name=req.project_name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
-    def create_handler_venv(self):
+    def create_handler_venv(self, use_zappa_release: Optional[str] = None):
         """
         Takes the installed zappa and brings it into a fresh virtualenv-like folder. All dependencies are then downloaded.
         """
@@ -470,7 +471,14 @@ class Zappa:
         # Use pip to download zappa's dependencies.
         # Copying from current venv causes issues with things like PyYAML that installs as yaml
         zappa_deps = self.get_deps_list("zappa")
-        pkg_list = ["{0!s}=={1!s}".format(dep, version) for dep, version in zappa_deps]
+        pkg_list = []
+        for dep, version in zappa_deps:
+            # allow specified zappa version for slim_handler_test
+            if dep == "zappa" and use_zappa_release:
+                pkg_version_str = f"{dep}=={use_zappa_release}"
+            else:
+                pkg_version_str = f"{dep}=={version}"
+            pkg_list.append(pkg_version_str)
 
         # Need to manually add setuptools
         pkg_list.append("setuptools")
