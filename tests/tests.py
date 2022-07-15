@@ -14,7 +14,6 @@ import unittest
 import uuid
 import zipfile
 from io import BytesIO
-from packaging import version
 from subprocess import check_output
 
 import botocore
@@ -23,6 +22,7 @@ import flask
 import mock
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
+from packaging import version
 
 from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
 from zappa.core import ALB_LAMBDA_ALIAS, ASSUME_POLICY, ATTACH_POLICY, Zappa
@@ -2220,7 +2220,9 @@ USE_TZ = True
 
         # get valid versions from tags
         version_match_string = "v?[0-9]+.[0-9]+.[0-9]+"
-        tags = [tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())]
+        tags = [
+            tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())
+        ]
 
         latest_release_tag = sorted(tags, key=version.parse)[-1]
         zappa_cli.create_package(use_zappa_release=latest_release_tag)
