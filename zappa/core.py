@@ -280,7 +280,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.6",  # Detected at runtime in CLI
+        runtime="python3.7",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -305,9 +305,7 @@ class Zappa:
 
         self.runtime = runtime
 
-        if self.runtime == "python3.6":
-            self.manylinux_suffix_start = "cp36m"
-        elif self.runtime == "python3.7":
+        if self.runtime == "python3.7":
             self.manylinux_suffix_start = "cp37m"
         elif self.runtime == "python3.8":
             # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
@@ -1100,7 +1098,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.6",
+        runtime="python3.7",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         xray_tracing=False,
@@ -1283,7 +1281,7 @@ class Zappa:
         memory_size=512,
         publish=True,
         vpc_config=None,
-        runtime="python3.6",
+        runtime="python3.7",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
