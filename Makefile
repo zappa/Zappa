@@ -42,7 +42,7 @@ black:
 	black --line-length 127 .
 
 black-check:
-	black . --check
+	black --line-length 127 . --check
 	@echo "If this fails, simply run: make black"
 
 isort:

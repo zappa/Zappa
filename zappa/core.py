@@ -545,7 +545,7 @@ class Zappa:
 
         # Pip is a weird package.
         # Calling this function in some environments without this can cause.. funkiness.
-        import pip # noqa: 547
+        import pip  # noqa: 547
 
         if not venv:
             venv = self.get_current_venv()
