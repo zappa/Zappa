@@ -1027,7 +1027,7 @@ class Zappa:
                 jsondata = json.dumps(data)
                 metafile.write(bytes(jsondata, "utf-8"))
 
-        if package_version not in data["releases"]:
+        if package_version not in data.get("releases", []):
             return None, None
 
         for f in data["releases"][package_version]:
