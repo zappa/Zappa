@@ -1028,7 +1028,9 @@ class Zappa:
                 metafile.write(bytes(jsondata, "utf-8"))
 
         if package_version not in data.get("releases", []):
-            logger.warning(f"package_version({package_version}) not found in {package_name} metafile={json_file_path}")
+            logger.warning(
+                f"package_version({package_version}) not found in {package_name} metafile={json_file_path}"
+            )
             return None, None
 
         for f in data["releases"][package_version]:
