@@ -22,7 +22,7 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipefile') }}
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
       - name: Setup Virtualenv
         run: python -m venv .venv
