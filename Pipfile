@@ -16,7 +16,7 @@ mock = "*"
 mypy = "*"
 nose = "*"
 nose-timer = "*"
-pipenv = "==2021.11.09"
+pipenv = ">2021.11.15"
 
 [packages]
 argcomplete = "*"
