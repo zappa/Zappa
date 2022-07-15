@@ -17,6 +17,7 @@ mypy = "*"
 nose = "*"
 nose-timer = "*"
 pipenv = ">2021.11.15"
+packaging = "*"
 
 [packages]
 argcomplete = "*"

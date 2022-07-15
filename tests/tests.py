@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import string
 import sys
@@ -13,6 +14,8 @@ import unittest
 import uuid
 import zipfile
 from io import BytesIO
+from packaging import version
+from subprocess import check_output
 
 import botocore
 import botocore.stub
@@ -2211,9 +2214,16 @@ USE_TZ = True
 
         # create_package builds the package from the latest zappa pypi release
         # If the *current* minor release is not available on pypi create_package() will fail
-        # Specify the latest pypi release here
-        latest_pypi_release = "0.54.2"
-        zappa_cli.create_package(use_zappa_release=latest_pypi_release)
+        # assumes that the latest pypi release has a tag matching "v?[0-9]+.[0-9]+.[0-9]+" defined in git.
+        command = "git tag"
+        command_output = check_output(command, shell=True).decode("utf8")
+
+        # get valid versions from tags
+        version_match_string = "v?[0-9]+.[0-9]+.[0-9]+"
+        tags = [tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())]
+
+        latest_release_tag = sorted(tags, key=version.parse)[-1]
+        zappa_cli.create_package(use_zappa_release=latest_release_tag)
 
         self.assertTrue(os.path.isfile(zappa_cli.handler_path))
         self.assertTrue(os.path.isfile(zappa_cli.zip_path))
