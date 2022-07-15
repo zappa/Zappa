@@ -12,12 +12,10 @@ with open("README.md", encoding="utf-8") as readme_file:
 pipfile = ConfigParser()
 pipfile.read(Path(__file__).parent.resolve() / "Pipfile")
 required = [
-    "{}{}".format(name, version.strip('"')) if version != '"*"' else name
-    for name, version in pipfile["packages"].items()
+    "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["packages"].items()
 ]
 test_required = [
-    "{}{}".format(name, version.strip('"')) if version != '"*"' else name
-    for name, version in pipfile["dev-packages"].items()
+    "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["dev-packages"].items()
 ]
 
 setup(

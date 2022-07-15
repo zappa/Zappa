@@ -44,11 +44,7 @@ class ZappaWSGIMiddleware:
             Related: https://github.com/Miserlou/Zappa/issues/1965
             """
 
-            new_headers = [
-                header
-                for header in headers
-                if ((type(header[0]) != str) or (header[0].lower() != "set-cookie"))
-            ]
+            new_headers = [header for header in headers if ((type(header[0]) != str) or (header[0].lower() != "set-cookie"))]
             cookie_headers = [
                 (header[0].lower(), header[1])
                 for header in headers

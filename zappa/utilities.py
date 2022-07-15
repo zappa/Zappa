@@ -44,7 +44,7 @@ def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
                     st = os.lstat(s)
                     mode = stat.S_IMODE(st.st_mode)
                     os.lchmod(d, mode)
-                except:
+                except Exception:
                     pass  # lchmod not available
         elif os.path.isdir(s):
             copytree(s, d, metadata, symlinks, ignore)
@@ -108,7 +108,7 @@ def string_to_timestamp(timestring):
         past = datetime.datetime.utcnow() - delta
         ts = calendar.timegm(past.timetuple())
         return ts
-    except Exception as e:
+    except Exception:
         pass
 
     if ts:
@@ -137,9 +137,7 @@ def detect_django_settings():
                 continue
             full = os.path.join(root, filename)
             package_path = full.replace(os.getcwd(), "")
-            package_module = (
-                package_path.replace(os.sep, ".").split(".", 1)[1].replace(".py", "")
-            )
+            package_module = package_path.replace(os.sep, ".").split(".", 1)[1].replace(".py", "")
 
             matches.append(package_module)
     return matches
@@ -175,11 +173,7 @@ def detect_flask_apps():
                         continue
 
                     package_path = full.replace(os.getcwd(), "")
-                    package_module = (
-                        package_path.replace(os.sep, ".")
-                        .split(".", 1)[1]
-                        .replace(".py", "")
-                    )
+                    package_module = package_path.replace(os.sep, ".").split(".", 1)[1].replace(".py", "")
                     app_module = package_module + "." + app
 
                     matches.append(app_module)
@@ -221,9 +215,7 @@ def get_topic_name(lambda_name):
 ##
 
 
-def get_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
-):
+def get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False):
     """
 
     Given an event_source dictionary item, a session and a lambda_arn,
@@ -335,9 +327,7 @@ def get_event_source(
             uuid = self._get_uuid(function)
             if uuid:
                 try:
-                    response = self._lambda.call(
-                        "get_event_source_mapping", UUID=self._get_uuid(function)
-                    )
+                    response = self._lambda.call("get_event_source_mapping", UUID=self._get_uuid(function))
                     LOG.debug(response)
                 except botocore.exceptions.ClientError:
                     LOG.debug("event source %s does not exist", self.arn)
@@ -363,9 +353,7 @@ def get_event_source(
                     )
                     kappa.event_source.sns.LOG.debug(response)
             except Exception:
-                kappa.event_source.sns.LOG.exception(
-                    "Unable to add filters for SNS topic %s", self.arn
-                )
+                kappa.event_source.sns.LOG.exception("Unable to add filters for SNS topic %s", self.arn)
 
         def add(self, function):
             super().add(function)
@@ -424,16 +412,12 @@ def get_event_source(
     return event_source_obj, ctx, funk
 
 
-def add_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
-):
+def add_event_source(event_source, lambda_arn, target_function, boto_session, dry=False):
     """
     Given an event_source dictionary, create the object and add the event source.
     """
 
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
+    event_source_obj, ctx, funk = get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False)
     # TODO: Detect changes in config and refine exists algorithm
     if not dry:
         if not event_source_obj.status(funk):
@@ -445,16 +429,12 @@ def add_event_source(
     return "dryrun"
 
 
-def remove_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
-):
+def remove_event_source(event_source, lambda_arn, target_function, boto_session, dry=False):
     """
     Given an event_source dictionary, create the object and remove the event source.
     """
 
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
+    event_source_obj, ctx, funk = get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False)
 
     # This is slightly dirty, but necessary for using Kappa this way.
     funk.arn = lambda_arn
@@ -465,16 +445,12 @@ def remove_event_source(
         return event_source_obj
 
 
-def get_event_source_status(
-    event_source, lambda_arn, target_function, boto_session, dry=False
-):
+def get_event_source_status(event_source, lambda_arn, target_function, boto_session, dry=False):
     """
     Given an event_source dictionary, create the object and get the event source status.
     """
 
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
+    event_source_obj, ctx, funk = get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False)
     return event_source_obj.status(funk)
 
 
@@ -540,20 +516,12 @@ def contains_python_files_or_subdirs(folder):
     Checks (recursively) if the directory contains .py or .pyc files
     """
     for root, dirs, files in os.walk(folder):
-        if [
-            filename
-            for filename in files
-            if filename.endswith(".py") or filename.endswith(".pyc")
-        ]:
+        if [filename for filename in files if filename.endswith(".py") or filename.endswith(".pyc")]:
             return True
 
         for d in dirs:
             for _, subdirs, subfiles in os.walk(d):
-                if [
-                    filename
-                    for filename in subfiles
-                    if filename.endswith(".py") or filename.endswith(".pyc")
-                ]:
+                if [filename for filename in subfiles if filename.endswith(".py") or filename.endswith(".pyc")]:
                     return True
 
     return False
@@ -580,7 +548,8 @@ def titlecase_keys(d):
 # https://github.com/Miserlou/Zappa/issues/1688
 def is_valid_bucket_name(name):
     """
-    Checks if an S3 bucket name is valid according to https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules
+    Checks if an S3 bucket name is valid according to:
+     https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules
     """
     # Bucket names must be at least 3 and no more than 63 characters long.
     if len(name) < 3 or len(name) > 63:
