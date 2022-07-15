@@ -1,5 +1,19 @@
 # Zappa Changelog
 
+## 0.55.1
+
+* Remove python 3.6 support
+* Update handler to be global if INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True (#1096)
+* Fix async invocation in Python 3 (#1006)
+* Drastically reduce cold start times by calling LambdaHandler externally (#982)
+* Support Newest Manylinux Version for dependencies (#1083)
+* Decode zappa invoke output regardless of --no-color option (#1069)
+* Convert project to using 'pipenv' to manage dependencies (#1077)
+* Ensure unique schedtuled event names (#1080)
+* Check isort in CI (#1078)
+* Use 'black' everywhere (#1076)
+* Update setup.py (#1050)
+
 ## 0.54.2
 * Update documentation to reflect python 3.9 support (#1137)
 
