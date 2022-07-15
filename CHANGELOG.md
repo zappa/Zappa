@@ -1,5 +1,8 @@
 # Zappa Changelog
 
+## 0.54.2
+* Update documentation to reflect python 3.9 support (#1137)
+
 ## 0.54.1
 * Increase Lambda client read timeout to 15m (#1065)
 * Unpin `Werkzeug` from `v0.x` (#1067)
