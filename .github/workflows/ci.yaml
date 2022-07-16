@@ -24,6 +24,8 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
+        name: make sure we have version tags
+        run: git fetch --unshallow --tags
       - name: Setup Virtualenv
         run: python -m venv .venv
       - name: Install
