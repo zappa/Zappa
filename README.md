@@ -1538,6 +1538,7 @@ If you are adding a non-trivial amount of new code, please include a functioning
 Please include the GitHub issue or pull request URL that has discussion related to your changes as a comment in the code ([example](https://github.com/zappa/Zappa/blob/fae2925431b820eaedf088a632022e4120a29f89/zappa/zappa.py#L241-L243)). This greatly helps for project maintainability, as it allows us to trace back use cases and explain decision making. Similarly, please make sure that you meet all of the requirements listed in the [pull request template](https://raw.githubusercontent.com/zappa/Zappa/master/.github/PULL_REQUEST_TEMPLATE.md).
 
 Please feel free to work on any open ticket, especially any ticket marked with the "help-wanted" label. If you get stuck or want to discuss an issue further, please join [our Slack channel](https://zappateam.slack.com/), where you'll find a community of smart and interesting people working dilligently on hard problems.
+[Zappa Slack Auto Invite](https://slackautoinviter.herokuapp.com)
 
 Zappa does not intend to conform to PEP8, isolate your commits so that changes to functionality with changes made by your linter.
 
