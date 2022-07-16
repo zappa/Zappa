@@ -2,7 +2,7 @@
 
 ## 0.55.1
 
-* Remove python 3.6 support
+* Remove python 3.6 support (#1151)
 * Update handler to be global if INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True (#1096)
 * Fix async invocation in Python 3 (#1006)
 * Drastically reduce cold start times by calling LambdaHandler externally (#982)
