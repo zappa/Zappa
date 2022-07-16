@@ -2,6 +2,7 @@
 
 ## 0.55.1
 
+* Remove function invoke command does not need quotes around function (#900)
 * Add python_requires to setup.py (#1111)
 * Remove python 3.6 support (#1151)
 * Update handler to be global if INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True (#1096)
