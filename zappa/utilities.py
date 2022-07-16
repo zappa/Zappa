@@ -13,7 +13,6 @@ from urllib.parse import urlparse
 
 import botocore
 import durationpy
-from past.builtins import basestring
 
 LOG = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ def string_to_timestamp(timestring):
     # Uses an extended version of Go's duration string.
     try:
         delta = durationpy.from_str(timestring)
-        past = datetime.datetime.utcnow() - delta
+        past = datetime.datetime.now(datetime.timezone.utc) - delta
         ts = calendar.timegm(past.timetuple())
         return ts
     except Exception:
@@ -113,8 +112,6 @@ def string_to_timestamp(timestring):
 
     if ts:
         return ts
-    # else:
-    #     print("Unable to parse timestring.")
     return 0
 
 
@@ -494,7 +491,7 @@ def validate_name(name, maxlen=80):
     Return: the name
     Raise: InvalidAwsLambdaName, if the name is invalid.
     """
-    if not isinstance(name, basestring):
+    if not isinstance(name, str):
         msg = "Name must be of type string"
         raise InvalidAwsLambdaName(msg)
     if len(name) > maxlen:

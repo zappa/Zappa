@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 """
 Zappa CLI
 
@@ -38,7 +35,6 @@ from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
-from past.builtins import basestring
 
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
@@ -1635,7 +1631,7 @@ class ZappaCLI:
 
         non_strings = []
         for (k, v) in environment.items():
-            if not isinstance(v, basestring):
+            if not isinstance(v, str):
                 non_strings.append(k)
         if non_strings:
             raise ValueError("The following environment variables are not strings: {}".format(", ".join(non_strings)))
