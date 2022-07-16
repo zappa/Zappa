@@ -2,6 +2,7 @@
 
 ## 0.55.1
 
+* Remove 'futures' package requirement (#826)
 * Remove function invoke command does not need quotes around function (#900)
 * Add python_requires to setup.py (#1111)
 * Remove python 3.6 support (#1151)
