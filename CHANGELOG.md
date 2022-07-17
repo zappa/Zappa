@@ -1,6 +1,6 @@
 # Zappa Changelog
 
-## 0.55.1
+## 0.55.0
 
 * Remove 'futures' package requirement (#826,#808)
 * Remove function invoke command does not need quotes around function (#900)
