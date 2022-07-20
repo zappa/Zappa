@@ -1,7 +1,7 @@
 # Zappa Changelog
 
 ## 0.55.0
-
+* Fix "cd workflow fired event outside of the create tags event" (#1152)
 * Remove 'futures' package requirement (#826,#808)
 * Remove function invoke command does not need quotes around function (#900)
 * Add python_requires to setup.py (#1111)
