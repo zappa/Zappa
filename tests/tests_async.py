@@ -1,6 +1,6 @@
+import datetime
 import os
 import unittest
-import datetime
 
 import boto3
 import mock
