@@ -1,6 +1,6 @@
-# -*- coding: utf8 -*-
 import os
 import unittest
+import datetime
 
 import boto3
 import mock
@@ -94,3 +94,10 @@ class TestZappa(unittest.TestCase):
             lambda_function_name="MyLambda",
         )
         lambda_async_mock.return_value.send.assert_called_with(get_func_task_path(async_me), ("qux",), {})
+
+    def test_async_call_arg_not_json_seralizable(self):
+        """Exception is raised when calling an async function locally (not on aws)"""
+        async_me = import_and_get_task("tests.test_app.async_me")
+        unseralizable_object = datetime.datetime.now()
+        with self.assertRaises(TypeError):
+            async_me(unseralizable_object)

@@ -592,3 +592,11 @@ def merge_headers(event):
     for h in multi_headers.keys():
         multi_headers[h] = ", ".join(multi_headers[h])
     return multi_headers
+
+
+def validate_json_seralizable(function_args: dict) -> None:
+    try:
+        json.dumps(function_args)
+    except Exception:
+        LOG.error("Arguments expected to be JSON seralizable!")
+        raise  # re-raise initial error
