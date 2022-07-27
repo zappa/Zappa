@@ -106,17 +106,10 @@ class AuthPolicy:
         the internal list contains a resource ARN and a condition statement. The condition
         statement can be null."""
         if verb != "*" and not hasattr(HttpVerb, verb):
-            raise NameError(
-                "Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class"
-            )
+            raise NameError("Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class")
         resourcePattern = re.compile(self.pathRegex)
         if not resourcePattern.match(resource):
-            raise NameError(
-                "Invalid resource path: "
-                + resource
-                + ". Path should match "
-                + self.pathRegex
-            )
+            raise NameError("Invalid resource path: " + resource + ". Path should match " + self.pathRegex)
 
         if resource[:1] == "/":
             resource = resource[1:]
@@ -137,13 +130,9 @@ class AuthPolicy:
         )
 
         if effect.lower() == "allow":
-            self.allowMethods.append(
-                {"resourceArn": resourceArn, "conditions": conditions}
-            )
+            self.allowMethods.append({"resourceArn": resourceArn, "conditions": conditions})
         elif effect.lower() == "deny":
-            self.denyMethods.append(
-                {"resourceArn": resourceArn, "conditions": conditions}
-            )
+            self.denyMethods.append({"resourceArn": resourceArn, "conditions": conditions})
 
     def _getEmptyStatement(self, effect):
         """Returns an empty statement object prepopulated with the correct action and the
@@ -222,11 +211,7 @@ class AuthPolicy:
             "policyDocument": {"Version": self.version, "Statement": []},
         }
 
-        policy["policyDocument"]["Statement"].extend(
-            self._getStatementForEffect("Allow", self.allowMethods)
-        )
-        policy["policyDocument"]["Statement"].extend(
-            self._getStatementForEffect("Deny", self.denyMethods)
-        )
+        policy["policyDocument"]["Statement"].extend(self._getStatementForEffect("Allow", self.allowMethods))
+        policy["policyDocument"]["Statement"].extend(self._getStatementForEffect("Deny", self.denyMethods))
 
         return policy

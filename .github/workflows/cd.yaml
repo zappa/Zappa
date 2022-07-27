@@ -1,7 +1,12 @@
 name: CD
 
 on:  # yamllint disable-line rule:truthy
-  create:
+  # From documentation:
+  # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onpushbranchestagsbranches-ignoretags-ignore
+  # on.push.tags: If you define only tags/tags-ignore or only branches/branches-ignore, the workflow won't run for events affecting the undefined Git ref.
+  #
+  # This workflow will only run when a tag matching the criteria is pushed
+  push:
     tags: ["v?[0-9]+.[0-9]+.[0-9]+"]
 
 jobs:
