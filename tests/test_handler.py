@@ -1,4 +1,5 @@
 import unittest
+
 from mock import Mock
 
 from zappa.handler import LambdaHandler
