@@ -563,6 +563,9 @@ class LambdaHandler:
                         #   (Related: https://github.com/zappa/Zappa/issues/908).
                         #   Content like this must be transmitted as b64.
                         # - The response is assumed to be some binary format (since BINARY_SUPPORT is enabled and it isn't application/json or text/)
+                        print(f"settings.BINARY_SUPPORT={settings.BINARY_SUPPORT}")
+                        print(f"response.headers.get('Content-Encoding')={response.headers.get('Content-Encoding')}")
+                        print(f"response.mimetype={response.mimetype}")
                         if settings.BINARY_SUPPORT:
                             exclude_startswith_mimetypes = (
                                 "text/",
