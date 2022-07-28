@@ -566,7 +566,11 @@ class LambdaHandler:
                         zappa_returndict["body"] = response.get_data(as_text=True)
                         if settings.BINARY_SUPPORT:
                             # overwrite zappa_returndict["body"] if necessary
-                            exclude_startswith_mimetypes = ("text/", "application/json", "application/vnd.oai.openapi")  # TODO: consider for settings
+                            exclude_startswith_mimetypes = (
+                                "text/",
+                                "application/json",
+                                "application/vnd.oai.openapi",
+                            )  # TODO: consider for settings
                             if response.headers.get("Content-Encoding"):  # Assume br/gzip/deflate/etc encoding
                                 zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
                                 zappa_returndict["isBase64Encoded"] = True
