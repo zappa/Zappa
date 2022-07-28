@@ -563,9 +563,7 @@ class LambdaHandler:
                         #   (Related: https://github.com/zappa/Zappa/issues/908).
                         #   Content like this must be transmitted as b64.
                         # - The response is assumed to be some binary format (since BINARY_SUPPORT is enabled and it isn't application/json or text/)
-                        zappa_returndict["body"] = response.get_data(as_text=True)
                         if settings.BINARY_SUPPORT:
-                            # overwrite zappa_returndict["body"] if necessary
                             exclude_startswith_mimetypes = (
                                 "text/",
                                 "application/json",
@@ -577,6 +575,10 @@ class LambdaHandler:
                             elif not response.mimetype.startswith(exclude_startswith_mimetypes):
                                 zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
                                 zappa_returndict["isBase64Encoded"] = True
+
+                        if "body" not in zappa_returndict:
+                            # treat body as text
+                            zappa_returndict["body"] = response.get_data(as_text=True)
 
                     zappa_returndict["statusCode"] = response.status_code
                     if "headers" in event:
