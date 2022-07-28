@@ -557,12 +557,28 @@ class LambdaHandler:
                         zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
-                        if (
-                            settings.BINARY_SUPPORT
-                            and not response.mimetype.startswith("text/")
-                            and response.mimetype != "application/json"
+                        # We base64 encode for two reasons when BINARY_SUPPORT is enabled:
+                        # - Content-Encoding is present, which is commonly used by compression mechanisms to indicate
+                        #   that the content is in br/gzip/deflate/etc encoding
+                        #   (Related: https://github.com/zappa/Zappa/issues/908). Content like this must be
+                        #   transmitted as b64.
+                        # - The response is assumed to be some binary format (since BINARY_SUPPORT is enabled and it
+                        #   isn't application/json or text/)
+                        if settings.BINARY_SUPPORT and response.headers.get(
+                                "Content-Encoding"
                         ):
-                            zappa_returndict["body"] = base64.b64encode(response.data).decode("utf-8")
+                            zappa_returndict["body"] = base64.b64encode(
+                                response.data
+                            ).decode()
+                            zappa_returndict["isBase64Encoded"] = True
+                        elif (
+                                settings.BINARY_SUPPORT
+                                and not response.mimetype.startswith("text/")
+                                and response.mimetype != "application/json"
+                        ):
+                            zappa_returndict["body"] = base64.b64encode(
+                                response.data
+                            ).decode("utf8")
                             zappa_returndict["isBase64Encoded"] = True
                         else:
                             zappa_returndict["body"] = response.get_data(as_text=True)
