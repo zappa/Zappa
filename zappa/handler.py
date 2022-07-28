@@ -557,27 +557,36 @@ class LambdaHandler:
                         zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
-                        # We base64 encode for two reasons when BINARY_SUPPORT is enabled:
-                        # - Content-Encoding is present, which is commonly used by compression mechanisms to indicate
-                        #   that the content is in br/gzip/deflate/etc encoding
-                        #   (Related: https://github.com/zappa/Zappa/issues/908).
-                        #   Content like this must be transmitted as b64.
-                        # - The response is assumed to be some binary format (since BINARY_SUPPORT is enabled and it isn't application/json or text/)
+                        encode_as_base64 = False
                         if settings.BINARY_SUPPORT:
+                            # Related: https://github.com/zappa/Zappa/issues/908
+                            # API Gateway requires binary data be base64 encoded:
+                            # https://aws.amazon.com/blogs/compute/handling-binary-data-using-amazon-api-gateway-http-apis/
+                            # When BINARY_SUPPORT is enabled the body is base64 encoded in the following cases:
+                            # - Content-Encoding defined, commonly used to specify compression (br/gzip/deflate/etc)
+                            #   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
+                            #   Content like this must be transmitted as b64.
+                            # - Response assumed binary when Response.mimetype does
+                            #   not start with entry defined in 'exclude_startswith_mimetypes'
                             exclude_startswith_mimetypes = (
                                 "text/",
                                 "application/json",
                                 "application/vnd.oai.openapi",
                             )  # TODO: consider for settings
                             if response.headers.get("Content-Encoding"):  # Assume br/gzip/deflate/etc encoding
-                                zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
-                                zappa_returndict["isBase64Encoded"] = True
-                            elif not response.mimetype.startswith(exclude_startswith_mimetypes):
-                                zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
-                                zappa_returndict["isBase64Encoded"] = True
+                                encode_as_base64 = True
 
-                        if "body" not in zappa_returndict:
-                            # treat body as text
+                            # werkzeug Response.mimetype: lowercase without parameters
+                            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.mimetype
+                            elif not response.mimetype.startswith(exclude_startswith_mimetypes):
+                                encode_as_base64 = True
+
+                        if encode_as_base64:
+                            zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
+                            zappa_returndict["isBase64Encoded"] = True
+                        else:
+                            # response.data decoded by werkzeug
+                            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.get_data
                             zappa_returndict["body"] = response.get_data(as_text=True)
 
                     zappa_returndict["statusCode"] = response.status_code
