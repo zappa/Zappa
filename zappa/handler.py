@@ -10,6 +10,7 @@ import sys
 import tarfile
 import traceback
 from builtins import str
+from typing import Tuple
 
 import boto3
 from werkzeug.wrappers import Response
@@ -264,6 +265,49 @@ class LambdaHandler:
                 logger.error(msg="Failed to process exception via custom handler.")
                 print(cex)
         return exception_processed
+
+    @staticmethod
+    def _process_response_body(response: Response, binary_support: bool = False) -> Tuple[str, bool]:
+        """
+        Perform Response body encoding/decoding
+
+        Related: https://github.com/zappa/Zappa/issues/908
+        API Gateway requires binary data be base64 encoded:
+        https://aws.amazon.com/blogs/compute/handling-binary-data-using-amazon-api-gateway-http-apis/
+        When BINARY_SUPPORT is enabled the body is base64 encoded in the following cases:
+
+        - Content-Encoding defined, commonly used to specify compression (br/gzip/deflate/etc)
+          https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
+          Content like this must be transmitted as b64.
+
+        - Response assumed binary when Response.mimetype does
+          not start with an entry defined in 'handle_as_text_mimetypes'
+        """
+        encode_body_as_base64 = False
+        if binary_support:
+
+            handle_as_text_mimetypes = (
+                "text/",
+                "application/json",
+                "application/vnd.oai.openapi",
+            )  # TODO: consider for settings
+            # TODO: woff files ok?
+            if response.headers.get("Content-Encoding"):  # Assume br/gzip/deflate/etc encoding
+                encode_body_as_base64 = True
+
+            # werkzeug Response.mimetype: lowercase without parameters
+            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.mimetype
+            elif not response.mimetype.startswith(handle_as_text_mimetypes):
+                encode_body_as_base64 = True
+
+        if encode_body_as_base64:
+            body = base64.b64encode(response.data).decode("utf8")
+        else:
+            # response.data decoded by werkzeug
+            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.get_data
+            body = response.get_data(as_text=True)
+
+        return body, encode_body_as_base64
 
     @staticmethod
     def run_function(app_function, event, context):
@@ -557,37 +601,10 @@ class LambdaHandler:
                         zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
-                        encode_as_base64 = False
-                        if settings.BINARY_SUPPORT:
-                            # Related: https://github.com/zappa/Zappa/issues/908
-                            # API Gateway requires binary data be base64 encoded:
-                            # https://aws.amazon.com/blogs/compute/handling-binary-data-using-amazon-api-gateway-http-apis/
-                            # When BINARY_SUPPORT is enabled the body is base64 encoded in the following cases:
-                            # - Content-Encoding defined, commonly used to specify compression (br/gzip/deflate/etc)
-                            #   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
-                            #   Content like this must be transmitted as b64.
-                            # - Response assumed binary when Response.mimetype does
-                            #   not start with entry defined in 'exclude_startswith_mimetypes'
-                            exclude_startswith_mimetypes = (
-                                "text/",
-                                "application/json",
-                                "application/vnd.oai.openapi",
-                            )  # TODO: consider for settings
-                            if response.headers.get("Content-Encoding"):  # Assume br/gzip/deflate/etc encoding
-                                encode_as_base64 = True
-
-                            # werkzeug Response.mimetype: lowercase without parameters
-                            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.mimetype
-                            elif not response.mimetype.startswith(exclude_startswith_mimetypes):
-                                encode_as_base64 = True
-
-                        if encode_as_base64:
-                            zappa_returndict["body"] = base64.b64encode(response.data).decode("utf8")
-                            zappa_returndict["isBase64Encoded"] = True
-                        else:
-                            # response.data decoded by werkzeug
-                            # https://werkzeug.palletsprojects.com/en/2.2.x/wrappers/#werkzeug.wrappers.Request.get_data
-                            zappa_returndict["body"] = response.get_data(as_text=True)
+                        processed_body, is_base64_encoded = self._process_response_body(response, binary_support=settings.BINARY_SUPPORT)
+                        zappa_returndict["body"] = processed_body
+                        if is_base64_encoded:
+                            zappa_returndict["isBase64Encoded"] = is_base64_encoded
 
                     zappa_returndict["statusCode"] = response.status_code
                     if "headers" in event:
