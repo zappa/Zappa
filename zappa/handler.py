@@ -601,7 +601,9 @@ class LambdaHandler:
                         zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
-                        processed_body, is_base64_encoded = self._process_response_body(response, binary_support=settings.BINARY_SUPPORT)
+                        processed_body, is_base64_encoded = self._process_response_body(
+                            response, binary_support=settings.BINARY_SUPPORT
+                        )
                         zappa_returndict["body"] = processed_body
                         if is_base64_encoded:
                             zappa_returndict["isBase64Encoded"] = is_base64_encoded
