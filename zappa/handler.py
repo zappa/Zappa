@@ -10,6 +10,7 @@ import sys
 import tarfile
 import traceback
 from builtins import str
+from types import ModuleType
 from typing import Tuple
 
 import boto3
@@ -267,7 +268,7 @@ class LambdaHandler:
         return exception_processed
 
     @staticmethod
-    def _process_response_body(response: Response, binary_support: bool = False) -> Tuple[str, bool]:
+    def _process_response_body(response: Response, settings: ModuleType) -> Tuple[str, bool]:
         """
         Perform Response body encoding/decoding
 
@@ -284,14 +285,12 @@ class LambdaHandler:
           not start with an entry defined in 'handle_as_text_mimetypes'
         """
         encode_body_as_base64 = False
-        if binary_support:
+        if settings.BINARY_SUPPORT:
+            handle_as_text_mimetypes = ("text/", "application/json")
+            additional_text_mimetypes = getattr(settings, "ADDITIONAL_TEXT_MIMETYPES", None)
+            if additional_text_mimetypes:
+                handle_as_text_mimetypes += tuple(additional_text_mimetypes)
 
-            handle_as_text_mimetypes = (
-                "text/",
-                "application/json",
-                "application/vnd.oai.openapi",
-            )  # TODO: consider for settings
-            # TODO: woff files ok?
             if response.headers.get("Content-Encoding"):  # Assume br/gzip/deflate/etc encoding
                 encode_body_as_base64 = True
 
@@ -601,9 +600,7 @@ class LambdaHandler:
                         zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
-                        processed_body, is_base64_encoded = self._process_response_body(
-                            response, binary_support=settings.BINARY_SUPPORT
-                        )
+                        processed_body, is_base64_encoded = self._process_response_body(response, settings=settings)
                         zappa_returndict["body"] = processed_body
                         if is_base64_encoded:
                             zappa_returndict["isBase64Encoded"] = is_base64_encoded

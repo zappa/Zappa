@@ -61,3 +61,11 @@ def response_with_content_encoding_3():
         mimetype="text/arbitrary",
         headers={"Content-Encoding": "with_content_type_but_not_bytes_response"},
     )
+
+
+@app.route("/userdefined_additional_mimetype_response1", methods=["GET"])
+def response_with_userdefined_addtional_mimetype():
+    return Response(
+        response="OK",
+        mimetype="application/vnd.oai.openapi",
+    )

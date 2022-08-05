@@ -348,6 +348,64 @@ class TestZappa(unittest.TestCase):
             self.assertIn("isBase64Encoded", response)
             self.assertTrue(is_base64(response["body"]))
 
+    def test_wsgi_script_binary_support_userdefined_additional_text_mimetypes__defined(
+        self,
+    ):
+        """
+        Ensure zappa response bodies are NOT base64 encoded when BINARY_SUPPORT is True, and additional_text_mimetypes are defined
+        """
+        lh = LambdaHandler("tests.test_binary_support_additional_text_mimetypes_settings")
+        expected_additional_mimetypes = ["application/vnd.oai.openapi"]
+        self.assertEqual(lh.settings.ADDITIONAL_TEXT_MIMETYPES, expected_additional_mimetypes)
+
+        event = {
+            "body": "",
+            "resource": "/{proxy+}",
+            "requestContext": {},
+            "queryStringParameters": {},
+            "headers": {
+                "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
+            },
+            "pathParameters": {"proxy": "return/request/url"},
+            "httpMethod": "GET",
+            "stageVariables": {},
+            "path": "/userdefined_additional_mimetype_response1",
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertNotIn("isBase64Encoded", response)
+        self.assertFalse(is_base64(response["body"]))
+
+    def test_wsgi_script_binary_support_userdefined_additional_text_mimetypes__undefined(
+        self,
+    ):
+        """
+        Ensure zappa response bodies are base64 encoded when BINARY_SUPPORT is True and mimetype not defined in additional_text_mimetypes
+        """
+        lh = LambdaHandler("tests.test_binary_support_settings")
+
+        event = {
+            "body": "",
+            "resource": "/{proxy+}",
+            "requestContext": {},
+            "queryStringParameters": {},
+            "headers": {
+                "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
+            },
+            "pathParameters": {"proxy": "return/request/url"},
+            "httpMethod": "GET",
+            "stageVariables": {},
+            "path": "/userdefined_additional_mimetype_response1",
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertIn("isBase64Encoded", response)
+        self.assertTrue(is_base64(response["body"]))
+
     def test_wsgi_script_on_cognito_event_request(self):
         """
         Ensure that requests sent by cognito behave sensibly
