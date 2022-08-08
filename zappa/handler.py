@@ -260,9 +260,9 @@ class LambdaHandler:
             try:
                 handler_function = cls.import_module_and_get_function(exception_handler)
                 exception_processed = handler_function(exception, event, context)
-            except Exception as cex:
-                logger.error(msg="Failed to process exception via custom handler.")
-                print(cex)
+            except Exception:
+                logger.exception("Failed to process exception via custom handler.")
+
         return exception_processed
 
     @staticmethod
@@ -383,8 +383,7 @@ class LambdaHandler:
             whole_function = event["command"]
             app_function = self.import_module_and_get_function(whole_function)
             result = self.run_function(app_function, event, context)
-            print("Result of %s:" % whole_function)
-            print(result)
+            logger.debug("Result of %s: %s", whole_function, result)
             return result
 
         # This is a direct, raw python invocation.
@@ -474,8 +473,7 @@ class LambdaHandler:
             app_function = self.import_module_and_get_function(whole_function)
             if app_function:
                 result = self.run_function(app_function, event, context)
-                logger.debug("Result of %s:" % whole_function)
-                logger.debug(result)
+                logger.debug("Result of %s: %s", whole_function, result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
