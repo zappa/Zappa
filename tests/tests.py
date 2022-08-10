@@ -739,6 +739,93 @@ class TestZappa(unittest.TestCase):
 
         request = create_wsgi_request(event)
 
+    def test_wsgi_event__handle_space_in_xforwardedfor(self):
+
+        ## This is a pre-proxy+ event
+        # event = {
+        #     "body": "",
+        #     "headers": {
+        #         "Via": "1.1 e604e934e9195aaf3e36195adbcb3e18.cloudfront.net (CloudFront)",
+        #         "Accept-Language": "en-US,en;q=0.5",
+        #         "Accept-Encoding": "gzip",
+        #         "CloudFront-Is-SmartTV-Viewer": "false",
+        #         "CloudFront-Forwarded-Proto": "https",
+        #         "X-Forwarded-For": "109.81.209.118, 216.137.58.43",
+        #         "CloudFront-Viewer-Country": "CZ",
+        #         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        #         "X-Forwarded-Proto": "https",
+        #         "X-Amz-Cf-Id": "LZeP_TZxBgkDt56slNUr_H9CHu1Us5cqhmRSswOh1_3dEGpks5uW-g==",
+        #         "CloudFront-Is-Tablet-Viewer": "false",
+        #         "X-Forwarded-Port": "443",
+        #         "CloudFront-Is-Mobile-Viewer": "false",
+        #         "CloudFront-Is-Desktop-Viewer": "true",
+        #         "Content-Type": "application/json"
+        #     },
+        #     "params": {
+        #         "parameter_1": "asdf1",
+        #         "parameter_2": "asdf2",
+        #     },
+        #     "method": "POST",
+        #     "query": {
+        #         "dead": "beef"
+        #     }
+        # }
+
+        event = {
+            "body": None,
+            "resource": "/",
+            "requestContext": {
+                "resourceId": "6cqjw9qu0b",
+                "apiId": "9itr2lba55",
+                "resourcePath": "/",
+                "httpMethod": "GET",
+                "requestId": "c17cb1bf-867c-11e6-b938-ed697406e3b5",
+                "accountId": "724336686645",
+                "identity": {
+                    "apiKey": None,
+                    "userArn": None,
+                    "cognitoAuthenticationType": None,
+                    "caller": None,
+                    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:48.0) Gecko/20100101 Firefox/48.0",
+                    "user": None,
+                    "cognitoIdentityPoolId": None,
+                    "cognitoIdentityId": None,
+                    "cognitoAuthenticationProvider": None,
+                    "sourceIp": "50.191.225.98",
+                    "accountId": None,
+                },
+                "stage": "devorr",
+            },
+            "queryStringParameters": None,
+            "httpMethod": "GET",
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 6801928d54163af944bf854db8d5520e.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "50.191.225.98 , 204.246.168.101",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Upgrade-Insecure-Requests": "1",
+                "Host": "9itr2lba55.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "X-Amz-Cf-Id": "qgNdqKT0_3RMttu5KjUdnvHI3OKm1BWF8mGD2lX8_rVrJQhhp-MLDw==",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:48.0) Gecko/20100101 Firefox/48.0",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+        }
+        expected = "50.191.225.98"
+        request = create_wsgi_request(event)
+        actual = request["REMOTE_ADDR"]
+        self.assertEqual(actual, expected)
+
     def test_wsgi_path_info_unquoted(self):
         event = {
             "body": {},
