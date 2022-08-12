@@ -96,7 +96,7 @@ from functools import update_wrapper, wraps
 import boto3
 import botocore
 
-from .utilities import get_topic_name, validate_json_seralizable
+from .utilities import get_topic_name, validate_json_serializable
 
 try:
     from zappa_settings import ASYNC_RESPONSE_TABLE
@@ -431,7 +431,7 @@ def task(*args, **kwargs):
                 return send_result
             else:
                 function_args = {"args": args, "kwargs": kwargs}
-                validate_json_seralizable(function_args)
+                validate_json_serializable(function_args)
                 return func(*args, **kwargs)
 
         update_wrapper(_run_async, func)

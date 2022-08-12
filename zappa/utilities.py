@@ -16,6 +16,12 @@ import durationpy
 
 LOG = logging.getLogger(__name__)
 
+
+class UnserializableJsonError(TypeError):
+    """Exception class for JSON encoding errors"""
+
+    pass
+
 ##
 # Settings / Packaging
 ##
@@ -594,9 +600,8 @@ def merge_headers(event):
     return multi_headers
 
 
-def validate_json_seralizable(function_args: dict) -> None:
+def validate_json_serializable(function_args: dict) -> None:
     try:
         json.dumps(function_args)
-    except Exception:
-        LOG.error("Arguments expected to be JSON seralizable!")
-        raise  # re-raise initial error
+    except (TypeError, OverflowError):
+        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
