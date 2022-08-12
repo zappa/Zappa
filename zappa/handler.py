@@ -20,7 +20,7 @@ try:
     from zappa.middleware import ZappaWSGIMiddleware
     from zappa.utilities import merge_headers, parse_s3_url
     from zappa.wsgi import common_log, create_wsgi_request
-except ImportError as e:  # pragma: no cover
+except ImportError:  # pragma: no cover
     from .middleware import ZappaWSGIMiddleware
     from .utilities import merge_headers, parse_s3_url
     from .wsgi import common_log, create_wsgi_request
@@ -101,30 +101,21 @@ class LambdaHandler:
             # https://github.com/Miserlou/Zappa/issues/776
             is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
             if is_slim_handler:
-                included_libraries = getattr(
-                    self.settings, "INCLUDE", ["libmysqlclient.so.18"]
-                )
+                included_libraries = getattr(self.settings, "INCLUDE", [])
                 try:
-                    from ctypes import cdll, util
+                    from ctypes import cdll
 
                     for library in included_libraries:
                         try:
                             cdll.LoadLibrary(os.path.join(os.getcwd(), library))
                         except OSError:
-                            print(
-                                "Failed to find library: {}...right filename?".format(
-                                    library
-                                )
-                            )
+                            print("Failed to find library: {}...right filename?".format(library))
                 except ImportError:
                     print("Failed to import cytpes library")
 
             # This is a non-WSGI application
             # https://github.com/Miserlou/Zappa/pull/748
-            if (
-                not hasattr(self.settings, "APP_MODULE")
-                and not self.settings.DJANGO_SETTINGS
-            ):
+            if not hasattr(self.settings, "APP_MODULE") and not self.settings.DJANGO_SETTINGS:
                 self.app_module = None
                 wsgi_app_function = None
             # This is probably a normal WSGI app (Or django with overloaded wsgi application)
@@ -138,9 +129,7 @@ class LambdaHandler:
 
                     # add the Lambda root path into the sys.path
                     self.trailing_slash = True
-                    os.environ[
-                        SETTINGS_ENVIRONMENT_VARIABLE
-                    ] = self.settings.DJANGO_SETTINGS
+                    os.environ[SETTINGS_ENVIRONMENT_VARIABLE] = self.settings.DJANGO_SETTINGS
                 else:
                     self.trailing_slash = False
 
@@ -248,7 +237,7 @@ class LambdaHandler:
 
     @classmethod
     def lambda_handler(cls, event, context):  # pragma: no cover
-        handler = cls()
+        handler = global_handler or cls()
         exception_handler = handler.settings.EXCEPTION_HANDLER
         try:
             return handler.handler(event, context)
@@ -285,9 +274,7 @@ class LambdaHandler:
         # getargspec does not support python 3 method with type hints
         # Related issue: https://github.com/Miserlou/Zappa/issues/1452
         if hasattr(inspect, "getfullargspec"):  # Python 3
-            args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(
-                app_function
-            )
+            args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(app_function)
         else:  # Python 2
             args, varargs, keywords, defaults = inspect.getargspec(app_function)
         num_args = len(args)
@@ -299,8 +286,7 @@ class LambdaHandler:
             result = app_function(event, context)
         else:
             raise RuntimeError(
-                "Function signature is invalid. Expected a function that accepts at most "
-                "2 arguments or varargs."
+                "Function signature is invalid. Expected a function that accepts at most " "2 arguments or varargs."
             )
         return result
 
@@ -343,9 +329,7 @@ class LambdaHandler:
         if intent:
             intent = intent.get("name")
             if intent:
-                return self.settings.AWS_BOT_EVENT_MAPPING.get(
-                    "{}:{}".format(intent, event.get("invocationSource"))
-                )
+                return self.settings.AWS_BOT_EVENT_MAPPING.get("{}:{}".format(intent, event.get("invocationSource")))
 
     def get_function_for_cognito_trigger(self, trigger):
         """
@@ -419,7 +403,7 @@ class LambdaHandler:
 
             try:  # Support both for tests
                 from zappa.ext.django_zappa import get_django_wsgi
-            except ImportError as e:  # pragma: no cover
+            except ImportError:  # pragma: no cover
                 from django_zappa_app import get_django_wsgi
 
             # Get the Django WSGI app from our extension
@@ -466,9 +450,7 @@ class LambdaHandler:
                 policy = self.run_function(app_function, event, context)
                 return policy
             else:
-                logger.error(
-                    "Cannot find a function to process the authorization request."
-                )
+                logger.error("Cannot find a function to process the authorization request.")
                 raise Exception("Unauthorized")
 
         # This is an AWS Cognito Trigger Event
@@ -481,11 +463,7 @@ class LambdaHandler:
                 result = self.run_function(app_function, event, context)
                 logger.debug(result)
             else:
-                logger.error(
-                    "Cannot find a function to handle cognito trigger {}".format(
-                        triggerSource
-                    )
-                )
+                logger.error("Cannot find a function to handle cognito trigger {}".format(triggerSource))
             return result
 
         # This is a CloudWatch event
@@ -512,9 +490,7 @@ class LambdaHandler:
                 script_name = ""
                 is_elb_context = False
                 headers = merge_headers(event)
-                if event.get("requestContext", None) and event["requestContext"].get(
-                    "elb", None
-                ):
+                if event.get("requestContext", None) and event["requestContext"].get("elb", None):
                     # Related: https://github.com/Miserlou/Zappa/issues/1715
                     # inputs/outputs for lambda loadbalancer
                     # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/lambda-functions.html
@@ -578,9 +554,7 @@ class LambdaHandler:
                     # base64 encoding and status description
                     if is_elb_context:
                         zappa_returndict.setdefault("isBase64Encoded", False)
-                        zappa_returndict.setdefault(
-                            "statusDescription", response.status
-                        )
+                        zappa_returndict.setdefault("statusDescription", response.status)
 
                     if response.data:
                         if (
@@ -588,9 +562,7 @@ class LambdaHandler:
                             and not response.mimetype.startswith("text/")
                             and response.mimetype != "application/json"
                         ):
-                            zappa_returndict["body"] = base64.b64encode(
-                                response.data
-                            ).decode("utf-8")
+                            zappa_returndict["body"] = base64.b64encode(response.data).decode("utf-8")
                             zappa_returndict["isBase64Encoded"] = True
                         else:
                             zappa_returndict["body"] = response.get_data(as_text=True)
@@ -603,9 +575,7 @@ class LambdaHandler:
                     if "multiValueHeaders" in event:
                         zappa_returndict["multiValueHeaders"] = {}
                         for key, value in response.headers:
-                            zappa_returndict["multiValueHeaders"][
-                                key
-                            ] = response.headers.getlist(key)
+                            zappa_returndict["multiValueHeaders"][key] = response.headers.getlist(key)
 
                     # Calculate the total response time,
                     # and log it in the Common Log format.
@@ -646,9 +616,7 @@ class LambdaHandler:
             content["statusCode"] = 500
             body = {"message": message}
             if settings.DEBUG:  # only include traceback if debug is on.
-                body["traceback"] = traceback.format_exception(
-                    *exc_info
-                )  # traceback as a list for readability.
+                body["traceback"] = traceback.format_exception(*exc_info)  # traceback as a list for readability.
             content["body"] = json.dumps(str(body), sort_keys=True, indent=4)
             return content
 
@@ -659,7 +627,10 @@ def lambda_handler(event, context):  # pragma: no cover
 
 def keep_warm_callback(event, context):
     """Method is triggered by the CloudWatch event scheduled when keep_warm setting is set to true."""
-    lambda_handler(
-        event={}, context=context
-    )  # overriding event with an empty one so that web app initialization will
+    lambda_handler(event={}, context=context)  # overriding event with an empty one so that web app initialization will
     # be triggered.
+
+
+global_handler = None
+if os.environ.get("INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT"):
+    global_handler = LambdaHandler()
