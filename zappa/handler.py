@@ -20,11 +20,11 @@ from werkzeug.wrappers import Response
 # so handle both scenarios.
 try:
     from zappa.middleware import ZappaWSGIMiddleware
-    from zappa.utilities import merge_headers, parse_s3_url
+    from zappa.utilities import merge_headers, parse_s3_url, DEFAULT_TEXT_MIMETYPES
     from zappa.wsgi import common_log, create_wsgi_request
 except ImportError:  # pragma: no cover
     from .middleware import ZappaWSGIMiddleware
-    from .utilities import merge_headers, parse_s3_url
+    from .utilities import merge_headers, parse_s3_url, DEFAULT_TEXT_MIMETYPES
     from .wsgi import common_log, create_wsgi_request
 
 
@@ -286,7 +286,7 @@ class LambdaHandler:
         """
         encode_body_as_base64 = False
         if settings.BINARY_SUPPORT:
-            handle_as_text_mimetypes = ("text/", "application/json")
+            handle_as_text_mimetypes = DEFAULT_TEXT_MIMETYPES
             additional_text_mimetypes = getattr(settings, "ADDITIONAL_TEXT_MIMETYPES", None)
             if additional_text_mimetypes:
                 handle_as_text_mimetypes += tuple(additional_text_mimetypes)
