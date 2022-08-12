@@ -75,6 +75,6 @@ def patch_open():
         yield mock_open, mock_file
 
 
-def get_invalid_sys_versioninfo() -> tuple:
+def get_unsupported_sys_versioninfo() -> tuple:
     invalid_versioninfo = namedtuple("version_info", ["major", "minor", "micro", "releaselevel", "serial"])
     return invalid_versioninfo(3, 6, 1, "final", 0)

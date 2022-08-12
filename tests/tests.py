@@ -57,7 +57,7 @@ from zappa.utilities import (
 )
 from zappa.wsgi import common_log, create_wsgi_request
 
-from .utils import get_invalid_sys_versioninfo
+from .utils import get_unsupported_sys_versioninfo
 
 
 def random_string(length):
@@ -2723,7 +2723,7 @@ USE_TZ = True
             FunctionName="abc",
         )
 
-    @mock.patch("sys.version_info", new_callable=get_invalid_sys_versioninfo)
+    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
     def test_unsupported_version_error(self, m):
         import sys
         from importlib import reload
