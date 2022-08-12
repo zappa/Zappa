@@ -17,7 +17,6 @@ from zappa.asynchronous import (
     get_func_task_path,
     import_and_get_task,
 )
-
 from zappa.utilities import UnserializableJsonError
 
 

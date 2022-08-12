@@ -22,6 +22,7 @@ class UnserializableJsonError(TypeError):
 
     pass
 
+
 ##
 # Settings / Packaging
 ##
