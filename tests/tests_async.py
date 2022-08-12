@@ -18,6 +18,8 @@ from zappa.asynchronous import (
     import_and_get_task,
 )
 
+from zappa.utilities import UnserializableJsonError
+
 
 class TestZappa(unittest.TestCase):
     def setUp(self):
@@ -100,4 +102,7 @@ class TestZappa(unittest.TestCase):
         async_me = import_and_get_task("tests.test_app.async_me")
         unserializable_object = datetime.datetime.now()
         with self.assertRaises(TypeError):
+            async_me(unserializable_object)
+
+        with self.assertRaises(UnserializableJsonError):
             async_me(unserializable_object)
