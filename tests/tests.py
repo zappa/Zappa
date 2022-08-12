@@ -2724,7 +2724,7 @@ USE_TZ = True
         )
 
     @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
-    def test_unsupported_version_error(self, m):
+    def test_unsupported_version_error(self, *_):
         from importlib import reload
 
         with self.assertRaises(RuntimeError):
