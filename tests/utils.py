@@ -1,7 +1,7 @@
 import functools
 import os
-from contextlib import contextmanager
 from collections import namedtuple
+from contextlib import contextmanager
 
 import boto3
 import placebo

@@ -2727,8 +2727,10 @@ USE_TZ = True
     def test_unsupported_version_error(self, m):
         import sys
         from importlib import reload
+
         with self.assertRaises(RuntimeError):
             import zappa
+
             reload(zappa)
 
 
