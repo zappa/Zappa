@@ -20,11 +20,11 @@ from werkzeug.wrappers import Response
 # so handle both scenarios.
 try:
     from zappa.middleware import ZappaWSGIMiddleware
-    from zappa.utilities import merge_headers, parse_s3_url, DEFAULT_TEXT_MIMETYPES
+    from zappa.utilities import DEFAULT_TEXT_MIMETYPES, merge_headers, parse_s3_url
     from zappa.wsgi import common_log, create_wsgi_request
 except ImportError:  # pragma: no cover
     from .middleware import ZappaWSGIMiddleware
-    from .utilities import merge_headers, parse_s3_url, DEFAULT_TEXT_MIMETYPES
+    from .utilities import DEFAULT_TEXT_MIMETYPES, merge_headers, parse_s3_url
     from .wsgi import common_log, create_wsgi_request
 
 
