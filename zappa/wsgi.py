@@ -25,20 +25,19 @@ def create_wsgi_request(
     Given some event_info via API Gateway,
     create and return a valid WSGI request environ.
     """
-    method = event_info["httpMethod"]
+    method = event_info.get("httpMethod", None)
     headers = merge_headers(event_info) or {}  # Allow for the AGW console 'Test' button to work (Pull #735)
 
-    """
-        API Gateway and ALB both started allowing for multi-value querystring
-        params in Nov. 2018. If there aren't multi-value params present, then
-        it acts identically to 'queryStringParameters', so we can use it as a
-        drop-in replacement.
+    # API Gateway and ALB both started allowing for multi-value querystring
+    # params in Nov. 2018. If there aren't multi-value params present, then
+    # it acts identically to 'queryStringParameters', so we can use it as a
+    # drop-in replacement.
+    #
+    # The one caveat here is that ALB will only include _one_ of
+    # queryStringParameters _or_ multiValueQueryStringParameters, which means
+    # we have to check for the existence of one and then fall back to the
+    # other.
 
-        The one caveat here is that ALB will only include _one_ of
-        queryStringParameters _or_ multiValueQueryStringParameters, which means
-        we have to check for the existence of one and then fall back to the
-        other.
-        """
     if "multiValueQueryStringParameters" in event_info:
         query = event_info["multiValueQueryStringParameters"]
         query_string = urlencode(query, doseq=True) if query else ""
@@ -59,13 +58,6 @@ def create_wsgi_request(
                     header_val = header_val[part]
             if header_val is not None:
                 headers[key] = header_val
-
-    # Extract remote user from context if Authorizer is enabled
-    remote_user = None
-    if event_info["requestContext"].get("authorizer"):
-        remote_user = event_info["requestContext"]["authorizer"].get("principalId")
-    elif event_info["requestContext"].get("identity"):
-        remote_user = event_info["requestContext"]["identity"].get("userArn")
 
     # Related:  https://github.com/Miserlou/Zappa/issues/677
     #           https://github.com/Miserlou/Zappa/issues/683
@@ -124,6 +116,17 @@ def create_wsgi_request(
         "wsgi.run_once": False,
     }
 
+    # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
+    # Extract remote_user, authorizer if Authorizer is enabled
+    remote_user = None
+    if "requestContext" in event_info:
+        authorizer = event_info["requestContext"].get("authorizer", None)
+        if authorizer:
+            remote_user = authorizer.get("principalId")
+            environ["API_GATEWAY_AUTHORIZER"] = authorizer
+        elif event_info["requestContext"].get("identity"):
+            remote_user = event_info["requestContext"]["identity"].get("userArn")
+
     # Input processing
     if method in ["POST", "PUT", "PATCH", "DELETE"]:
         if "Content-Type" in headers:
@@ -149,9 +152,6 @@ def create_wsgi_request(
 
     if remote_user:
         environ["REMOTE_USER"] = remote_user
-
-    if event_info["requestContext"].get("authorizer"):
-        environ["API_GATEWAY_AUTHORIZER"] = event_info["requestContext"]["authorizer"]
 
     return environ
 

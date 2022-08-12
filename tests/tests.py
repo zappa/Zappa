@@ -1009,6 +1009,89 @@ class TestZappa(unittest.TestCase):
         response_tuple = collections.namedtuple("Response", ["status_code", "content"])
         response = response_tuple(200, "hello")
 
+    def test_wsgi_without_requestcontext(self):
+        event = {
+            "body": None,
+            "resource": "/",
+            "queryStringParameters": None,
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "71.231.27.57, 104.246.180.51",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0",
+                "Host": "xo2z7zafjh.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "Cookie": "zappa=AQ4",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "Referer": "https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "X-Amz-Cf-Id": "31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+            "isBase64Encoded": True,
+        }
+        environ = create_wsgi_request(event, trailing_slash=False)
+        self.assertTrue(environ)
+
+    def test_wsgi_with_authorizer(self):
+        expected_remote_user = "remote-user"
+        authorizer = {
+            "principalId": expected_remote_user,
+        }
+        event = {
+            "body": None,
+            "resource": "/",
+            "requestContext": {
+                "resourceId": "6cqjw9qu0b",
+                "apiId": "9itr2lba55",
+                "resourcePath": "/",
+                "httpMethod": "POST",
+                "requestId": "c17cb1bf-867c-11e6-b938-ed697406e3b5",
+                "accountId": "724336686645",
+                "authorizer": authorizer,
+                "stage": "devorr",
+            },
+            "queryStringParameters": None,
+            "httpMethod": "POST",
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "71.231.27.57, 104.246.180.51",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0",
+                "Host": "xo2z7zafjh.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "Cookie": "zappa=AQ4",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "Referer": "https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "X-Amz-Cf-Id": "31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+            "isBase64Encoded": True,
+        }
+
+        environ = create_wsgi_request(event, trailing_slash=False)
+        self.assertEqual(environ["REMOTE_USER"], expected_remote_user)
+        self.assertDictEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
+
     def test_wsgi_from_apigateway_testbutton(self):
         """
         API Gateway resources have a "test bolt" button on methods.
