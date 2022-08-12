@@ -2732,6 +2732,19 @@ USE_TZ = True
 
             reload(zappa)
 
+    def test_wsgi_query_string_unquoted(self):
+        event = {
+            "body": {},
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"a": "A,B", "b": "C#D"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
+
 
 if __name__ == "__main__":
     unittest.main()
