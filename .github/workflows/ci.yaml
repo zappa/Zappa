@@ -3,13 +3,15 @@ name: CI
 on:  # yamllint disable-line rule:truthy
   pull_request:
     branches: ["master"]
+  push:
+    branches: ["master"]
 
 jobs:
   test:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python: [3.6, 3.7, 3.8]
+        python: [3.7, 3.8, 3.9]
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v2
@@ -20,13 +22,32 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
+      - name: make sure we have version tags
+        run: git fetch --unshallow --tags
       - name: Setup Virtualenv
         run: python -m venv .venv
       - name: Install
         run: source .venv/bin/activate && make requirements && python setup.py install
       - name: Lint
-        run: source .venv/bin/activate && make flake black-check
+        run: source .venv/bin/activate && make flake black-check isort-check
       - name: Test
         run: source .venv/bin/activate && make tests
+      - name: Upload Coverage
+        run: .venv/bin/coveralls --service=github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_FLAG_NAME: py${{ matrix.python }}
+          COVERALLS_PARALLEL: true
+
+  coverage:
+    needs: test
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+      - name: Finalise Coverage
+        run: pip3 install --upgrade coveralls && coveralls --service=github --finish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
