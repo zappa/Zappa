@@ -4,10 +4,9 @@ import sys
 from urllib.parse import urlencode
 
 import six
-from requestlogger import ApacheFormatter
 from werkzeug import urls
 
-from .utilities import merge_headers, titlecase_keys
+from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 
 BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
 
@@ -164,24 +163,15 @@ def common_log(environ, response, response_time=None):
     logger = logging.getLogger()
 
     if response_time:
-        formatter = ApacheFormatter(with_response_time=True)
-        try:
-            log_entry = formatter(
-                response.status_code,
-                environ,
-                len(response.content),
-                rt_us=response_time,
-            )
-        except TypeError:
-            # Upstream introduced a very annoying breaking change on the rt_ms/rt_us kwarg.
-            log_entry = formatter(
-                response.status_code,
-                environ,
-                len(response.content),
-                rt_ms=response_time,
-            )
+        formatter = ApacheNCSAFormatter(with_response_time=True)
+        log_entry = formatter(
+            response.status_code,
+            environ,
+            len(response.content),
+            rt_us=response_time,
+        )
     else:
-        formatter = ApacheFormatter(with_response_time=False)
+        formatter = ApacheNCSAFormatter(with_response_time=False)
         log_entry = formatter(response.status_code, environ, len(response.content))
 
     logger.info(log_entry)

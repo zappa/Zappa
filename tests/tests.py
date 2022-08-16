@@ -1886,8 +1886,6 @@ class TestZappa(unittest.TestCase):
             f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
 
-
-
     def test_shameless(self):
         shamelessly_promote()
 
@@ -2047,8 +2045,6 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             zappa_cli.create_package()
         self.assertEqual("Environment variable keys must be ascii.", str(context.exception))
-
-
 
     # TODO: encountered error when vpc_config["SubnetIds"] or vpc_config["SecurityGroupIds"] is missing
     # We need to make the code more robust in this case and avoid the KeyError

@@ -4,9 +4,8 @@ import re
 import shutil
 import tempfile
 import unittest
-
-from unittest import mock
 from typing import Tuple
+from unittest import mock
 
 from zappa.core import Zappa
 from zappa.ext.django_zappa import get_django_wsgi
@@ -313,11 +312,13 @@ USE_TZ = True
         self.assertTrue(is_valid_bucket_name("valid-formed-s3-bucket-name"))
         self.assertTrue(is_valid_bucket_name("worst.bucket.ever"))
 
-class ApacheNCSAFormatterTestCase(unittest.TestCase):
 
+class ApacheNCSAFormatterTestCase(unittest.TestCase):
     def setUp(self):
         self.method = "GET"
-        self.datetime_regex = re.compile(r"\d+\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/\d{4}:\d{2}:\d{2}:\d{2}\s\+\d{4}")
+        self.datetime_regex = re.compile(
+            r"\d+\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/\d{4}:\d{2}:\d{2}:\d{2}\s\+\d{4}"
+        )
         self.agent = "myagent"
 
     def _build_expected_format_string(self, status_code, addtional_environ, content_length, **kwargs) -> Tuple[dict, str]:
@@ -332,7 +333,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
             "HTTP_REFERER": referer,
             "SERVER_PROTOCOL": server_protocol,
             "PATH_INFO": "/my/path/",
-            "REQUEST_METHOD": self.method
+            "REQUEST_METHOD": self.method,
         }
         environ.update(addtional_environ)
         query_string = ""
@@ -342,7 +343,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         request = f"{self.method} {environ['PATH_INFO']}{query_string} {server_protocol}"
 
         regex_log_entry = f'{host} {logname} {user} [] "{request}" {status_code} {content_length} "{referer}" "{self.agent}"'
-        rt_us = kwargs.get('rt_us')
+        rt_us = kwargs.get("rt_us")
         if rt_us:
             rt_seconds = int(rt_us / 1_000_000)
             regex_log_entry = f"{regex_log_entry} {rt_seconds}/{rt_us}"
@@ -376,9 +377,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         status_code = 200
         content_length = 10
         rt_us = 15
-        additional_environ = {
-            "QUERY_STRING": "name=hello&data=hello"
-        }
+        additional_environ = {"QUERY_STRING": "name=hello&data=hello"}
         environ, expected = self._build_expected_format_string(status_code, additional_environ, content_length, rt_us=15)
         actual = formatter(status_code, environ, content_length, rt_us=rt_us)
         self.assertRegexpMatches(actual, self.datetime_regex)
@@ -418,9 +417,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
 
         status_code = 200
         content_length = 10
-        additional_environ = {
-            "QUERY_STRING": "name=hello&data=hello"
-        }
+        additional_environ = {"QUERY_STRING": "name=hello&data=hello"}
         environ, expected = self._build_expected_format_string(status_code, additional_environ, content_length)
         actual = formatter(status_code, environ, content_length)
         self.assertRegexpMatches(actual, self.datetime_regex)
@@ -432,6 +429,3 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         self.assertEqual(actual, expected)
         agent_endstring = f'"{self.agent}"'
         self.assertTrue(actual.endswith(agent_endstring))
-
-
-
