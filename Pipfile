@@ -43,5 +43,4 @@ Werkzeug = "*"
 wheel = "*"
 
 [pipenv]
-# Required for 'black' since all of its release tags contain 'b'
-allow_prereleases = true
+allow_prereleases = false
