@@ -514,30 +514,26 @@ class Zappa:
             return venv
 
         # pyenv available check
-        try: # progma: no cover
+        try:  # progma: no cover
             subprocess.check_output(["pyenv", "help"], stderr=subprocess.STDOUT)
             pyenv_available = True
         except OSError:
             pyenv_available = False
 
-        if pyenv_available: # progma: no cover
+        if pyenv_available:  # progma: no cover
             # minor fix find pyenv version-file (.python-version)
             # Related: https://github.com/zappa/Zappa/issues/1132
-            version_file_path = subprocess.check_output(
-                ['pyenv', 'version-file']
-            ).decode('utf-8').strip()
+            version_file_path = subprocess.check_output(["pyenv", "version-file"]).decode("utf-8").strip()
 
             if ".python-version" in version_file_path:
                 with open(version_file_path, "r") as f:
                     # minor fix in how .python-version is read
                     # Related: https://github.com/Miserlou/Zappa/issues/921
                     env_name = f.readline().strip()
-                bin_path = subprocess.check_output(
-                    ["pyenv", "which", "python"]
-                ).decode("utf-8")
+                bin_path = subprocess.check_output(["pyenv", "which", "python"]).decode("utf-8")
                 venv = bin_path[: bin_path.rfind(env_name)] + env_name
                 return venv
-        
+
         return None
 
     def create_lambda_zip(
