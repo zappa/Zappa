@@ -1,11 +1,11 @@
 import functools
 import os
 from contextlib import contextmanager
+from io import IOBase as file
 
 import boto3
 import placebo
 from mock import MagicMock, patch
-from io import IOBase as file
 
 PLACEBO_DIR = os.path.join(os.path.dirname(__file__), "placebo")
 
