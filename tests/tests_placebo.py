@@ -213,11 +213,6 @@ class TestZappa(unittest.TestCase):
         # Init will test load_remote_settings
         lh = LambdaHandler("test_settings", session=session)
 
-        # Annoyingly, this will fail during record, but
-        # the result will actually be okay to use in playback.
-        # See: https://github.com/garnaat/placebo/issues/48
-        self.assertEqual(os.environ["hello"], "world")
-
         event = {
             "body": {},
             "headers": {},
