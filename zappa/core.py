@@ -521,7 +521,8 @@ class Zappa:
             pyenv_available = False
 
         if pyenv_available:  # progma: no cover
-            # minor fix find pyenv version
+            # Each Python version is installed into its own directory under $(pyenv root)/versions
+            # https://github.com/pyenv/pyenv#locating-pyenv-provided-python-installations
             # Related: https://github.com/zappa/Zappa/issues/1132
             pyenv_root = subprocess.check_output(["pyenv", "root"]).decode("utf-8").strip()
             pyenv_version = subprocess.check_output(["pyenv", "version-name"]).decode("utf-8").strip()
