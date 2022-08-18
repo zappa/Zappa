@@ -42,4 +42,5 @@ wheel = "*"
 wsgi-request-logger = "*"
 
 [pipenv]
-allow_prereleases = false
+# Required for 'black' since all of its release tags contain 'b'
+allow_prereleases = true
