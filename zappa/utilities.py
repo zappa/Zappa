@@ -383,13 +383,9 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             params = {"FunctionName": function.name, "EventSourceArn": self.arn, "BatchSize": self.batch_size,
                       "Topics": self.topics, "StartingPosition": self.starting_position, "Enabled": self.enabled}
             if self._config.get('group_id'):
-                group_config = None
-                if self.arn.split(":")[2] == 'kafka':
-                    group_config = {"AmazonManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
-                elif self.arn.split(":")[2] == 'SelfManagedKafka':
-                    group_config = {"SelfManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
-                if group_config:
-                    params.update(group_config)
+                group_config = {
+                    "AmazonManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
+                params.update(group_config)
             try:
                 response = self._lambda.call(
                     "create_event_source_mapping", **params)

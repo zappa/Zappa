@@ -321,8 +321,9 @@ class LambdaHandler:
 
         return None
 
+    # AWS MSK
     def get_function_for_kafka_trigger(self, event):
-        arn = event.get("eventSourceArn") or event.get("bootstrapServers")
+        arn = event.get("eventSourceArn")
         # if multiple topics are in 1 trigger, need to improve
         keys = list(event.get('records').keys())
         topic = keys[0].rsplit('-', 1)[0]
@@ -440,8 +441,8 @@ class LambdaHandler:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
 
-            # this is an AWS-event triggered from MSK or kafka
-        elif event.get("eventSource") in ["aws:kafka", "aws:SelfManagedKafka"]:
+            # this is an AWS-event triggered from MSK
+        elif event.get("eventSource") in ["aws:kafka"]:
             result = None
             whole_function = self.get_function_for_kafka_trigger(event)
             if whole_function:
