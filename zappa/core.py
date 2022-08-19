@@ -2779,7 +2779,7 @@ class Zappa:
         # The stream sources - DynamoDB, Kinesis and SQS - are working differently than the other services (pull vs push)
         # and do not require event permissions. They do require additional permissions on the Lambda roles though.
         # http://docs.aws.amazon.com/lambda/latest/dg/lambda-api-permissions-ref.html
-        pull_services = ["dynamodb", "kinesis", "sqs"]
+        pull_services = ["dynamodb", "kinesis", "sqs", "kafka", "SelfManagedKafka"]
 
         # XXX: Not available in Lambda yet.
         # We probably want to execute the latest code.

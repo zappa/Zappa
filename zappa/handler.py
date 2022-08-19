@@ -321,6 +321,16 @@ class LambdaHandler:
 
         return None
 
+    def get_function_for_kafka_trigger(self, event):
+        arn = event.get("eventSourceArn") or event.get("bootstrapServers")
+        # if multiple topics are in 1 trigger, need to improve
+        keys = list(event.get('records').keys())
+        topic = keys[0].rsplit('-', 1)[0]
+        arn = '{}:{}'.format(arn, topic.strip())
+        if arn:
+            return self.settings.AWS_EVENT_MAPPING.get(arn)
+        return None
+
     def get_function_from_bot_intent_trigger(self, event):
         """
         For the given event build ARN and return the configured function
@@ -422,6 +432,18 @@ class LambdaHandler:
             records = event.get("Records")
             result = None
             whole_function = self.get_function_for_aws_event(records[0])
+            if whole_function:
+                app_function = self.import_module_and_get_function(whole_function)
+                result = self.run_function(app_function, event, context)
+                logger.debug(result)
+            else:
+                logger.error("Cannot find a function to process the triggered event.")
+            return result
+
+            # this is an AWS-event triggered from MSK or kafka
+        elif event.get("eventSource") in ["aws:kafka", "aws:SelfManagedKafka"]:
+            result = None
+            whole_function = self.get_function_for_kafka_trigger(event)
             if whole_function:
                 app_function = self.import_module_and_get_function(whole_function)
                 result = self.run_function(app_function, event, context)

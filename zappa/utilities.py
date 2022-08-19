@@ -300,9 +300,10 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                 try:
                     response = self._lambda.call(
                         "update_event_source_mapping",
+                        UUID=uuid,
                         BatchSize=self.batch_size,
                         Enabled=self.enabled,
-                        FunctionName=function.arn,
+                        FunctionName=function.name,
                     )
                     LOG.debug(response)
                 except Exception:
@@ -355,6 +356,112 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             if self.filters:
                 self.add_filters(function)
 
+    class KafkaEventSource(kappa.event_source.base.EventSource):
+        def __init__(self, context, config):
+            super().__init__(context, config)
+            self._lambda = kappa.awsclient.create_client("lambda", context.session)
+
+        @property
+        def topics(self):
+            return self._config.get('topics', [])
+
+        def _get_uuid(self, function):
+            uuid = None
+            response = self._lambda.call(
+                "list_event_source_mappings",
+                FunctionName=function.name,
+                EventSourceArn=self.arn,
+            )
+            LOG.debug(response)
+            if response["EventSourceMappings"]:
+                for esm in response["EventSourceMappings"]:
+                    if set(esm.get('Topics')) == set(self.topics):
+                        return esm["UUID"]
+            return uuid
+
+        def add(self, function):
+            params = {"FunctionName": function.name, "EventSourceArn": self.arn, "BatchSize": self.batch_size,
+                      "Topics": self.topics, "StartingPosition": self.starting_position, "Enabled": self.enabled}
+            if self._config.get('group_id'):
+                group_config = None
+                if self.arn.split(":")[2] == 'kafka':
+                    group_config = {"AmazonManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
+                elif self.arn.split(":")[2] == 'SelfManagedKafka':
+                    group_config = {"SelfManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
+                if group_config:
+                    params.update(group_config)
+            try:
+                response = self._lambda.call(
+                    "create_event_source_mapping", **params)
+                LOG.debug(response)
+            except Exception:
+                LOG.exception("Unable to add event source")
+
+        def enable(self, function):
+            self._config["enabled"] = True
+            try:
+                response = self._lambda.call(
+                    "update_event_source_mapping",
+                    UUID=self._get_uuid(function),
+                    Enabled=self.enabled,
+                )
+                LOG.debug(response)
+            except Exception:
+                LOG.exception("Unable to enable event source")
+
+        def disable(self, function):
+            self._config["enabled"] = False
+            try:
+                response = self._lambda.call(
+                    "update_event_source_mapping",
+                    UUID=self._get_uuid(function),
+                    Enabled=self.enabled,
+                )
+                LOG.debug(response)
+            except Exception:
+                LOG.exception("Unable to disable event source")
+
+        def update(self, function):
+            response = None
+            uuid = self._get_uuid(function)
+            if uuid:
+                try:
+                    response = self._lambda.call(
+                        "update_event_source_mapping",
+                        UUID=uuid,
+                        FunctionName=function.name,
+                        Enabled=self.enabled,
+                        BatchSize=self.batch_size
+                    )
+                    LOG.debug(response)
+                except Exception:
+                    LOG.exception("Unable to update event source")
+
+        def remove(self, function):
+            response = None
+            uuid = self._get_uuid(function)
+            if uuid:
+                response = self._lambda.call("delete_event_source_mapping", UUID=uuid)
+                LOG.debug(response)
+            return response
+
+        def status(self, function):
+            response = None
+            LOG.debug("getting status for event source %s", self.arn)
+            uuid = self._get_uuid(function)
+            if uuid:
+                try:
+                    response = self._lambda.call(
+                        "get_event_source_mapping", UUID=self._get_uuid(function)
+                    )
+                    LOG.debug(response)
+                except botocore.exceptions.ClientError:
+                    LOG.debug("event source %s does not exist", self.arn)
+                    response = None
+            else:
+                LOG.debug("No UUID for event source %s", self.arn)
+            return response
+
     event_source_map = {
         "dynamodb": kappa.event_source.dynamodb_stream.DynamoDBStreamEventSource,
         "kinesis": kappa.event_source.kinesis.KinesisEventSource,
@@ -362,6 +469,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
         "sns": ExtendedSnsEventSource,
         "sqs": SqsEventSource,
         "events": kappa.event_source.cloudwatch.CloudWatchEventSource,
+        "kafka": KafkaEventSource,
     }
 
     arn = event_source["arn"]
