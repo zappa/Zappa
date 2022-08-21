@@ -335,7 +335,7 @@ In addition, Zappa will also automatically set the correct execution permissions
 To further reduce the final package file size, you can:
 
 * Set `slim_handler` to `True` to upload a small handler to Lambda and the rest of the package to S3. For more details, see the [merged pull request](https://github.com/Miserlou/Zappa/pull/548) and the [discussion in the original issue](https://github.com/Miserlou/Zappa/issues/510). See also: [Large Projects](#large-projects).
-* Use the `exclude` setting and provide a list of regex patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
+* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
 
 ### Template
 
@@ -894,7 +894,8 @@ to change Zappa's behavior. Use these at your own risk!
         ],
         "endpoint_configuration": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
-        "exclude": ["*.gz", "*.rar"], // A list of regex patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
+        "exclude": ["file.gz", "tests/"], // A list of regex patterns to exclude from the archive.
+        "exclude_glob": ["*.gz", "*.rar", "tests/**/*"], // A list of glob patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
         "extra_permissions": [{ // Attach any extra permissions to this policy. Default None
             "Effect": "Allow",
