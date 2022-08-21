@@ -39,6 +39,10 @@ def handle_bot_intent(event, context):
     return "Success"
 
 
+def handle_msk_intent(event, context):
+    return "Success"
+
+
 mocked_exception_handler = Mock()
 
 
@@ -356,6 +360,51 @@ class TestZappa(unittest.TestCase):
             response["body"],
             "https://1234567890.execute-api.us-east-1.amazonaws.com/return/request/url",
         )
+
+    def test_msk_triggered_event(self):
+        """
+        Ensure that bot triggered events are handled as in the settings
+        """
+        lh = LambdaHandler("tests.test_msk_handler_being_triggered")
+        # from : https://docs.aws.amazon.com/lambda/latest/dg/with-msk.html
+        event = {
+            "eventSource": "aws:kafka",
+            "eventSourceArn": "arn:aws:kafka:sa-east-1:123456789012:cluster/vpc-2priv-2pub/751d2973-a626-431c-9d4e-d7975eb44dd7-2",
+            "records": {
+                "test_msk": [
+                    {
+                        "topic": "test_msk",
+                        "partition": 0,
+                        "offset": 15,
+                        "timestamp": 1545084650987,
+                        "timestampType": "CREATE_TIME",
+                        "key": "abcDEFghiJKLmnoPQRstuVWXyz1234==",
+                        "value": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0Lg==",
+                        "headers": [
+                            {
+                                "headerKey": [
+                                    104,
+                                    101,
+                                    97,
+                                    100,
+                                    101,
+                                    114,
+                                    86,
+                                    97,
+                                    108,
+                                    117,
+                                    101
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response, "Success")
 
     def test_merge_headers_no_multi_value(self):
         event = {"headers": {"a": "b"}}
