@@ -327,8 +327,8 @@ class LambdaHandler:
         # if multiple topics are in 1 trigger, need to improve
         keys = list(event.get('records').keys())
         topic = keys[0].rsplit('-', 1)[0]
-        arn = '{}:{}'.format(arn, topic.strip())
-        if arn:
+        if arn and topic:
+            arn = f'{arn}:{topic.strip()}'
             return self.settings.AWS_EVENT_MAPPING.get(arn)
         return None
 
@@ -441,8 +441,9 @@ class LambdaHandler:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
 
-            # this is an AWS-event triggered from MSK
-        elif event.get("eventSource") in ["aws:kafka"]:
+        # this is an AWS-event triggered from MSK
+        # TODO If Apache Kafka, "aws:SelfManagedKafka" as eventSource
+        elif event.get("eventSource") == "aws:kafka":
             result = None
             whole_function = self.get_function_for_kafka_trigger(event)
             if whole_function:
