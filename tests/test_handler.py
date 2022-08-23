@@ -56,9 +56,7 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(LambdaHandler.run_function(one_arg, "e", "c"), "e")
         self.assertEqual(LambdaHandler.run_function(two_args, "e", "c"), ("e", "c"))
         self.assertEqual(LambdaHandler.run_function(var_args, "e", "c"), ("e", "c"))
-        self.assertEqual(
-            LambdaHandler.run_function(var_args_with_one, "e", "c"), ("e", "c")
-        )
+        self.assertEqual(LambdaHandler.run_function(var_args_with_one, "e", "c"), ("e", "c"))
 
         try:
             LambdaHandler.run_function(unsupported, "e", "c")
