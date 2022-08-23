@@ -380,26 +380,10 @@ class TestZappa(unittest.TestCase):
                         "timestampType": "CREATE_TIME",
                         "key": "abcDEFghiJKLmnoPQRstuVWXyz1234==",
                         "value": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0Lg==",
-                        "headers": [
-                            {
-                                "headerKey": [
-                                    104,
-                                    101,
-                                    97,
-                                    100,
-                                    101,
-                                    114,
-                                    86,
-                                    97,
-                                    108,
-                                    117,
-                                    101
-                                ]
-                            }
-                        ]
+                        "headers": [{"headerKey": [104, 101, 97, 100, 101, 114, 86, 97, 108, 117, 101]}],
                     }
                 ]
-            }
+            },
         }
 
         response = lh.handler(event, None)

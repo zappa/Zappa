@@ -325,10 +325,10 @@ class LambdaHandler:
     def get_function_for_kafka_trigger(self, event):
         arn = event.get("eventSourceArn")
         # if multiple topics are in 1 trigger, need to improve
-        keys = list(event.get('records').keys())
-        topic = keys[0].rsplit('-', 1)[0]
+        keys = list(event.get("records").keys())
+        topic = keys[0].rsplit("-", 1)[0]
         if arn and topic:
-            arn = f'{arn}:{topic.strip()}'
+            arn = f"{arn}:{topic.strip()}"
             return self.settings.AWS_EVENT_MAPPING.get(arn)
         return None
 

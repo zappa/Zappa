@@ -363,7 +363,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
 
         @property
         def topics(self):
-            return self._config.get('topics', [])
+            return self._config.get("topics", [])
 
         def _get_uuid(self, function):
             uuid = None
@@ -375,20 +375,24 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             LOG.debug(response)
             if response["EventSourceMappings"]:
                 for esm in response["EventSourceMappings"]:
-                    if set(esm.get('Topics')) == set(self.topics):
+                    if set(esm.get("Topics")) == set(self.topics):
                         return esm["UUID"]
             return uuid
 
         def add(self, function):
-            params = {"FunctionName": function.name, "EventSourceArn": self.arn, "BatchSize": self.batch_size,
-                      "Topics": self.topics, "StartingPosition": self.starting_position, "Enabled": self.enabled}
-            if self._config.get('group_id'):
-                group_config = {
-                    "AmazonManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get('group_id')}}
+            params = {
+                "FunctionName": function.name,
+                "EventSourceArn": self.arn,
+                "BatchSize": self.batch_size,
+                "Topics": self.topics,
+                "StartingPosition": self.starting_position,
+                "Enabled": self.enabled,
+            }
+            if self._config.get("group_id"):
+                group_config = {"AmazonManagedKafkaEventSourceConfig": {"ConsumerGroupId": self._config.get("group_id")}}
                 params.update(group_config)
             try:
-                response = self._lambda.call(
-                    "create_event_source_mapping", **params)
+                response = self._lambda.call("create_event_source_mapping", **params)
                 LOG.debug(response)
             except Exception:
                 LOG.exception("Unable to add event source")
@@ -427,7 +431,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                         UUID=uuid,
                         FunctionName=function.name,
                         Enabled=self.enabled,
-                        BatchSize=self.batch_size
+                        BatchSize=self.batch_size,
                     )
                     LOG.debug(response)
                 except Exception:
@@ -447,9 +451,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             uuid = self._get_uuid(function)
             if uuid:
                 try:
-                    response = self._lambda.call(
-                        "get_event_source_mapping", UUID=self._get_uuid(function)
-                    )
+                    response = self._lambda.call("get_event_source_mapping", UUID=self._get_uuid(function))
                     LOG.debug(response)
                 except botocore.exceptions.ClientError:
                     LOG.debug("event source %s does not exist", self.arn)
