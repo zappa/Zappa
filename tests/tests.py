@@ -253,6 +253,28 @@ class TestZappa(unittest.TestCase):
                 with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages("", ""), {"super_package": "0.1"})
 
+    def test_get_current_venv(self, *args):
+        z = Zappa()
+
+        expected = "/expected/versions/path"
+
+        # VIRTUL_ENV test
+        os_env = {"VIRTUAL_ENV": expected}
+        with mock.patch.dict("os.environ", os_env):
+            current_venv = z.get_current_venv()
+            self.assertEqual(current_venv, expected)
+
+        # pyenv test
+        with mock.patch.dict("os.environ", {}, clear=True):
+
+            with mock.patch("subprocess.check_output", side_effect=[None, b"/expected", b"path"]):
+                current_venv = z.get_current_venv()
+                self.assertEqual(current_venv, expected)
+
+            with mock.patch("subprocess.check_output", side_effect=OSError("No pyenv!")):
+                current_venv = z.get_current_venv()
+                self.assertEqual(current_venv, None)
+
     def test_getting_installed_packages_mixed_case_location(self, *args):
         z = Zappa(runtime="python3.7")
 
