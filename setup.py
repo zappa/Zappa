@@ -12,12 +12,10 @@ with open("README.md", encoding="utf-8") as readme_file:
 pipfile = ConfigParser()
 pipfile.read(Path(__file__).parent.resolve() / "Pipfile")
 required = [
-    "{}{}".format(name, version.strip('"')) if version != '"*"' else name
-    for name, version in pipfile["packages"].items()
+    "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["packages"].items()
 ]
 test_required = [
-    "{}{}".format(name, version.strip('"')) if version != '"*"' else name
-    for name, version in pipfile["dev-packages"].items()
+    "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["dev-packages"].items()
 ]
 
 setup(
@@ -25,6 +23,7 @@ setup(
     version=__version__,
     packages=["zappa"],
     install_requires=required,
+    python_requires=">=3.7, <3.10",
     tests_require=test_required,
     test_suite="nose.collector",
     include_package_data=True,
@@ -46,7 +45,6 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

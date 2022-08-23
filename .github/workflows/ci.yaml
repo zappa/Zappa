@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python: [3.6, 3.7, 3.8, 3.9]
+        python: [3.7, 3.8, 3.9]
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v2
@@ -22,8 +22,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
+      - name: make sure we have version tags
+        run: git fetch --unshallow --tags
       - name: Setup Virtualenv
         run: python -m venv .venv
       - name: Install

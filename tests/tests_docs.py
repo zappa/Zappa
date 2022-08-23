@@ -64,9 +64,7 @@ class TestDocs(unittest.TestCase):
                             # skip empty header
                             continue
 
-                        header_text_no_spaces = header_text_strip.replace(
-                            " ", "-"
-                        ).lower()
+                        header_text_no_spaces = header_text_strip.replace(" ", "-").lower()
                         toc_line = "  " * (len(header) - 2) + "- [%s](#%s)" % (
                             header_text,
                             header_text_no_spaces.lower(),
@@ -88,14 +86,10 @@ class TestDocs(unittest.TestCase):
             msg = "README.test.md written so you can manually compare."
 
         else:
-            msg = (
-                "You can set environ[ZAPPA_TEST_SAVE_README_NEW]=1 to generate\n"
-                "  README.test.md to manually compare."
-            )
+            msg = "You can set environ[ZAPPA_TEST_SAVE_README_NEW]=1 to generate\n" "  README.test.md to manually compare."
 
         self.assertEquals(
             "".join(old_readme),
             new_readme,
-            "README doesn't match after regenerating TOC\n\n"
-            "You need to run doctoc after a heading change.\n{}".format(msg),
+            "README doesn't match after regenerating TOC\n\n" "You need to run doctoc after a heading change.\n{}".format(msg),
         )
