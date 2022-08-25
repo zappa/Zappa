@@ -647,12 +647,12 @@ For configuring MSK triggered events:
            {
                "function": "your_module.process_messages",
                "event_source": {
-                    "arn":  "arn:aws:kafka:us-west-2:337870060802:cluster/xxxx/e9de1d16-aba9-4d26-8a43-78aa78629f58-6",",
+                    "arn":  "arn:aws:kafka:sa-east-1:123456789012:cluster/vpc-2priv-2pub/751d2973-a626-431c-9d4e-d7975eb44dd7-2",",
                     "batch_size": 10, 
                     "topics": [
-                      "data-profile-pipeline-test"
+                      "test_msk"
                     ],
-                    "group_id": "consumer_group_data-profile-pipeline-test",
+                    "group_id": "test_msk_group",
                     "starting_position": "LATEST",
                     "enabled": true
                }
