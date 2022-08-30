@@ -2587,6 +2587,12 @@ class ZappaCLI:
             arn = event.get("event_source", {}).get("arn")
             function = event.get("function")
             if arn and function:
+                if arn.find('aws:kafka') > 0:
+                    # only support one kafka topic
+                    topics = event.get("event_source", {}).get("topics")
+                    if isinstance(topics, list):
+                        topics = topics[0]
+                    arn += ':' + topics.strip()
                 event_mapping[arn] = function
         settings_s = settings_s + "AWS_EVENT_MAPPING={0!s}\n".format(event_mapping)
 
