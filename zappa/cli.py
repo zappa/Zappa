@@ -2235,9 +2235,7 @@ class ZappaCLI:
         )
         self.vpc_config = self.stage_config.get("vpc_config", {})
         self.memory_size = self.stage_config.get("memory_size", 512)
-        self.ephemeral_storage = self.stage_config.get(
-            "ephemeral_storage", {"Size": 512}
-        )
+        self.ephemeral_storage = self.stage_config.get("ephemeral_storage", {"Size": 512})
         self.app_function = self.stage_config.get("app_function", None)
         self.exception_handler = self.stage_config.get("exception_handler", None)
         self.aws_region = self.stage_config.get("aws_region", None)
