@@ -1,4 +1,3 @@
-import datetime
 import os
 import unittest
 
@@ -99,6 +98,6 @@ class TestZappa(unittest.TestCase):
     def test_async_call_arg_not_json_serializable(self):
         """Exception is raised when calling an async function locally (not on aws)"""
         async_me = import_and_get_task("tests.test_app.async_me")
-        unserializable_object = datetime.datetime.now()
+        unserializable_object = object()
         with self.assertRaises(UnserializableJsonError):
             async_me(unserializable_object)
