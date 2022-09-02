@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import sys
+from typing import Any
 from urllib.parse import urlparse
 
 import botocore
@@ -601,8 +602,8 @@ def merge_headers(event):
     return multi_headers
 
 
-def validate_json_serializable(function_args: dict) -> None:
+def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
     try:
-        json.dumps(function_args)
+        json.dumps((args, kwargs))
     except (TypeError, OverflowError):
         raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")

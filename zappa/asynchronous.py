@@ -430,8 +430,7 @@ def task(*args, **kwargs):
                 ).send(task_path, args, kwargs)
                 return send_result
             else:
-                function_args = {"args": args, "kwargs": kwargs}
-                validate_json_serializable(function_args)
+                validate_json_serializable(*args, **kwargs)
                 return func(*args, **kwargs)
 
         update_wrapper(_run_async, func)
