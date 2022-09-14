@@ -324,13 +324,9 @@ class LambdaHandler:
     # AWS MSK
     def get_function_for_kafka_trigger(self, event):
         arn = event.get("eventSourceArn")
-        # if multiple topics are in 1 trigger, need to improve
-        records = event.get("records")
-        keys = list(records.keys()) if records else []
-        topic = keys[0].rsplit("-", 1)[0] if keys else None
-        if arn and topic:
-            arn = f"{arn}:{topic.strip()}"
-            return self.settings.AWS_EVENT_MAPPING.get(arn)
+        records = event.get("records", None)
+        if records:
+            return {kafka_topic: self.settings.AWS_EVENT_MAPPING.get(f"{arn}:{kafka_topic.strip()}") for kafka_topic in records.keys()}
         return None
 
     def get_function_from_bot_intent_trigger(self, event):
@@ -443,14 +439,14 @@ class LambdaHandler:
             return result
 
         # this is an AWS-event triggered from MSK
-        # TODO If Apache Kafka, "aws:SelfManagedKafka" as eventSource
         elif event.get("eventSource") == "aws:kafka":
             result = None
-            whole_function = self.get_function_for_kafka_trigger(event)
-            if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
-                result = self.run_function(app_function, event, context)
-                logger.debug(result)
+            topic_functions = self.get_function_for_kafka_trigger(event)
+            if topic_functions:
+                for topic, whole_function in topic_functions.items():
+                    app_function = self.import_module_and_get_function(whole_function)
+                    result = self.run_function(app_function, event, context)
+                    logger.debug(result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
