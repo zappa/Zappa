@@ -9,12 +9,20 @@ import re
 import shutil
 import stat
 import sys
+from typing import Any
 from urllib.parse import urlparse
 
 import botocore
 import durationpy
 
 LOG = logging.getLogger(__name__)
+
+
+class UnserializableJsonError(TypeError):
+    """Exception class for JSON encoding errors"""
+
+    pass
+
 
 ##
 # Settings / Packaging
@@ -592,3 +600,10 @@ def merge_headers(event):
     for h in multi_headers.keys():
         multi_headers[h] = ", ".join(multi_headers[h])
     return multi_headers
+
+
+def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
+    try:
+        json.dumps((args, kwargs))
+    except (TypeError, OverflowError):
+        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
