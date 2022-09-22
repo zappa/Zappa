@@ -927,7 +927,7 @@ to change Zappa's behavior. Use these at your own risk!
         ],
         "endpoint_configuration": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
-        "exclude": ["file.gz", "tests/"], // A list of regex patterns to exclude from the archive.
+        "exclude": ["file.gz", "tests"], // A list of filename patterns to exclude from the archive (see `fnmatch` module for patterns).
         "exclude_glob": ["*.gz", "*.rar", "tests/**/*"], // A list of glob patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
         "extra_permissions": [{ // Attach any extra permissions to this policy. Default None
