@@ -21,7 +21,7 @@
 - [Basic Usage](#basic-usage)
   - [Initial Deployments](#initial-deployments)
   - [Updates](#updates)
-    - [Docker Workflows](#docker-workflows)
+    - [Docker Workflows](#docker-workflows
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
@@ -222,7 +222,20 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+
+You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
+Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+
+Deploy Example:
+
+    $ zappa deploy --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Update Example:
+
+    $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
 
 ### Rollback
 

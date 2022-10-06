@@ -2837,6 +2837,17 @@ USE_TZ = True
 
             reload(zappa)
 
+    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
+    def test_no_runtimeerror_when_in_docker(self, *_):
+        from importlib import reload
+
+        try:
+            import zappa
+            reload(zappa)
+        except RuntimeError:
+            self.fail()
+
     def test_wsgi_query_string_unquoted(self):
         event = {
             "body": {},
