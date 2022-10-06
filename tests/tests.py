@@ -2844,6 +2844,7 @@ USE_TZ = True
 
         try:
             import zappa
+
             reload(zappa)
         except RuntimeError:
             self.fail()
