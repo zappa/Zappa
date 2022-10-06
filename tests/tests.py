@@ -763,7 +763,7 @@ class TestZappa(unittest.TestCase):
 
         request = create_wsgi_request(event)
 
-    def test_wsgi_event__handle_space_in_xforwardedfor(self):
+    def test_wsgi_event_handle_space_in_xforwardedfor(self):
         event = {
             "body": None,
             "resource": "/",
