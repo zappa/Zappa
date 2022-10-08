@@ -57,6 +57,8 @@ from zappa.utilities import (
 )
 from zappa.wsgi import common_log, create_wsgi_request
 
+from .utils import get_unsupported_sys_versioninfo
+
 
 def random_string(length):
     return "".join(random.choice(string.printable) for _ in range(length))
@@ -761,6 +763,62 @@ class TestZappa(unittest.TestCase):
 
         request = create_wsgi_request(event)
 
+    def test_wsgi_event_handle_space_in_xforwardedfor(self):
+        event = {
+            "body": None,
+            "resource": "/",
+            "requestContext": {
+                "resourceId": "6cqjw9qu0b",
+                "apiId": "9itr2lba55",
+                "resourcePath": "/",
+                "httpMethod": "GET",
+                "requestId": "c17cb1bf-867c-11e6-b938-ed697406e3b5",
+                "accountId": "724336686645",
+                "identity": {
+                    "apiKey": None,
+                    "userArn": None,
+                    "cognitoAuthenticationType": None,
+                    "caller": None,
+                    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:48.0) Gecko/20100101 Firefox/48.0",
+                    "user": None,
+                    "cognitoIdentityPoolId": None,
+                    "cognitoIdentityId": None,
+                    "cognitoAuthenticationProvider": None,
+                    "sourceIp": "50.191.225.98",
+                    "accountId": None,
+                },
+                "stage": "devorr",
+            },
+            "queryStringParameters": None,
+            "httpMethod": "GET",
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 6801928d54163af944bf854db8d5520e.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "50.191.225.98 , 204.246.168.101",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Upgrade-Insecure-Requests": "1",
+                "Host": "9itr2lba55.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "X-Amz-Cf-Id": "qgNdqKT0_3RMttu5KjUdnvHI3OKm1BWF8mGD2lX8_rVrJQhhp-MLDw==",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:48.0) Gecko/20100101 Firefox/48.0",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+        }
+        expected = "50.191.225.98"
+        request = create_wsgi_request(event)
+        actual = request["REMOTE_ADDR"]
+        self.assertEqual(actual, expected)
+
     def test_wsgi_path_info_unquoted(self):
         event = {
             "body": {},
@@ -972,6 +1030,89 @@ class TestZappa(unittest.TestCase):
         environ = create_wsgi_request(event, trailing_slash=False)
         response_tuple = collections.namedtuple("Response", ["status_code", "content"])
         response = response_tuple(200, "hello")
+
+    def test_wsgi_without_requestcontext(self):
+        event = {
+            "body": None,
+            "resource": "/",
+            "queryStringParameters": None,
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "71.231.27.57, 104.246.180.51",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0",
+                "Host": "xo2z7zafjh.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "Cookie": "zappa=AQ4",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "Referer": "https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "X-Amz-Cf-Id": "31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+            "isBase64Encoded": True,
+        }
+        environ = create_wsgi_request(event, trailing_slash=False)
+        self.assertTrue(environ)
+
+    def test_wsgi_with_authorizer(self):
+        expected_remote_user = "remote-user"
+        authorizer = {
+            "principalId": expected_remote_user,
+        }
+        event = {
+            "body": None,
+            "resource": "/",
+            "requestContext": {
+                "resourceId": "6cqjw9qu0b",
+                "apiId": "9itr2lba55",
+                "resourcePath": "/",
+                "httpMethod": "POST",
+                "requestId": "c17cb1bf-867c-11e6-b938-ed697406e3b5",
+                "accountId": "724336686645",
+                "authorizer": authorizer,
+                "stage": "devorr",
+            },
+            "queryStringParameters": None,
+            "httpMethod": "POST",
+            "pathParameters": None,
+            "headers": {
+                "Via": "1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "CloudFront-Is-SmartTV-Viewer": "false",
+                "CloudFront-Forwarded-Proto": "https",
+                "X-Forwarded-For": "71.231.27.57, 104.246.180.51",
+                "CloudFront-Viewer-Country": "US",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0",
+                "Host": "xo2z7zafjh.execute-api.us-east-1.amazonaws.com",
+                "X-Forwarded-Proto": "https",
+                "Cookie": "zappa=AQ4",
+                "CloudFront-Is-Tablet-Viewer": "false",
+                "X-Forwarded-Port": "443",
+                "Referer": "https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post",
+                "CloudFront-Is-Mobile-Viewer": "false",
+                "X-Amz-Cf-Id": "31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==",
+                "CloudFront-Is-Desktop-Viewer": "true",
+            },
+            "stageVariables": None,
+            "path": "/",
+            "isBase64Encoded": True,
+        }
+
+        environ = create_wsgi_request(event, trailing_slash=False)
+        self.assertEqual(environ["REMOTE_USER"], expected_remote_user)
+        self.assertDictEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
 
     def test_wsgi_from_apigateway_testbutton(self):
         """
@@ -2686,6 +2827,28 @@ USE_TZ = True
         boto_mock.client().delete_function_concurrency.assert_called_with(
             FunctionName="abc",
         )
+
+    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
+    def test_unsupported_version_error(self, *_):
+        from importlib import reload
+
+        with self.assertRaises(RuntimeError):
+            import zappa
+
+            reload(zappa)
+
+    def test_wsgi_query_string_unquoted(self):
+        event = {
+            "body": {},
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"a": "A,B", "b": "C#D"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
 
 
 if __name__ == "__main__":

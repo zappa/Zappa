@@ -35,7 +35,6 @@ python-slugify = "*"
 PyYAML = "*"
 # previous versions don't work with urllib3 1.24
 requests = ">=2.20.0"
-six = "*"
 toml = "*"
 tqdm = "*"
 troposphere = ">=3.0"
