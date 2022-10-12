@@ -326,7 +326,9 @@ class LambdaHandler:
         arn = event.get("eventSourceArn")
         records = event.get("records", None)
         if records:
-            return {kafka_topic: self.settings.AWS_EVENT_MAPPING.get("{}:{}".format(arn, kafka_topic.split("-")[0].strip())) for kafka_topic in records.keys()}
+            return {
+                kafka_topic: self.settings.AWS_EVENT_MAPPING.get("{}:{}".format(arn, kafka_topic.split("-")[0].strip()))
+                for kafka_topic in records.keys()}
         return None
 
     def get_function_from_bot_intent_trigger(self, event):
