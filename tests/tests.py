@@ -1086,6 +1086,158 @@ class TestZappa(unittest.TestCase):
         response_tuple = collections.namedtuple("Response", ["status_code", "content"])
         response = response_tuple(200, "hello")
 
+    def test_wsgi_from_v2_event(self):
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate, br",
+                "accept-language": "en-US,en;q=0.9",
+                "cache-control": "no-cache",
+                "content-length": "0",
+                "dnt": "1",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "pragma": "no-cache",
+                "upgrade-insecure-requests": "1",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "GET",
+                    "path": "/",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                },
+                "requestId": "xTG4wqXdSQ0RHpA=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "16/Oct/2022:11:17:12 +0000",
+                "timeEpoch": 1665919032135,
+            },
+            "pathParameters": {"proxy": ""},
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event, event_version="2.0")
+        self.assertTrue(environ)
+
+    def test_wsgi_from_v2_event_with_lambda_authorizer(self):
+        principal_id = "user|a1b2c3d4"
+        authorizer = {"lambda": {"bool": True, "key": "value", "number": 1, "principalId": principal_id}}
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate, br",
+                "authorization": "Bearer 1232314343",
+                "content-length": "28",
+                "content-type": "application/json",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "authorizer": authorizer,
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "POST",
+                    "path": "/",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                },
+                "requestId": "aJ6Rqi93zQ0GPng=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "17/Oct/2022:14:58:44 +0000",
+                "timeEpoch": 1666018724000,
+            },
+            "pathParameters": {"proxy": ""},
+            "body": "{'data':'0123456789'}",
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event, event_version="2.0")
+        self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
+        self.assertEqual(environ["REMOTE_USER"], principal_id)
+
+    def test_wsgi_from_v2_event_with_iam_authorizer(self):
+        user_arn = "arn:aws:sts::724336686645:assumed-role/SAMLUSER/user.name"
+        authorizer = {
+            "iam": {
+                "accessKey": "AWSACCESSKEYID",
+                "accountId": "724336686645",
+                "callerId": "KFDJSURSUC8FU3ITCWEDJ:user.name",
+                "cognitoIdentity": None,
+                "principalOrgId": "aws:PrincipalOrgID",
+                "userArn": user_arn,
+                "userId": "KFDJSURSUC8FU3ITCWEDJ:user.name",
+            }
+        }
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate",
+                "authorization": "AWS4-HMAC-SHA256 Credential=AWSACCESSKEYID/20221017/eu-west-1/execute-api/aws4_request, SignedHeaders=host;x-amz-date;x-amz-security-token, Signature=foosignature",
+                "content-length": "17",
+                "content-type": "application/json",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "user-agent": "python-requests/2.28.1",
+                "x-amz-content-sha256": "foobar",
+                "x-amz-date": "20221017T150616Z",
+                "x-amz-security-token": "footoken",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "authorizer": authorizer,
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "POST",
+                    "path": "/",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "python-requests/2.28.1",
+                },
+                "requestId": "aJ5ZZgeYiQ0Rz-A=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "17/Oct/2022:15:06:16 +0000",
+                "timeEpoch": 1666019176656,
+            },
+            "pathParameters": {"proxy": ""},
+            "body": "{'data': '12345'}",
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event, event_version="2.0")
+        self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
+        self.assertEqual(environ["REMOTE_USER"], user_arn)
+
     ##
     # Handler
     ##
