@@ -9,13 +9,20 @@ import re
 import shutil
 import stat
 import sys
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import botocore
 import durationpy
 
 LOG = logging.getLogger(__name__)
+
+
+class UnserializableJsonError(TypeError):
+    """Exception class for JSON encoding errors"""
+
+    pass
+
 
 ##
 # Settings / Packaging
@@ -668,3 +675,10 @@ def ApacheNCSAFormatter(with_response_time: bool = True) -> Callable:
         return ApacheNCSAFormatters.format_log_with_response_time
     else:
         return ApacheNCSAFormatters.format_log
+
+
+def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
+    try:
+        json.dumps((args, kwargs))
+    except (TypeError, OverflowError):
+        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
