@@ -1462,6 +1462,26 @@ class Zappa:
         )
 
     ##
+    # Function URL
+    ##
+    def deploy_lambda_function_url(self, function_name, function_url_config):
+        response = self.lambda_client.create_function_url_config(
+            FunctionName=function_name,
+            Qualifier='string',
+            AuthType=function_url_config['authorizer'],
+            Cors={
+                'AllowCredentials': function_url_config["cors"]["allowCredentials"],
+                'AllowHeaders': function_url_config["cors"]["allowedHeaders"],
+                'AllowMethods': function_url_config["cors"]["allowedMethods"],
+                'AllowOrigins': function_url_config["cors"]["allowedOrigins"],
+                'ExposeHeaders': function_url_config["cors"]["exposedResponseHeaders"],
+                'MaxAge':  function_url_config["cors"]["maxAge"]
+            }
+        )
+        print(f"function URL response {response}")
+        pass
+
+    ##
     # Application load balancer
     ##
 

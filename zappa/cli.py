@@ -849,6 +849,14 @@ class ZappaCLI:
             )
             self.zappa.deploy_lambda_alb(**kwargs)
 
+        if self.use_function_url:
+            kwargs = dict(
+                lambda_arn=self.lambda_arn,
+                lambda_name=self.lambda_name,
+                function_url_config=self.function_url_config,
+            )
+            self.zappa.deploy_lambda_function_url(**kwargs)
+
         if self.use_apigateway:
 
             # Create and configure the API Gateway
@@ -2294,6 +2302,22 @@ class ZappaCLI:
         # Load ALB-related settings
         self.use_alb = self.stage_config.get("alb_enabled", False)
         self.alb_vpc_config = self.stage_config.get("alb_vpc_config", {})
+
+        # function URL settings
+        self.use_function_url = self.stage_config.get("function_url_enabled", True)
+        default_function_url_config = {
+            "authorizer": "NONE",
+            "cors": {
+              "allowedOrigins": ["*"],
+              "allowedHeaders": ["*"],
+              "allowedMethods": ["*"],
+              "allowCredentials": False,
+              "exposedResponseHeaders": ["*"],
+              "maxAge": 0
+            }
+        }
+        self.function_url_config = self.stage_config.get("function_url_config", {})
+        self.function_url_config.update(default_function_url_config)
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})

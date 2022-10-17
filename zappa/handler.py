@@ -485,6 +485,13 @@ class LambdaHandler:
             # Timing
             time_start = datetime.datetime.now()
 
+            # This is a function url request
+            if event.get("rawPath", None):
+                http_info = event['requestContext']['http']
+                event['httpMethod'] = http_info['method']
+                event['path'] = http_info['path']
+                event['body'] = event.get("body", None)
+
             # This is a normal HTTP request
             if event.get("httpMethod", None):
                 script_name = ""

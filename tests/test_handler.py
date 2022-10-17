@@ -357,6 +357,58 @@ class TestZappa(unittest.TestCase):
             "https://1234567890.execute-api.us-east-1.amazonaws.com/return/request/url",
         )
 
+    def test_wsgi_script_name_on_function_url_event(self):
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        function_url_domain = "123456789.lambda-url.ap-southeast-1.on.aws"
+
+        event = {
+            'version': '2.0',
+            'routeKey': '$default',
+            "rawPath": "/return/request/url",
+            'rawQueryString': 'foo=bar',
+
+            'requestContext': {
+                'accountId': 'anonymous',
+                'apiId': 'no36vu2lg47wozii2hhzhrhkb40tjjgx',
+                'domainName': function_url_domain,
+                'domainPrefix': function_url_domain.split(".")[0],
+                'http': {
+                    'method': 'GET',
+                    'path': '/return/request/url',
+                    'protocol': 'HTTP/1.1',
+                    'sourceIp': '202.161.35.23',
+                    'userAgent': 'curl/7.79.1'
+                },
+                'requestId': 'df63740e-e499-4356-9f5e-148056a5b42a',
+                'routeKey': '$default',
+                'stage': '$default',
+                'time': '17/Oct/2022:06:52:18 +0000',
+                'timeEpoch': 1665989538036
+            },
+            "queryStringParameters": {},
+            "headers": {
+                "accept": "text/html,application/xhtml+xml",
+                "accept-language": "en-US,en;q=0.8",
+                "content-type": "text/plain",
+                "cookie": "cookies",
+                "host": function_url_domain,
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6)",
+                "x-amzn-trace-id": "Root=1-5bdb40ca-556d8b0c50dc66f0511bf520",
+                "x-forwarded-for": "72.21.198.66",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "isBase64Encoded": False,
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(
+            response["body"],
+            f"https://{function_url_domain}/return/request/url",
+        )
+
     def test_merge_headers_no_multi_value(self):
         event = {"headers": {"a": "b"}}
 
