@@ -851,8 +851,7 @@ class ZappaCLI:
 
         if self.use_function_url:
             kwargs = dict(
-                lambda_arn=self.lambda_arn,
-                lambda_name=self.lambda_name,
+                function_name=self.lambda_arn,
                 function_url_config=self.function_url_config,
             )
             self.zappa.deploy_lambda_function_url(**kwargs)
@@ -1116,6 +1115,15 @@ class ZappaCLI:
 
         else:
             endpoint_url = None
+
+        if self.use_function_url:
+            kwargs = dict(
+                function_name=self.lambda_arn,
+                function_url_config=self.function_url_config,
+            )
+            self.zappa.update_lambda_function_url(**kwargs)
+        else:
+            self.zappa.delete_lambda_function_url(self.lambda_arn)
 
         self.schedule()
 
@@ -2308,13 +2316,13 @@ class ZappaCLI:
         default_function_url_config = {
             "authorizer": "NONE",
             "cors": {
-              "allowedOrigins": ["*"],
-              "allowedHeaders": ["*"],
-              "allowedMethods": ["*"],
-              "allowCredentials": False,
-              "exposedResponseHeaders": ["*"],
-              "maxAge": 0
-            }
+                "allowedOrigins": ["*"],
+                "allowedHeaders": ["*"],
+                "allowedMethods": ["*"],
+                "allowCredentials": False,
+                "exposedResponseHeaders": ["*"],
+                "maxAge": 0,
+            },
         }
         self.function_url_config = self.stage_config.get("function_url_config", {})
         self.function_url_config.update(default_function_url_config)

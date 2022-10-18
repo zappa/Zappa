@@ -363,28 +363,27 @@ class TestZappa(unittest.TestCase):
         function_url_domain = "123456789.lambda-url.ap-southeast-1.on.aws"
 
         event = {
-            'version': '2.0',
-            'routeKey': '$default',
+            "version": "2.0",
+            "routeKey": "$default",
             "rawPath": "/return/request/url",
-            'rawQueryString': 'foo=bar',
-
-            'requestContext': {
-                'accountId': 'anonymous',
-                'apiId': 'no36vu2lg47wozii2hhzhrhkb40tjjgx',
-                'domainName': function_url_domain,
-                'domainPrefix': function_url_domain.split(".")[0],
-                'http': {
-                    'method': 'GET',
-                    'path': '/return/request/url',
-                    'protocol': 'HTTP/1.1',
-                    'sourceIp': '202.161.35.23',
-                    'userAgent': 'curl/7.79.1'
+            "rawQueryString": "foo=bar",
+            "requestContext": {
+                "accountId": "anonymous",
+                "apiId": "no36vu2lg47wozii2hhzhrhkb40tjjgx",
+                "domainName": function_url_domain,
+                "domainPrefix": function_url_domain.split(".")[0],
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "202.161.35.23",
+                    "userAgent": "curl/7.79.1",
                 },
-                'requestId': 'df63740e-e499-4356-9f5e-148056a5b42a',
-                'routeKey': '$default',
-                'stage': '$default',
-                'time': '17/Oct/2022:06:52:18 +0000',
-                'timeEpoch': 1665989538036
+                "requestId": "df63740e-e499-4356-9f5e-148056a5b42a",
+                "routeKey": "$default",
+                "stage": "$default",
+                "time": "17/Oct/2022:06:52:18 +0000",
+                "timeEpoch": 1665989538036,
             },
             "queryStringParameters": {},
             "headers": {
