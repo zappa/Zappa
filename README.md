@@ -21,7 +21,7 @@
 - [Basic Usage](#basic-usage)
   - [Initial Deployments](#initial-deployments)
   - [Updates](#updates)
-    - [Docker Workflows](#docker-workflows
+    - [Docker Workflows](#docker-workflows)
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
