@@ -13,9 +13,9 @@ import tempfile
 import unittest
 import uuid
 import zipfile
+from functools import partial
 from io import BytesIO
 from subprocess import check_output
-from functools import partial
 
 import botocore
 import botocore.stub
