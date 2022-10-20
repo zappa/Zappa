@@ -15,6 +15,7 @@ import uuid
 import zipfile
 from io import BytesIO
 from subprocess import check_output
+from functools import partial
 
 import botocore
 import botocore.stub
@@ -57,7 +58,7 @@ from zappa.utilities import (
 )
 from zappa.wsgi import common_log, create_wsgi_request
 
-from .utils import get_unsupported_sys_versioninfo
+from .utils import get_sys_versioninfo
 
 
 def random_string(length):
@@ -2828,7 +2829,7 @@ USE_TZ = True
             FunctionName="abc",
         )
 
-    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
+    @mock.patch("sys.version_info", new_callable=get_sys_versioninfo)
     def test_unsupported_version_error(self, *_):
         from importlib import reload
 
@@ -2838,7 +2839,17 @@ USE_TZ = True
             reload(zappa)
 
     @mock.patch("pathlib.Path.read_text", return_value="/docker/")
-    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 6))
+    def test_minor_version_only_check_when_in_docker(self, *_):
+        from importlib import reload
+
+        with self.assertRaises(RuntimeError):
+            import zappa
+
+            reload(zappa)
+
+    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 7))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
 
