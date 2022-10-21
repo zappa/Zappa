@@ -1464,6 +1464,46 @@ class Zappa:
     ##
     # Function URL
     ##
+    def list_function_url_policy(self, function_name):
+        results = []
+        try:
+            policy_response = self.lambda_client.get_policy(FunctionName=function_name)
+            if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                statement = json.loads(policy_response["Policy"])["Statement"]
+                for s in statement:
+                    if s["Sid"] in ["FunctionURLAllowPublicAccess"]:
+                        results.append(s)
+            else:
+                logger.debug("Failed to load Lambda function policy: {}".format(policy_response))
+        except ClientError as e:
+            if e.args[0].find("ResourceNotFoundException") > -1:
+                logger.debug("No policy found, must be first run.")
+            else:
+                logger.error("Unexpected client error {}".format(e.args[0]))
+        return results
+
+    def delete_function_url_policy(self, function_name):
+        statements = self.list_function_url_policy(function_name)
+        for s in statements:
+            delete_response = self.lambda_client.remove_permission(FunctionName=function_name, StatementId=s["Sid"])
+            if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
+                logger.error("Failed to delete an obsolete policy statement: {}".format(delete_response))
+
+    def update_function_url_policy(self, function_name, function_url_config):
+        statements = self.list_function_url_policy(function_name)
+
+        if function_url_config["authorizer"] == "NONE":
+            if not statements:
+                permission_response = self.lambda_client.add_permission(
+                    FunctionName=function_name,
+                    StatementId="FunctionURLAllowPublicAccess",
+                    Action="lambda:InvokeFunction",
+                    Principal="*",
+                )
+        elif function_url_config["authorizer"] == "AWS_IAM":
+            if statements:
+                self.delete_function_url_policy(function_name)
+
     def deploy_lambda_function_url(self, function_name, function_url_config):
 
         response = self.lambda_client.create_function_url_config(
@@ -1478,15 +1518,9 @@ class Zappa:
                 "MaxAge": function_url_config["cors"]["maxAge"],
             },
         )
-        print(f"function URL address: {response['FunctionUrl']}")
-        if function_url_config["authorizer"] == "NONE":
-            permission_response = self.lambda_client.add_permission(
-                FunctionName=function_name,
-                StatementId="FunctionURLAllowPublicAccess",
-                Action="lambda:InvokeFunction",
-                Principal="*",
-            )
-            permission_response
+        print("function URL address: {}".format(response["FunctionUrl"]))
+        self.update_function_url_policy(function_name, function_url_config)
+        return response
 
     def update_lambda_function_url(self, function_name, function_url_config):
         response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
@@ -1504,7 +1538,8 @@ class Zappa:
                         "MaxAge": function_url_config["cors"]["maxAge"],
                     },
                 )
-                print(f"function URL address: {response['FunctionUrl']}")
+                print("function URL address: {}".format(response["FunctionUrl"]))
+                self.update_function_url_policy(config["FunctionArn"], function_url_config)
         else:
             self.deploy_lambda_function_url(function_name, function_url_config)
 
@@ -1512,7 +1547,9 @@ class Zappa:
         response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
         for config in response.get("FunctionUrlConfigs", []):
             resp = self.lambda_client.delete_function_url_config(FunctionName=config["FunctionArn"])
-            print(f"function URL deleted: {config['FunctionUrl']}")
+            if resp["ResponseMetadata"]["HTTPStatusCode"] == 204:
+                print("function URL deleted: {}".format(config["FunctionUrl"]))
+            self.delete_function_url_policy(config["FunctionArn"])
 
     ##
     # Application load balancer

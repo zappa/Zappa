@@ -2324,8 +2324,8 @@ class ZappaCLI:
                 "maxAge": 0,
             },
         }
-        self.function_url_config = self.stage_config.get("function_url_config", {})
-        self.function_url_config.update(default_function_url_config)
+        default_function_url_config.update(self.stage_config.get("function_url_config", {}))
+        self.function_url_config = default_function_url_config
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
