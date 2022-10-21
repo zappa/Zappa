@@ -1207,6 +1207,12 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(6, zappa_cli.stage_config["lambda_concurrency"])
 
+    def test_load_settings__function_url_enabled(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "function_url_enabled"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(True, zappa_cli.stage_config["function_url_enabled"])
+
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
