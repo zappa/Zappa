@@ -511,20 +511,25 @@ class Zappa:
         """
         if "VIRTUAL_ENV" in os.environ:
             venv = os.environ["VIRTUAL_ENV"]
-        elif os.path.exists(".python-version"):  # pragma: no cover
-            try:
-                subprocess.check_output(["pyenv", "help"], stderr=subprocess.STDOUT)
-            except OSError:
-                print("This directory seems to have pyenv's local venv, " "but pyenv executable was not found.")
-            with open(".python-version", "r") as f:
-                # minor fix in how .python-version is read
-                # Related: https://github.com/Miserlou/Zappa/issues/921
-                env_name = f.readline().strip()
-            bin_path = subprocess.check_output(["pyenv", "which", "python"]).decode("utf-8")
-            venv = bin_path[: bin_path.rfind(env_name)] + env_name
-        else:  # pragma: no cover
-            return None
-        return venv
+            return venv
+
+        # pyenv available check
+        try:  # progma: no cover
+            subprocess.check_output(["pyenv", "help"], stderr=subprocess.STDOUT)
+            pyenv_available = True
+        except OSError:
+            pyenv_available = False
+
+        if pyenv_available:  # progma: no cover
+            # Each Python version is installed into its own directory under $(pyenv root)/versions
+            # https://github.com/pyenv/pyenv#locating-pyenv-provided-python-installations
+            # Related: https://github.com/zappa/Zappa/issues/1132
+            pyenv_root = subprocess.check_output(["pyenv", "root"]).decode("utf-8").strip()
+            pyenv_version = subprocess.check_output(["pyenv", "version-name"]).decode("utf-8").strip()
+            venv = os.path.join(pyenv_root, "versions", pyenv_version)
+            return venv
+
+        return None
 
     def create_lambda_zip(
         self,
@@ -2799,6 +2804,7 @@ class Zappa:
             kwargs = event.get("kwargs", {})  # optional dict of keyword arguments for the event
             event_source = event.get("event_source", None)
             description = event.get("description", function)
+            enabled = event.get("enabled", True)
 
             #   - If 'cron' or 'rate' in expression, use ScheduleExpression
             #   - Else, use EventPattern
@@ -2822,7 +2828,7 @@ class Zappa:
                     rule_response = self.events_client.put_rule(
                         Name=rule_name,
                         ScheduleExpression=expression,
-                        State="ENABLED",
+                        State="ENABLED" if enabled else "DISABLED",
                         Description=description,
                         RoleArn=self.credentials_arn,
                     )
