@@ -25,6 +25,8 @@
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
+      - [Multiple Expressions](#multiple-expressions)
+      - [Disabled Event](#disabled-event)
   - [Undeploy](#undeploy)
   - [Package](#package)
     - [How Zappa Makes Packages](#how-zappa-makes-packages)
@@ -263,6 +265,8 @@ See the [example](example/) for more details.
 
 #### Advanced Scheduling
 
+##### Multiple Expressions
+
 Sometimes a function needs multiple expressions to describe its schedule. To set multiple expressions, simply list your functions, and the list of expressions to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your *zappa_settings.json* file:
 
 ```javascript
@@ -281,6 +285,28 @@ Sometimes a function needs multiple expressions to describe its schedule. To set
 This can be used to deal with issues arising from the UTC timezone crossing midnight during business hours in your local timezone.
 
 It should be noted that overlapping expressions will not throw a warning, and should be checked for, to prevent duplicate triggering of functions.
+
+##### Disabled Event
+
+Sometimes an event should be scheduled, yet disabled.
+For example, perhaps an event should only run in your production environment, but not sandbox.
+You may still want to deploy it to sandbox to ensure there is no issue with your expression(s) before deploying to production.
+
+In this case, you can disable it from running by setting `enabled` to `false` in the event definition:
+
+```javascript
+{
+    "sandbox": {
+       ...
+       "events": [{
+           "function": "your_module.your_function", // The function to execute
+           "expression": "rate(1 minute)", // When to execute it (in cron or rate format)
+           "enabled": false
+       }],
+       ...
+    }
+}
+```
 
 ### Undeploy
 
@@ -482,7 +508,15 @@ In your *zappa_settings.json* file, define your [event sources](http://docs.aws.
                   "arn":  "arn:aws:s3:::my-bucket",
                   "events": [
                     "s3:ObjectCreated:*" // Supported event types: http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#supported-notification-event-types
-                  ]
+                  ],
+                  "key_filters": [{ // optional
+                    "type": "suffix",
+                    "value": "yourfile.json"
+                  },
+                  {
+                    "type": "prefix",
+                    "value": "prefix/for/your/object"
+                  }]
                }
             }],
        ...
