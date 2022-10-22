@@ -21,7 +21,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import textwrap
 import time
@@ -80,7 +79,10 @@ def get_cert_and_update_domain(
                         stage=api_stage,
                     )
                     print(
-                        "Created a new domain name. Please note that it can take up to 40 minutes for this domain to be created and propagated through AWS, but it requires no further work on your part."
+                        "Created a new domain name. "
+                        "Please note that it can take up to 40 minutes "
+                        "for this domain to be created and propagated through AWS, "
+                        "but it requires no further work on your part."
                     )
                 else:
                     zappa_instance.update_domain_name(
@@ -213,9 +215,7 @@ def get_boulder_header(key_bytes):
         "jwk": {
             "e": _b64(binascii.unhexlify(pub_exp.encode("utf-8"))),
             "kty": "RSA",
-            "n": _b64(
-                binascii.unhexlify(re.sub(r"(\s|:)", "", pub_hex).encode("utf-8"))
-            ),
+            "n": _b64(binascii.unhexlify(re.sub(r"(\s|:)", "", pub_hex).encode("utf-8"))),
         },
     }
 
@@ -270,15 +270,9 @@ def get_cert(zappa_instance, log=LOGGER, CA=DEFAULT_CA):
             },
         )
         if code != 201:
-            raise ValueError(
-                "Error requesting challenges: {0} {1}".format(code, result)
-            )
+            raise ValueError("Error requesting challenges: {0} {1}".format(code, result))
 
-        challenge = [
-            ch
-            for ch in json.loads(result.decode("utf8"))["challenges"]
-            if ch["type"] == "dns-01"
-        ][0]
+        challenge = [ch for ch in json.loads(result.decode("utf8"))["challenges"] if ch["type"] == "dns-01"][0]
         token = re.sub(r"[^A-Za-z0-9_\-]", "_", challenge["token"])
         keyauthorization = "{0}.{1}".format(token, thumbprint).encode("utf-8")
 
@@ -330,20 +324,14 @@ def verify_challenge(uri):
             resp = urlopen(uri)
             challenge_status = json.loads(resp.read().decode("utf8"))
         except IOError as e:
-            raise ValueError(
-                "Error checking challenge: {0} {1}".format(
-                    e.code, json.loads(e.read().decode("utf8"))
-                )
-            )
+            raise ValueError("Error checking challenge: {0} {1}".format(e.code, json.loads(e.read().decode("utf8"))))
         if challenge_status["status"] == "pending":
             time.sleep(2)
         elif challenge_status["status"] == "valid":
             LOGGER.info("Domain verified!")
             break
         else:
-            raise ValueError(
-                "Domain challenge did not pass: {0}".format(challenge_status)
-            )
+            raise ValueError("Domain challenge did not pass: {0}".format(challenge_status))
 
 
 def sign_certificate():
@@ -381,10 +369,8 @@ def encode_certificate(result):
     """
     Encode cert bytes to PEM encoded cert file.
     """
-    cert_body = (
-        """-----BEGIN CERTIFICATE-----\n{0}\n-----END CERTIFICATE-----\n""".format(
-            "\n".join(textwrap.wrap(base64.b64encode(result).decode("utf8"), 64))
-        )
+    cert_body = """-----BEGIN CERTIFICATE-----\n{0}\n-----END CERTIFICATE-----\n""".format(
+        "\n".join(textwrap.wrap(base64.b64encode(result).decode("utf8"), 64))
     )
     signed_crt = open("{}/signed.crt".format(gettempdir()), "w")
     signed_crt.write(cert_body)
@@ -424,9 +410,7 @@ def _send_signed_request(url, payload):
         "-sign",
         os.path.join(gettempdir(), "account.key"),
     ]
-    proc = subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = proc.communicate("{0}.{1}".format(protected64, payload64).encode("utf8"))
     if proc.returncode != 0:  # pragma: no cover
         raise IOError("OpenSSL Error: {0}".format(err))

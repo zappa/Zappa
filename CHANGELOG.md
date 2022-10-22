@@ -1,5 +1,42 @@
 # Zappa Changelog
 
+## 0.55.0
+* Fix "cd workflow fired event outside of the create tags event" (#1152)
+* Remove 'futures' package requirement (#826,#808)
+* Remove function invoke command does not need quotes around function (#900)
+* Add python_requires to setup.py (#1111)
+* Remove python 3.6 support (#1151)
+* Update handler to be global if INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True (#1096)
+* Fix async invocation in Python 3 (#1006)
+* Drastically reduce cold start times by calling LambdaHandler externally (#982)
+* Support Newest Manylinux Version for dependencies (#1083)
+* Decode zappa invoke output regardless of --no-color option (#1069)
+* Convert project to using 'pipenv' to manage dependencies (#1077)
+* Ensure unique scheduled event names (#1080)
+* Check isort in CI (#1078)
+* Use 'black' everywhere (#1076)
+* Update setup.py (#1050)
+
+## 0.54.2
+* Update documentation to reflect python 3.9 support (#1137)
+
+## 0.54.1
+* Increase Lambda client read timeout to 15m (#1065)
+* Unpin `Werkzeug` from `v0.x` (#1067)
+
+## 0.54.0
+* Pin troposphere version and update to 3.x (#1029)
+* Relax stage name restrictions when not using apigateway (#993)
+* Wait for lambda to become active during deploy/update (#992)
+* add support for Python 3.9 (#1026)
+
+## 0.53.0
+* Deprecated ACME v1 for Lets Encrypt
+* Global black formatting
+* Update & deploy using a docker container
+  * See [blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details on the current functionality and how it works
+  * See [PR](https://github.com/zappa/Zappa/pull/967) or [original issue](https://github.com/Miserlou/Zappa/issues/2188) for discussion around what is currently supported & next steps
+
 ## 0.52.0
 * Remove dateutil version restriction
 * Fix failed downloads of wheel packages with non-alphanumeric characters

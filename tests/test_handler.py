@@ -1,6 +1,8 @@
-from mock import Mock
 import sys
 import unittest
+
+from mock import Mock
+
 from zappa.handler import LambdaHandler
 from zappa.utilities import merge_headers
 
@@ -54,9 +56,7 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(LambdaHandler.run_function(one_arg, "e", "c"), "e")
         self.assertEqual(LambdaHandler.run_function(two_args, "e", "c"), ("e", "c"))
         self.assertEqual(LambdaHandler.run_function(var_args, "e", "c"), ("e", "c"))
-        self.assertEqual(
-            LambdaHandler.run_function(var_args_with_one, "e", "c"), ("e", "c")
-        )
+        self.assertEqual(LambdaHandler.run_function(var_args_with_one, "e", "c"), ("e", "c"))
 
         try:
             LambdaHandler.run_function(unsupported, "e", "c")

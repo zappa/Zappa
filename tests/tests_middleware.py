@@ -2,8 +2,8 @@
 import sys
 import unittest
 
-from zappa.wsgi import create_wsgi_request
 from zappa.middleware import ZappaWSGIMiddleware, all_casings
+from zappa.wsgi import create_wsgi_request
 
 
 class TestWSGIMockMiddleWare(unittest.TestCase):
@@ -61,9 +61,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         def simple_app(environ, start_response):
             # String of weird characters
             status = "301 Moved Permanently"
-            response_headers = [
-                ("Location", f"http://zappa.com/elsewhere{ugly_string}")
-            ]
+            response_headers = [("Location", f"http://zappa.com/elsewhere{ugly_string}")]
             start_response(status, response_headers)
             return [ugly_string]
 
@@ -88,9 +86,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["REMOTE_USER"], "user1")
 
         # With empty authorizer, should not include REMOTE_USER
@@ -106,9 +102,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
@@ -125,9 +119,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
@@ -144,9 +136,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
@@ -246,9 +236,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             },
             "query": {},
         }
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["QUERY_STRING"], "")
 
     def test_should_handle_multi_value_query_string_params(self):
@@ -278,7 +266,5 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             },
             "query": {},
         }
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["QUERY_STRING"], "foo=1&foo=2")
