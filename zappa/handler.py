@@ -571,15 +571,7 @@ class LambdaHandler:
                     response_body = None
                     response_is_base_64_encoded = False
                     if response.data:
-                        if (
-                            settings.BINARY_SUPPORT
-                            and not response.mimetype.startswith("text/")
-                            and response.mimetype != "application/json"
-                        ):
-                            response_body = base64.b64encode(response.data).decode("utf-8")
-                            response_is_base_64_encoded = True
-                        else:
-                            response_body = response.get_data(as_text=True)
+                        response_body, response_is_base_64_encoded = self._process_response_body(response, settings=settings)
 
                     response_status_code = response.status_code
 
