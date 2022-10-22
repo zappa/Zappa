@@ -1,5 +1,6 @@
 import functools
 import os
+from collections import namedtuple
 from contextlib import contextmanager
 
 import boto3
@@ -29,9 +30,7 @@ def placebo_session(function):
 
     @functools.wraps(function)
     def wrapper(*args, **kwargs):
-        session_kwargs = {
-            "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-        }
+        session_kwargs = {"region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1")}
         profile_name = os.environ.get("PLACEBO_PROFILE", None)
         if profile_name:
             session_kwargs["profile_name"] = profile_name
@@ -74,3 +73,9 @@ def patch_open():
 
     with patch("__builtin__.open", stub_open):
         yield mock_open, mock_file
+
+
+def get_unsupported_sys_versioninfo() -> tuple:
+    """Mock used to test the python unsupported version testcase"""
+    invalid_versioninfo = namedtuple("version_info", ["major", "minor", "micro", "releaselevel", "serial"])
+    return invalid_versioninfo(3, 6, 1, "final", 0)

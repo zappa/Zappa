@@ -27,7 +27,7 @@ clean:
 	rm -f .coverage
 
 requirements:
-	pip install pipenv==2021.11.09
+	pip install pipenv>2021.11.15
 	pipenv lock
 	pipenv sync --dev
 
@@ -39,10 +39,10 @@ mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict zappa tests
 
 black:
-	black .
+	black --line-length 127 .
 
 black-check:
-	black . --check
+	black --line-length 127 . --check
 	@echo "If this fails, simply run: make black"
 
 isort:
@@ -53,7 +53,7 @@ isort-check:
 
 flake:
 	flake8 zappa --count --select=E9,F63,F7,F82 --show-source --statistics
-	flake8 zappa --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+	flake8 zappa --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 test-docs:
 	nosetests tests/tests_docs.py --with-coverage --cover-package=zappa --with-timer
@@ -73,4 +73,7 @@ test-async:
 test-general:
 	nosetests tests/tests.py --with-coverage --cover-package=zappa --with-timer
 
-tests: clean test-docs test-handler test-middleware test-placebo test-async test-general
+test-utilities:
+	nosetests tests/tests_utilities.py --with-coverage --cover-package=zappa --with-timer
+
+tests: clean test-docs test-handler test-middleware test-placebo test-async test-general test-utilities
