@@ -73,4 +73,7 @@ test-async:
 test-general:
 	nosetests tests/tests.py --with-coverage --cover-package=zappa --with-timer
 
-tests: clean test-docs test-handler test-middleware test-placebo test-async test-general
+test-utilities:
+	nosetests tests/tests_utilities.py --with-coverage --cover-package=zappa --with-timer
+
+tests: clean test-docs test-handler test-middleware test-placebo test-async test-general test-utilities
