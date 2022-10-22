@@ -1,6 +1,7 @@
 import base64
 import functools
 import os
+from collections import namedtuple
 from contextlib import contextmanager
 from io import IOBase as file
 
@@ -77,3 +78,10 @@ def is_base64(test_string: str) -> bool:
         return base64.b64encode(base64.b64decode(test_string)).decode() == test_string
     except Exception:
         return False
+
+
+def get_unsupported_sys_versioninfo() -> tuple:
+    """Mock used to test the python unsupported version testcase"""
+    invalid_versioninfo = namedtuple("version_info", ["major", "minor", "micro", "releaselevel", "serial"])
+    return invalid_versioninfo(3, 6, 1, "final", 0)
+
