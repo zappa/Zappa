@@ -2580,7 +2580,7 @@ class TestZappa(unittest.TestCase):
                 "HTTPStatusCode": 201,
                 "RetryAttempts": 0,
             },
-            "Statement": '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"arn:aws:lambda:ap-southeast-1:123456789:function:abc"}',
+            "Statement": '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":"arn:aws:lambda:ap-southeast-1:123456789:function:abc"}, "Condition":{"StringEquals":{"lambda: FunctionUrlAuthType":"NONE"}}',
         }
 
         zappa_core.deploy_lambda_function_url(function_name="abc", function_url_config=function_url_config)
@@ -2600,8 +2600,9 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().add_permission.assert_called_with(
             FunctionName=function_name,
             StatementId="FunctionURLAllowPublicAccess",
-            Action="lambda:InvokeFunction",
+            Action="lambda:InvokeFunctionUrl",
             Principal="*",
+            FunctionUrlAuthType=function_url_config["authorizer"],
         )
 
     @mock.patch("botocore.client")
