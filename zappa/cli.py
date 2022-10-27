@@ -820,7 +820,7 @@ class ZappaCLI:
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
                 kwargs["docker_image_uri"] = docker_image_uri
-                kwargs["image_uri_command"] = self.lambda_handler
+                kwargs["image_uri_command"] = [self.lambda_handler]
             elif source_zip and source_zip.startswith("s3://"):
                 bucket, key_name = parse_s3_url(source_zip)
                 kwargs["bucket"] = bucket
