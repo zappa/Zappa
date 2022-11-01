@@ -867,7 +867,7 @@ to change Zappa's behavior. Use these at your own risk!
         "assume_policy": "my_assume_policy.json", // optional, IAM assume policy JSON file
         "attach_policy": "my_attach_policy.json", // optional, IAM attach policy JSON file
         "apigateway_policy": "my_apigateway_policy.json", // optional, API Gateway resource policy JSON file
-        "function_url_enabled": false, // optional, set to true if you don't want to enable function URL. Default false.
+        "function_url_enabled": false, // optional, set to true if you want to enable function URL. Default false.
         "function_url_config": {
             "authorizer": "NONE", // required if function url is enabled. default None. https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
             "cors": {

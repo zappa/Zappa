@@ -2312,7 +2312,8 @@ class ZappaCLI:
         self.alb_vpc_config = self.stage_config.get("alb_vpc_config", {})
 
         # function URL settings
-        self.use_function_url = self.stage_config.get("function_url_enabled", True)
+        self.use_function_url = self.stage_config.get("function_url_enabled", False)
+
         default_function_url_config = {
             "authorizer": "NONE",
             "cors": {
