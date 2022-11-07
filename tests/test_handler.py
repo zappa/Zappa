@@ -227,7 +227,7 @@ class TestZappa(unittest.TestCase):
     def test_wsgi_script_binary_support_with_content_encoding(self):
         """
         Ensure that response body is base64 encoded when BINARY_SUPPORT is enabled and Content-Encoding header is present.
-        """  # don't linebreak so that whole line is shown during nosetest readout
+        """
         lh = LambdaHandler("tests.test_binary_support_settings")
 
         text_plain_event = {
@@ -284,7 +284,7 @@ class TestZappa(unittest.TestCase):
     ):
         """
         Ensure zappa response bodies are NOT base64 encoded when BINARY_SUPPORT is enabled and the mimetype is "application/json" or starts with "text/".
-        """  # don't linebreak so that whole line is shown during nosetest readout
+        """
 
         lh = LambdaHandler("tests.test_binary_support_settings")
 
@@ -319,7 +319,7 @@ class TestZappa(unittest.TestCase):
     ):
         """
         Ensure zappa response bodies are base64 encoded when BINARY_SUPPORT is enabled and Content-Encoding is absent.
-        """  # don't linebreak so that whole line is shown during nosetest readout
+        """
 
         lh = LambdaHandler("tests.test_binary_support_settings")
 

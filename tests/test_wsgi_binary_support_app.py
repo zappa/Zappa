@@ -1,12 +1,12 @@
-###
-# This test application exists to confirm how Zappa handles WSGI application
-# _responses_ when Binary Support is enabled.
-###
+"""
+This test application exists to confirm how Zappa handles WSGI application
+_responses_ when Binary Support is enabled.
+"""
 
 import gzip
 import json
 
-from flask import Flask, Response, send_file
+from flask import Flask, Response
 
 app = Flask(__name__)
 
