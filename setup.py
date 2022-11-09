@@ -23,7 +23,7 @@ setup(
     version=__version__,
     packages=["zappa"],
     install_requires=required,
-    python_requires=">=3.7, <3.10",
+    python_requires=">=3.7, <3.12",
     tests_require=test_required,
     test_suite="nose.collector",
     include_package_data=True,
