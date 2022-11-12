@@ -67,6 +67,7 @@ CUSTOM_SETTINGS = [
 
 BOTO3_CONFIG_DOCS_URL = "https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration"
 
+
 ##
 # Main Input Processing
 ##
@@ -117,6 +118,7 @@ class ZappaCLI:
     xray_tracing = False
     aws_kms_key_arn = ""
     context_header_mappings = None
+    additional_text_mimetypes = None
     tags = []
     layers = None
 
@@ -2290,6 +2292,11 @@ class ZappaCLI:
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
         self.layers = self.stage_config.get("layers", None)
+        self.additional_text_mimetypes = self.stage_config.get("additional_text_mimetypes", None)
+
+        # check that BINARY_SUPPORT is True if additional_text_mimetypes is provided
+        if self.additional_text_mimetypes and not self.binary_support:
+            raise ClickException("zappa_settings.json has additional_text_mimetypes defined, but binary_support is False!")
 
         # Load ALB-related settings
         self.use_alb = self.stage_config.get("alb_enabled", False)
@@ -2622,6 +2629,10 @@ class ZappaCLI:
         # async response
         async_response_table = self.stage_config.get("async_response_table", "")
         settings_s += "ASYNC_RESPONSE_TABLE='{0!s}'\n".format(async_response_table)
+
+        # additional_text_mimetypes
+        additional_text_mimetypes = self.stage_config.get("additional_text_mimetypes", [])
+        settings_s += f"ADDITIONAL_TEXT_MIMETYPES={additional_text_mimetypes}\n"
         return settings_s
 
     def remove_local_zip(self):
