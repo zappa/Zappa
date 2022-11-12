@@ -872,6 +872,7 @@ to change Zappa's behavior. Use these at your own risk!
 ```javascript
  {
     "dev": {
+        "additional_text_mimetypes": [], // allows you to provide additional mimetypes to be handled as text when binary_support is true.
         "alb_enabled": false, // enable provisioning of application load balancing resources. If set to true, you _must_ fill out the alb_vpc_config option as well.
         "alb_vpc_config": {
             "CertificateArn": "your_acm_certificate_arn", // ACM certificate ARN for ALB
