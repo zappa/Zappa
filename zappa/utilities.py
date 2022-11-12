@@ -28,6 +28,19 @@ class UnserializableJsonError(TypeError):
 # Settings / Packaging
 ##
 
+# mimetypes starting with entries defined here are considered as TEXT when BINARTY_SUPPORT is True.
+# - Additional TEXT mimetypes may be defined with the 'ADDITIONAL_TEXT_MIMETYPES' setting.
+DEFAULT_TEXT_MIMETYPES = (
+    "text/",
+    "application/json",  # RFC 4627
+    "application/javascript",  # RFC 4329
+    "application/ecmascript",  # RFC 4329
+    "application/xml",  # RFC 3023
+    "application/xml-external-parsed-entity",  # RFC 3023
+    "application/xml-dtd",  # RFC 3023
+    "image/svg+xml",  # RFC 3023
+)
+
 
 def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
     """

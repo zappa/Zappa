@@ -1,16 +1,13 @@
+import base64
 import functools
 import os
 from collections import namedtuple
 from contextlib import contextmanager
+from io import IOBase as file
 
 import boto3
 import placebo
 from mock import MagicMock, patch
-
-try:
-    file
-except NameError:  # builtin 'file' was removed in Python 3
-    from io import IOBase as file
 
 PLACEBO_DIR = os.path.join(os.path.dirname(__file__), "placebo")
 
@@ -73,6 +70,14 @@ def patch_open():
 
     with patch("__builtin__.open", stub_open):
         yield mock_open, mock_file
+
+
+def is_base64(test_string: str) -> bool:
+    # Taken from https://stackoverflow.com/a/45928164/3200002
+    try:
+        return base64.b64encode(base64.b64decode(test_string)).decode() == test_string
+    except Exception:
+        return False
 
 
 def get_unsupported_sys_versioninfo() -> tuple:
