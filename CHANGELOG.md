@@ -1,5 +1,16 @@
 # Zappa Changelog
 
+## 0.55.1
+* Not recognizing virtaulenv created with pyenv (#1132)
+* Remove six from zappa dependencies (#1164)
+* Handle optional space in x-forwarded-for header (#1127)
+* [Migrated] #2077 Fix url decoding for query string (#879)
+* [Migrated] [async] Check if args/kwargs are JSON Serializable while running locally (#704)
+* [Migrated] Add on Docs: event_source from S3 with key_filters (#446)
+* [Migrated] Logs are missing query strings (#410)
+* [Migrated] Update BINARY_SUPPORT to use Content-Encoding to identify if data is binary (#908)
+* Remove obsolete check for Django version < 1.7 (#1158)
+
 ## 0.55.0
 * Fix "cd workflow fired event outside of the create tags event" (#1152)
 * Remove 'futures' package requirement (#826,#808)
