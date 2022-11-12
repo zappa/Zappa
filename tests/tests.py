@@ -1220,6 +1220,20 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.toml")
         self.assertEqual(False, zappa_cli.stage_config["touch"])
 
+    def test_load_settings_bad_additional_text_mimetypes(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "nobinarysupport"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_bad_additional_text_mimetypes_settings.json")
+
+    def test_load_settings_additional_text_mimetypes(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "addtextmimetypes"
+        zappa_cli.load_settings("test_settings.json")
+        expected_additional_text_mimetypes = ["application/custommimetype"]
+        self.assertEqual(expected_additional_text_mimetypes, zappa_cli.stage_config["additional_text_mimetypes"])
+        self.assertEqual(True, zappa_cli.stage_config["binary_support"])
+
     def test_settings_extension(self):
         """
         Make sure Zappa uses settings in the proper order: JSON, TOML, YAML.
