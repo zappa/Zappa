@@ -1,0 +1,14 @@
+API_STAGE = "dev"
+APP_FUNCTION = "app"
+APP_MODULE = "tests.test_wsgi_binary_support_app"
+BINARY_SUPPORT = True
+CONTEXT_HEADER_MAPPINGS = {}
+DEBUG = "True"
+DJANGO_SETTINGS = None
+DOMAIN = "api.example.com"
+ENVIRONMENT_VARIABLES = {}
+LOG_LEVEL = "DEBUG"
+PROJECT_NAME = "binary_support_settings"
+COGNITO_TRIGGER_MAPPING = {}
+EXCEPTION_HANDLER = None
+ADDITIONAL_TEXT_MIMETYPES = ["application/vnd.oai.openapi"]

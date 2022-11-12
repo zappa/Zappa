@@ -1,0 +1,9 @@
+{
+    "nobinarysupport": {
+       "s3_bucket": "lmbda",
+       "app_function": "tests.test_app.hello_world",
+       "delete_local_zip": true,
+       "binary_support": false,
+       "additional_text_mimetypes": ["application/custommimetype"]
+    }
+}
