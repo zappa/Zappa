@@ -25,6 +25,8 @@
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
+      - [Multiple Expressions](#multiple-expressions)
+      - [Disabled Event](#disabled-event)
   - [Undeploy](#undeploy)
   - [Package](#package)
     - [How Zappa Makes Packages](#how-zappa-makes-packages)
@@ -135,7 +137,7 @@ __Awesome!__
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.6/3.7/3.8 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.7/3.8/3.9 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -263,6 +265,8 @@ See the [example](example/) for more details.
 
 #### Advanced Scheduling
 
+##### Multiple Expressions
+
 Sometimes a function needs multiple expressions to describe its schedule. To set multiple expressions, simply list your functions, and the list of expressions to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your *zappa_settings.json* file:
 
 ```javascript
@@ -281,6 +285,28 @@ Sometimes a function needs multiple expressions to describe its schedule. To set
 This can be used to deal with issues arising from the UTC timezone crossing midnight during business hours in your local timezone.
 
 It should be noted that overlapping expressions will not throw a warning, and should be checked for, to prevent duplicate triggering of functions.
+
+##### Disabled Event
+
+Sometimes an event should be scheduled, yet disabled.
+For example, perhaps an event should only run in your production environment, but not sandbox.
+You may still want to deploy it to sandbox to ensure there is no issue with your expression(s) before deploying to production.
+
+In this case, you can disable it from running by setting `enabled` to `false` in the event definition:
+
+```javascript
+{
+    "sandbox": {
+       ...
+       "events": [{
+           "function": "your_module.your_function", // The function to execute
+           "expression": "rate(1 minute)", // When to execute it (in cron or rate format)
+           "enabled": false
+       }],
+       ...
+    }
+}
+```
 
 ### Undeploy
 
@@ -335,7 +361,7 @@ In addition, Zappa will also automatically set the correct execution permissions
 To further reduce the final package file size, you can:
 
 * Set `slim_handler` to `True` to upload a small handler to Lambda and the rest of the package to S3. For more details, see the [merged pull request](https://github.com/Miserlou/Zappa/pull/548) and the [discussion in the original issue](https://github.com/Miserlou/Zappa/issues/510). See also: [Large Projects](#large-projects).
-* Use the `exclude` setting and provide a list of regex patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
+* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
 
 ### Template
 
@@ -394,11 +420,11 @@ You can execute any function in your application directly at any time by using t
 
 For instance, suppose you have a basic application in a file called "my_app.py", and you want to invoke a function in it called "my_function". Once your application is deployed, you can invoke that function at any time by calling:
 
-    $ zappa invoke production 'my_app.my_function'
+    $ zappa invoke production my_app.my_function
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.6/3.7/3.8 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.7/3.8/3.9 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -482,7 +508,15 @@ In your *zappa_settings.json* file, define your [event sources](http://docs.aws.
                   "arn":  "arn:aws:s3:::my-bucket",
                   "events": [
                     "s3:ObjectCreated:*" // Supported event types: http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#supported-notification-event-types
-                  ]
+                  ],
+                  "key_filters": [{ // optional
+                    "type": "suffix",
+                    "value": "yourfile.json"
+                  },
+                  {
+                    "type": "prefix",
+                    "value": "prefix/for/your/object"
+                  }]
                }
             }],
        ...
@@ -820,6 +854,7 @@ to change Zappa's behavior. Use these at your own risk!
 ```javascript
  {
     "dev": {
+        "additional_text_mimetypes": [], // allows you to provide additional mimetypes to be handled as text when binary_support is true.
         "alb_enabled": false, // enable provisioning of application load balancing resources. If set to true, you _must_ fill out the alb_vpc_config option as well.
         "alb_vpc_config": {
             "CertificateArn": "your_acm_certificate_arn", // ACM certificate ARN for ALB
@@ -893,7 +928,8 @@ to change Zappa's behavior. Use these at your own risk!
         ],
         "endpoint_configuration": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
-        "exclude": ["*.gz", "*.rar"], // A list of regex patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
+        "exclude": ["file.gz", "tests/"], // A list of regex patterns to exclude from the archive.
+        "exclude_glob": ["*.gz", "*.rar", "tests/**/*"], // A list of glob patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
         "extra_permissions": [{ // Attach any extra permissions to this policy. Default None
             "Effect": "Allow",
@@ -929,7 +965,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.6", // Python runtime to use on Lambda. Can be one of "python3.6", "python3.7" or "python3.8". Defaults to whatever the current Python being used is.
+        "runtime": "python3.9", // Python runtime to use on Lambda. Can be one of "python3.7", "python3.8", or "python3.9". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
@@ -1538,6 +1574,7 @@ If you are adding a non-trivial amount of new code, please include a functioning
 Please include the GitHub issue or pull request URL that has discussion related to your changes as a comment in the code ([example](https://github.com/zappa/Zappa/blob/fae2925431b820eaedf088a632022e4120a29f89/zappa/zappa.py#L241-L243)). This greatly helps for project maintainability, as it allows us to trace back use cases and explain decision making. Similarly, please make sure that you meet all of the requirements listed in the [pull request template](https://raw.githubusercontent.com/zappa/Zappa/master/.github/PULL_REQUEST_TEMPLATE.md).
 
 Please feel free to work on any open ticket, especially any ticket marked with the "help-wanted" label. If you get stuck or want to discuss an issue further, please join [our Slack channel](https://zappateam.slack.com/), where you'll find a community of smart and interesting people working dilligently on hard problems.
+[Zappa Slack Auto Invite](https://slackautoinviter.herokuapp.com)
 
 Zappa does not intend to conform to PEP8, isolate your commits so that changes to functionality with changes made by your linter.
 

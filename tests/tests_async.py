@@ -1,4 +1,3 @@
-# -*- coding: utf8 -*-
 import os
 import unittest
 
@@ -17,6 +16,7 @@ from zappa.asynchronous import (
     get_func_task_path,
     import_and_get_task,
 )
+from zappa.utilities import UnserializableJsonError
 
 
 class TestZappa(unittest.TestCase):
@@ -73,9 +73,7 @@ class TestZappa(unittest.TestCase):
         async_me = import_and_get_task("tests.test_app.async_me")
         lambda_async_mock = mock.Mock()
         lambda_async_mock.return_value.send.return_value = "Running async!"
-        with mock.patch.dict(
-            "zappa.asynchronous.ASYNC_CLASSES", {"lambda": lambda_async_mock}
-        ):
+        with mock.patch.dict("zappa.asynchronous.ASYNC_CLASSES", {"lambda": lambda_async_mock}):
             # First check that it still runs synchronously by default
             self.assertEqual(async_me("123"), "run async when on lambda 123")
 
@@ -95,6 +93,11 @@ class TestZappa(unittest.TestCase):
             capture_response=False,
             lambda_function_name="MyLambda",
         )
-        lambda_async_mock.return_value.send.assert_called_with(
-            get_func_task_path(async_me), ("qux",), {}
-        )
+        lambda_async_mock.return_value.send.assert_called_with(get_func_task_path(async_me), ("qux",), {})
+
+    def test_async_call_arg_not_json_serializable(self):
+        """Exception is raised when calling an async function locally (not on aws)"""
+        async_me = import_and_get_task("tests.test_app.async_me")
+        unserializable_object = object()
+        with self.assertRaises(UnserializableJsonError):
+            async_me(unserializable_object)
