@@ -10,6 +10,8 @@
 * [Migrated] Logs are missing query strings (#410)
 * [Migrated] Update BINARY_SUPPORT to use Content-Encoding to identify if data is binary (#908)
 * Remove obsolete check for Django version < 1.7 (#1158)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Add exclude_glob documentation (#1052)
 
 ## 0.55.0
 * Fix "cd workflow fired event outside of the create tags event" (#1152)
