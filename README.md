@@ -361,7 +361,7 @@ In addition, Zappa will also automatically set the correct execution permissions
 To further reduce the final package file size, you can:
 
 * Set `slim_handler` to `True` to upload a small handler to Lambda and the rest of the package to S3. For more details, see the [merged pull request](https://github.com/Miserlou/Zappa/pull/548) and the [discussion in the original issue](https://github.com/Miserlou/Zappa/issues/510). See also: [Large Projects](#large-projects).
-* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
+* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html). This will cause your application to fall back to the Boto tools that ship with AWS Lambda, which can be quite old. If this is a problem for your deployments, override `exclude` defaults with your own, removing just those: `"exclude": ["dateutil", "s3transfer", "concurrent"]`.
 
 ### Template
 
