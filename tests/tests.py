@@ -1668,6 +1668,27 @@ class TestZappa(unittest.TestCase):
         )
         assert zone == "zone-public"
 
+    def test_domain_name_match_components(self):
+        # Simple sanity check
+        zone = Zappa.get_best_match_zone(
+            all_zones={
+                "HostedZones": [
+                    {
+                        "Name": "example.com",
+                        "Id": "zone-correct",
+                        "Config": {"PrivateZone": False},
+                    },
+                    {
+                        "Name": "beta.example.com",
+                        "Id": "zone-incorrect",
+                        "Config": {"PrivateZone": False},
+                    },
+                ]
+            },
+            domain="some-beta.example.com",
+        )
+        assert zone == "zone-correct"
+
     ##
     # Let's Encrypt / ACME
     ##

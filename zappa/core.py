@@ -3202,8 +3202,14 @@ class Zappa:
 
         zones = {zone["Name"][:-1]: zone["Id"] for zone in public_zones if zone["Name"][:-1] in domain}
         if zones:
-            keys = max(zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
-            return zones[keys]
+            domain_components = domain.split(".")[::-1]  # match in reverse
+            matches = []
+            for zone in zones:
+                zone_components = zone.split(".")[::-1]  # match in reverse
+                match_count = sum(d == z for d, z in zip(domain_components, zone_components))
+                matches.append((zone, match_count))
+            key, _ = max(matches, key=lambda a: a[1])  # get key with most matches
+            return zones[key]
         else:
             return None
 
