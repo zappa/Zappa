@@ -3208,8 +3208,8 @@ class Zappa:
                     candidate_zones[public_zone_name] = zone["Id"]
 
         if candidate_zones:
-            key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
-            return candidate_zones[key]
+            best_match_key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            return candidate_zones[best_match_key]
         else:
             return None
 
