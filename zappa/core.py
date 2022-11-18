@@ -3202,9 +3202,10 @@ class Zappa:
         candidate_zones = {}
         for zone in all_zones["HostedZones"]:
             if not zone["Config"]["PrivateZone"]:
-                public_zone_name = zone["Name"][:-1]
+                public_zone_name = zone["Name"][:-1]  # zone "Name" expected to end with "." - remove "."
                 zone_components = public_zone_name.split(".")[::-1]  # reverse order
                 if all(d == z for d, z in zip(domain_components, zone_components)):
+                    # zones that match the shortest comparison considered a candidate
                     candidate_zones[public_zone_name] = zone["Id"]
 
         if candidate_zones:
