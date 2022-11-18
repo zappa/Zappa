@@ -3198,18 +3198,18 @@ class Zappa:
         """Return zone id which name is closer matched with domain name."""
 
         # Related: https://github.com/Miserlou/Zappa/issues/459
-        public_zones = [zone for zone in all_zones["HostedZones"] if not zone["Config"]["PrivateZone"]]
+        domain_components = domain.split(".")[::-1]  # match in reverse
+        candidate_zones = {}
+        for zone in all_zones["HostedZones"]:
+            if not zone["Config"]["PrivateZone"]:
+                public_zone_name = zone["Name"][:-1]
+                zone_components = public_zone_name.split(".")[::-1]  # reverse order
+                if all(d == z for d, z in zip(domain_components, zone_components)):
+                    candidate_zones[public_zone_name] = zone["Id"]
 
-        zones = {zone["Name"][:-1]: zone["Id"] for zone in public_zones if zone["Name"][:-1] in domain}
-        if zones:
-            domain_components = domain.split(".")[::-1]  # match in reverse
-            matches = []
-            for zone in zones:
-                zone_components = zone.split(".")[::-1]  # match in reverse
-                match_count = sum(d == z for d, z in zip(domain_components, zone_components))
-                matches.append((zone, match_count))
-            key, _ = max(matches, key=lambda a: a[1])  # get key with most matches
-            return zones[key]
+        if candidate_zones:
+            key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            return candidate_zones[key]
         else:
             return None
 

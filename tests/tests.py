@@ -1674,12 +1674,12 @@ class TestZappa(unittest.TestCase):
             all_zones={
                 "HostedZones": [
                     {
-                        "Name": "example.com",
+                        "Name": "example.com.",
                         "Id": "zone-correct",
                         "Config": {"PrivateZone": False},
                     },
                     {
-                        "Name": "beta.example.com",
+                        "Name": "beta.example.com.",
                         "Id": "zone-incorrect",
                         "Config": {"PrivateZone": False},
                     },
