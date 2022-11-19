@@ -13,6 +13,7 @@
 * [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
 * Add exclude_glob documentation (#1052)
 * Unable to schedule SQS Batch Size of greater than 10 (#1117)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
 
 ## 0.55.0
 * Fix "cd workflow fired event outside of the create tags event" (#1152)
