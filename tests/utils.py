@@ -1,3 +1,4 @@
+import base64
 import functools
 import os
 from collections import namedtuple
@@ -69,6 +70,14 @@ def patch_open():
 
     with patch("__builtin__.open", stub_open):
         yield mock_open, mock_file
+
+
+def is_base64(test_string: str) -> bool:
+    # Taken from https://stackoverflow.com/a/45928164/3200002
+    try:
+        return base64.b64encode(base64.b64decode(test_string)).decode() == test_string
+    except Exception:
+        return False
 
 
 def get_unsupported_sys_versioninfo() -> tuple:
