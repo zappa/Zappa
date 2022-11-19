@@ -28,6 +28,19 @@ class UnserializableJsonError(TypeError):
 # Settings / Packaging
 ##
 
+# mimetypes starting with entries defined here are considered as TEXT when BINARTY_SUPPORT is True.
+# - Additional TEXT mimetypes may be defined with the 'ADDITIONAL_TEXT_MIMETYPES' setting.
+DEFAULT_TEXT_MIMETYPES = (
+    "text/",
+    "application/json",  # RFC 4627
+    "application/javascript",  # RFC 4329
+    "application/ecmascript",  # RFC 4329
+    "application/xml",  # RFC 3023
+    "application/xml-external-parsed-entity",  # RFC 3023
+    "application/xml-dtd",  # RFC 3023
+    "image/svg+xml",  # RFC 3023
+)
+
 
 def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
     """
@@ -252,6 +265,10 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             super().__init__(context, config)
             self._lambda = kappa.awsclient.create_client("lambda", context.session)
 
+        @property
+        def batch_window(self):
+            return self._config.get("batch_window", 1 if self.batch_size > 10 else 0)
+
         def _get_uuid(self, function):
             uuid = None
             response = self._lambda.call(
@@ -271,6 +288,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     FunctionName=function.name,
                     EventSourceArn=self.arn,
                     BatchSize=self.batch_size,
+                    MaximumBatchingWindowInSeconds=self.batch_window,
                     Enabled=self.enabled,
                 )
                 LOG.debug(response)
@@ -309,6 +327,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     response = self._lambda.call(
                         "update_event_source_mapping",
                         BatchSize=self.batch_size,
+                        MaximumBatchingWindowInSeconds=self.batch_window,
                         Enabled=self.enabled,
                         FunctionName=function.arn,
                     )
