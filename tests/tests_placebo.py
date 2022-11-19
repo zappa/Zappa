@@ -1,16 +1,17 @@
 # -*- coding: utf8 -*-
-import mock
 import os
 import random
 import string
 import unittest
 
-from .utils import placebo_session
+import mock
 
 from zappa.cli import ZappaCLI
+from zappa.core import Zappa
 from zappa.handler import LambdaHandler
 from zappa.utilities import add_event_source, remove_event_source
-from zappa.core import Zappa
+
+from .utils import placebo_session
 
 
 def random_string(length):
@@ -176,13 +177,6 @@ class TestZappa(unittest.TestCase):
             z.rollback_lambda_function_version(function_name)
 
     @placebo_session
-    def test_is_lambda_function_ready(self, session):
-        z = Zappa(session)
-        z.credentials_arn = "arn:aws:iam::724336686645:role/ZappaLambdaExecution"
-        function_name = "django-helloworld-unicode"
-        z.is_lambda_function_ready(function_name)
-
-    @placebo_session
     def test_invoke_lambda_function(self, session):
         z = Zappa(session)
         z.credentials_arn = "arn:aws:iam::724336686645:role/ZappaLambdaExecution"
@@ -246,9 +240,7 @@ class TestZappa(unittest.TestCase):
             "version": "0",
             "time": "2016-05-10T21:05:39Z",
             "id": "0d6a6db0-d5e7-4755-93a0-750a8bf49d55",
-            "resources": [
-                "arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"
-            ],
+            "resources": ["arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"],
         }
         lh.handler(event, None)
 
@@ -262,9 +254,7 @@ class TestZappa(unittest.TestCase):
             "version": "0",
             "time": "2016-05-10T21:05:39Z",
             "id": "0d6a6db0-d5e7-4755-93a0-750a8bf49d55",
-            "resources": [
-                "arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"
-            ],
+            "resources": ["arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"],
         }
         lh.handler(event, None)
 
@@ -296,9 +286,7 @@ class TestZappa(unittest.TestCase):
             "version": "0",
             "time": "2016-05-10T21:05:39Z",
             "id": "0d6a6db0-d5e7-4755-93a0-750a8bf49d55",
-            "resources": [
-                "arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"
-            ],
+            "resources": ["arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"],
         }
         lh.handler(event, None)
 
@@ -307,16 +295,12 @@ class TestZappa(unittest.TestCase):
             "account": "72333333333",
             "region": "us-east-1",
             "detail": {},
-            "Records": [
-                {"s3": {"configurationId": "test_project:test_settings.aws_s3_event"}}
-            ],
+            "Records": [{"s3": {"configurationId": "test_project:test_settings.aws_s3_event"}}],
             "source": "aws.events",
             "version": "0",
             "time": "2016-05-10T21:05:39Z",
             "id": "0d6a6db0-d5e7-4755-93a0-750a8bf49d55",
-            "resources": [
-                "arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"
-            ],
+            "resources": ["arn:aws:events:us-east-1:72333333333:rule/tests.test_app.schedule_me"],
         }
         self.assertEqual("AWS S3 EVENT", lh.handler(event, None))
 
@@ -528,9 +512,7 @@ class TestZappa(unittest.TestCase):
         event_source = {"arn": "blah:blah:blah:blah", "events": ["s3:ObjectCreated:*"]}
         # Sanity. This should fail.
         try:
-            es = add_event_source(
-                event_source, "blah:blah:blah:blah", "test_settings.callback", session
-            )
+            es = add_event_source(event_source, "blah:blah:blah:blah", "test_settings.callback", session)
             self.fail("Success should have failed.")
         except ValueError:
             pass
@@ -546,6 +528,63 @@ class TestZappa(unittest.TestCase):
         remove_event_source(
             event_source,
             "lambda:lambda:lambda:lambda",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        event_source = {
+            "arn": "sqs:sqs:sqs:sqs",
+            "events": [
+                {
+                    "function": "function_name",
+                    "event_source": {
+                        "arn": "dummy",
+                        "batch_size": 100,
+                        "batch_window": 10,
+                        "functionResponseType": "ReportBatchItemFailures",
+                        "enabled": True,
+                    },
+                }
+            ],
+        }
+        add_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        remove_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        event_source = {
+            "arn": "sqs:sqs:sqs:sqs",
+            "events": [
+                {
+                    "function": "function_name",
+                    "event_source": {
+                        "arn": "dummy",
+                        "batch_size": 100,
+                        "functionResponseType": "ReportBatchItemFailures",
+                        "enabled": True,
+                    },
+                }
+            ],
+        }
+        add_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        remove_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
             "test_settings.callback",
             session,
             dry=True,
@@ -578,9 +617,7 @@ class TestZappa(unittest.TestCase):
         zappa_cli.api_stage = "ttt888"
         zappa_cli.api_key_required = True
         zappa_cli.load_settings("test_settings.json", session)
-        zappa_cli.lambda_arn = (
-            "arn:aws:lambda:us-east-1:12345:function:Zappa-Trigger-Test"
-        )
+        zappa_cli.lambda_arn = "arn:aws:lambda:us-east-1:12345:function:Zappa-Trigger-Test"
         zappa_cli.update_cognito_triggers()
 
     @placebo_session
