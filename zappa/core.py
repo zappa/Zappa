@@ -843,12 +843,13 @@ class Zappa:
                     with open(os.path.join(root, filename), "rb") as f:
                         archivef.writestr(zipi, f.read(), compression_method)
                 elif archive_format == "tarball":
+                    # Issue #516: added a slightly better Posix Method: https://github.com/zappa/Zappa/issues/516
                     tarinfo = tarfile.TarInfo(
                         PurePosixPath(
                             root.replace(temp_project_path, "")
                             .lstrip(os.sep)
                             .replace("\\", "/")
-                        ).joinpath(filename),
+                        ).joinpath(filename).as_posix(),
                     )
                     tarinfo.mode = 0o755
 
