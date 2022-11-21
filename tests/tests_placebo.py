@@ -532,6 +532,63 @@ class TestZappa(unittest.TestCase):
             session,
             dry=True,
         )
+        event_source = {
+            "arn": "sqs:sqs:sqs:sqs",
+            "events": [
+                {
+                    "function": "function_name",
+                    "event_source": {
+                        "arn": "dummy",
+                        "batch_size": 100,
+                        "batch_window": 10,
+                        "functionResponseType": "ReportBatchItemFailures",
+                        "enabled": True,
+                    },
+                }
+            ],
+        }
+        add_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        remove_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        event_source = {
+            "arn": "sqs:sqs:sqs:sqs",
+            "events": [
+                {
+                    "function": "function_name",
+                    "event_source": {
+                        "arn": "dummy",
+                        "batch_size": 100,
+                        "functionResponseType": "ReportBatchItemFailures",
+                        "enabled": True,
+                    },
+                }
+            ],
+        }
+        add_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
+        remove_event_source(
+            event_source,
+            "sqs:sqs:sqs:sqs",
+            "test_settings.callback",
+            session,
+            dry=True,
+        )
         # get_event_source_status(event_source, 'lambda:lambda:lambda:lambda', 'test_settings.callback', session, dry=True)
 
     @placebo_session
