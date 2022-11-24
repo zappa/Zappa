@@ -1,6 +1,6 @@
 # Zappa Changelog
 
-## 0.55.1
+## 0.56.0
 * Not recognizing virtaulenv created with pyenv (#1132)
 * Remove six from zappa dependencies (#1164)
 * Handle optional space in x-forwarded-for header (#1127)
@@ -14,6 +14,7 @@
 * Add exclude_glob documentation (#1052)
 * Unable to schedule SQS Batch Size of greater than 10 (#1117)
 * [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Allow any Python version if using Docker image for Lambda (#1140)
 
 ## 0.55.0
 * Fix "cd workflow fired event outside of the create tags event" (#1152)
