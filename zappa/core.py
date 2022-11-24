@@ -22,6 +22,7 @@ import time
 import uuid
 import zipfile
 from builtins import bytes, int
+from itertools import zip_longest
 from distutils.dir_util import copy_tree
 from io import open
 from typing import Optional
@@ -3204,12 +3205,15 @@ class Zappa:
             if not zone["Config"]["PrivateZone"]:
                 public_zone_name = zone["Name"][:-1]  # zone "Name" expected to end with "." - remove "."
                 zone_components = public_zone_name.split(".")[::-1]  # reverse order
-                if all(d == z for d, z in zip(domain_components, zone_components)):
+                if all(z == d for z, d in zip(zone_components, domain_components)):
                     # zones that match the shortest comparison considered a candidate
                     candidate_zones[public_zone_name] = zone["Id"]
 
         if candidate_zones:
-            best_match_key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            if domain in candidate_zones:  # if exact match use it
+                best_match_key = domain
+            else:  # otherwise, use longest matched
+                best_match_key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
             return candidate_zones[best_match_key]
         else:
             return None
