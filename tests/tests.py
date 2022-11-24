@@ -13,6 +13,7 @@ import tempfile
 import unittest
 import uuid
 import zipfile
+from functools import partial
 from io import BytesIO
 from subprocess import check_output
 
@@ -40,7 +41,7 @@ from zappa.letsencrypt import (
 )
 from zappa.wsgi import common_log, create_wsgi_request
 
-from .utils import get_unsupported_sys_versioninfo
+from .utils import get_sys_versioninfo
 
 
 def random_string(length):
@@ -1820,6 +1821,47 @@ class TestZappa(unittest.TestCase):
         )
         assert zone == "zone-public"
 
+    def test_domain_name_match_components(self):
+        # Simple sanity check
+        zone = Zappa.get_best_match_zone(
+            all_zones={
+                "HostedZones": [
+                    {
+                        "Name": "example.com.",
+                        "Id": "zone-correct",
+                        "Config": {"PrivateZone": False},
+                    },
+                    {
+                        "Name": "beta.example.com.",
+                        "Id": "zone-incorrect",
+                        "Config": {"PrivateZone": False},
+                    },
+                ]
+            },
+            domain="some-beta.example.com",
+        )
+        assert zone == "zone-correct"
+
+    def test_domain_name_match_components_short(self):
+        zone = Zappa.get_best_match_zone(
+            all_zones={
+                "HostedZones": [
+                    {
+                        "Name": "beta.example.com.",
+                        "Id": "zone-incorrect",
+                        "Config": {"PrivateZone": False},
+                    },
+                    {
+                        "Name": "example.com.",
+                        "Id": "zone-correct",
+                        "Config": {"PrivateZone": False},
+                    },
+                ]
+            },
+            domain="example.com",
+        )
+        assert zone == "zone-correct"
+
     ##
     # Let's Encrypt / ACME
     ##
@@ -2705,7 +2747,7 @@ class TestZappa(unittest.TestCase):
             FunctionName="abc",
         )
 
-    @mock.patch("sys.version_info", new_callable=get_unsupported_sys_versioninfo)
+    @mock.patch("sys.version_info", new_callable=get_sys_versioninfo)
     def test_unsupported_version_error(self, *_):
         from importlib import reload
 
@@ -2713,6 +2755,28 @@ class TestZappa(unittest.TestCase):
             import zappa
 
             reload(zappa)
+
+    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 6))
+    def test_minor_version_only_check_when_in_docker(self, *_):
+        from importlib import reload
+
+        with self.assertRaises(RuntimeError):
+            import zappa
+
+            reload(zappa)
+
+    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 7))
+    def test_no_runtimeerror_when_in_docker(self, *_):
+        from importlib import reload
+
+        try:
+            import zappa
+
+            reload(zappa)
+        except RuntimeError:
+            self.fail()
 
     def test_wsgi_query_string_unquoted(self):
         event = {
