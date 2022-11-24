@@ -80,10 +80,11 @@ class TestDocs(unittest.TestCase):
         )
 
         if environ.get("ZAPPA_TEST_SAVE_README_NEW"):
-            with open(path.join(path.dirname(DIR), "README.test.md"), "w") as f:
+            readme_test_output_filepath = path.join(path.dirname(DIR), "README.test.md")
+            with open(readme_test_output_filepath, "w") as f:
                 f.write(new_readme)
 
-            msg = "README.test.md written so you can manually compare."
+            msg = f"{readme_test_output_filepath} written so you can manually compare."
 
         else:
             msg = "You can set environ[ZAPPA_TEST_SAVE_README_NEW]=1 to generate\n" "  README.test.md to manually compare."
