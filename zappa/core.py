@@ -24,6 +24,7 @@ import zipfile
 from builtins import bytes, int
 from distutils.dir_util import copy_tree
 from io import open
+from pathlib import PurePosixPath
 from typing import Optional
 
 import boto3
@@ -818,7 +819,13 @@ class Zappa:
                     with open(os.path.join(root, filename), "rb") as f:
                         archivef.writestr(zipi, f.read(), compression_method)
                 elif archive_format == "tarball":
-                    tarinfo = tarfile.TarInfo(os.path.join(root.replace(temp_project_path, "").lstrip(os.sep), filename))
+                    # Issue #516: added a slightly better Posix Method
+                    # https://github.com/zappa/Zappa/issues/516
+                    tarinfo = tarfile.TarInfo(
+                        PurePosixPath(root.replace(temp_project_path, "").lstrip(os.sep).replace("\\", "/"))
+                        .joinpath(filename)
+                        .as_posix(),
+                    )
                     tarinfo.mode = 0o755
 
                     stat = os.stat(os.path.join(root, filename))
@@ -2801,7 +2808,8 @@ class Zappa:
             function = event["function"]
             expression = event.get("expression", None)  # single expression
             expressions = event.get("expressions", None)  # multiple expression
-            kwargs = event.get("kwargs", {})  # optional dict of keyword arguments for the event
+            # optional dict of keyword arguments for the event
+            kwargs = event.get("kwargs", {})
             event_source = event.get("event_source", None)
             description = event.get("description", function)
             enabled = event.get("enabled", True)
@@ -2814,7 +2822,8 @@ class Zappa:
                 self.get_credentials_arn()
 
             if expression:
-                expressions = [expression]  # same code for single and multiple expression
+                # same code for single and multiple expression
+                expressions = [expression]
 
             if expressions:
                 for index, expression in enumerate(expressions):
@@ -3202,7 +3211,8 @@ class Zappa:
 
         zones = {zone["Name"][:-1]: zone["Id"] for zone in public_zones if zone["Name"][:-1] in domain}
         if zones:
-            keys = max(zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            # get longest key -- best match.
+            keys = max(zones.keys(), key=lambda a: len(a))
             return zones[keys]
         else:
             return None
