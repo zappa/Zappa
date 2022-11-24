@@ -22,7 +22,6 @@ import time
 import uuid
 import zipfile
 from builtins import bytes, int
-from itertools import zip_longest
 from distutils.dir_util import copy_tree
 from io import open
 from typing import Optional
