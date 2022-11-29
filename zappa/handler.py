@@ -557,7 +557,6 @@ class LambdaHandler:
                     trailing_slash=self.trailing_slash,
                     binary_support=settings.BINARY_SUPPORT,
                     context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
-                    event_version="2.0",
                 )
 
                 # We are always on https on Lambda, so tell our wsgi app that.

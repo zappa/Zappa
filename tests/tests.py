@@ -1129,7 +1129,7 @@ class TestZappa(unittest.TestCase):
             "pathParameters": {"proxy": ""},
             "isBase64Encoded": False,
         }
-        environ = create_wsgi_request(event, event_version="2.0")
+        environ = create_wsgi_request(event)
         self.assertTrue(environ)
 
     def test_wsgi_from_v2_event_with_lambda_authorizer(self):
@@ -1175,7 +1175,7 @@ class TestZappa(unittest.TestCase):
             "body": "{'data':'0123456789'}",
             "isBase64Encoded": False,
         }
-        environ = create_wsgi_request(event, event_version="2.0")
+        environ = create_wsgi_request(event)
         self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
         self.assertEqual(environ["REMOTE_USER"], principal_id)
 
@@ -1235,7 +1235,7 @@ class TestZappa(unittest.TestCase):
             "body": "{'data': '12345'}",
             "isBase64Encoded": False,
         }
-        environ = create_wsgi_request(event, event_version="2.0")
+        environ = create_wsgi_request(event)
         self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
         self.assertEqual(environ["REMOTE_USER"], user_arn)
 

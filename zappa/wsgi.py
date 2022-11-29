@@ -19,13 +19,12 @@ def create_wsgi_request(
     binary_support=False,
     base_path=None,
     context_header_mappings={},
-    event_version="1.0",
 ):
     """
     Given some event_info via API Gateway,
     create and return a valid WSGI request environ.
     """
-    if event_version == "2.0":
+    if event_info.get("version", "") == "2.0":
         method, headers, path, query_string, remote_user, authorizer = process_lambda_payload_v2(event_info)
     else:
         method, headers, path, query_string, remote_user, authorizer = process_lambda_payload_v1(event_info)
