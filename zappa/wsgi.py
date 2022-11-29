@@ -25,6 +25,7 @@ def create_wsgi_request(
     Given some event_info via API Gateway,
     create and return a valid WSGI request environ.
     """
+    remote_user, authorizer = None, None
     if event_version == "2.0":
         # See the new format documentation
         # here: https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html#urls-payloads
@@ -41,7 +42,6 @@ def create_wsgi_request(
 
         # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
         # Extract remote_user, authorizer if Authorizer is enabled
-        remote_user = None
         authorizer = event_info["requestContext"].get("authorizer", None)
         if authorizer:
             if authorizer.get("lambda"):
@@ -75,8 +75,6 @@ def create_wsgi_request(
 
         # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
         # Extract remote_user, authorizer if Authorizer is enabled
-        remote_user = None
-        authorizer = None
         if "requestContext" in event_info:
             authorizer = event_info["requestContext"].get("authorizer", None)
             if authorizer:
