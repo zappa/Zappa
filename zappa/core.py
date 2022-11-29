@@ -2183,11 +2183,13 @@ class Zappa:
                 description_kwargs[key] = value
             elif key == "LambdaConfig":
                 for lckey, lcvalue in value.items():
+                    # update needed config
                     if lckey in LambdaConfig:
                         value[lckey] = LambdaConfig[lckey]
                 print("value", value)
                 description_kwargs[key] = value
-        if "LambdaConfig" not in description_kwargs:
+        # if dont have lambda config, add it
+        if "LambdaConfig" not in description_kwargs or not description_kwargs["LambdaConfig"]:
             description_kwargs["LambdaConfig"] = LambdaConfig
         if "TemporaryPasswordValidityDays" in description_kwargs["Policies"]["PasswordPolicy"]:
             description_kwargs["AdminCreateUserConfig"].pop("UnusedAccountValidityDays", None)
