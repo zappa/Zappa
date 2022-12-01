@@ -3198,12 +3198,22 @@ class Zappa:
         """Return zone id which name is closer matched with domain name."""
 
         # Related: https://github.com/Miserlou/Zappa/issues/459
-        public_zones = [zone for zone in all_zones["HostedZones"] if not zone["Config"]["PrivateZone"]]
+        domain_components = domain.split(".")[::-1]  # match in reverse
+        candidate_zones = {}
+        for zone in all_zones["HostedZones"]:
+            if not zone["Config"]["PrivateZone"]:
+                public_zone_name = zone["Name"][:-1]  # zone "Name" expected to end with "." - remove "."
+                zone_components = public_zone_name.split(".")[::-1]  # reverse order
+                if all(z == d for z, d in zip(zone_components, domain_components)):
+                    # zones that match the shortest comparison considered a candidate
+                    candidate_zones[public_zone_name] = zone["Id"]
 
-        zones = {zone["Name"][:-1]: zone["Id"] for zone in public_zones if zone["Name"][:-1] in domain}
-        if zones:
-            keys = max(zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
-            return zones[keys]
+        if candidate_zones:
+            if domain in candidate_zones:  # if exact match use it
+                best_match_key = domain
+            else:  # otherwise, use longest matched
+                best_match_key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            return candidate_zones[best_match_key]
         else:
             return None
 
