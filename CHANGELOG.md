@@ -1,5 +1,9 @@
 # Zappa Changelog
 
+## 0.56.1
+
+* FileNotFoundError in running_in_docker (#1201)
+
 ## 0.56.0
 * Not recognizing virtaulenv created with pyenv (#1132)
 * Remove six from zappa dependencies (#1164)

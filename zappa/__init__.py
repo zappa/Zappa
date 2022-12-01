@@ -8,8 +8,11 @@ def running_in_docker() -> bool:
     - When docker is used allow usage of any python version
     """
     # https://stackoverflow.com/a/20012536/24718
-    cgroup_content = Path("/proc/1/cgroup").read_text()
-    in_docker = "/docker/" in cgroup_content or "/lxc/" in cgroup_content
+    in_docker = False
+    cgroup_filepath = Path("/proc/1/cgroup")
+    if cgroup_filepath.exists():
+        cgroup_content = cgroup_filepath.read_text(encoding="utf8")
+        in_docker = "/docker/" in cgroup_content or "/lxc/" in cgroup_content
     return in_docker
 
 
@@ -33,4 +36,4 @@ elif running_in_docker() and sys.version_info.minor < MINIMUM_SUPPORTED_MINOR_VE
     raise RuntimeError(err_msg)
 
 
-__version__ = "0.56.0"
+__version__ = "0.56.1"

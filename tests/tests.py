@@ -2626,6 +2626,19 @@ class TestZappa(unittest.TestCase):
         except RuntimeError:
             self.fail()
 
+    @mock.patch("pathlib.Path.exists", return_value=False)
+    @mock.patch("pathlib.Path.read_text", side_effect=FileNotFoundError("not found"))
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 7))
+    def test_running_in_docker_filenotfound(self, *_):
+        from importlib import reload
+
+        try:
+            import zappa
+
+            reload(zappa)
+        except FileNotFoundError:
+            self.fail()
+
     def test_wsgi_query_string_unquoted(self):
         event = {
             "body": {},
