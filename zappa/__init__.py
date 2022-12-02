@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 
+# Alternative solution to: https://github.com/zappa/Zappa/issues/1140
 def running_in_docker() -> bool:
     """
     Determine if zappa is running in docker.
