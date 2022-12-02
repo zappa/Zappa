@@ -244,7 +244,7 @@ If you are using a custom Docker image for your Lambda runtime (e.g. if you want
 You can also add this to your Dockerfile like this:
 
 ```
-    ENV ZAPPA_RUNNING_IN_DOCKER=True
+ENV ZAPPA_RUNNING_IN_DOCKER=True
 ```
 
 ### Rollback
