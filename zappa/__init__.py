@@ -1,6 +1,5 @@
 import os
 import sys
-from distutils.util import strtobool
 from pathlib import Path
 
 
@@ -11,7 +10,7 @@ def running_in_docker() -> bool:
     - When docker is used allow usage of any python version
     """
     # https://stackoverflow.com/questions/63116419
-    running_in_docker_flag = strtobool(os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower())
+    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in {'y', 'yes', 't', 'true', '1'}
     return running_in_docker_flag
 
 
@@ -34,4 +33,4 @@ elif running_in_docker() and sys.version_info.minor < MINIMUM_SUPPORTED_MINOR_VE
     raise RuntimeError(err_msg)
 
 
-__version__ = "0.56.0"
+__version__ = "0.56.1"
