@@ -222,7 +222,30 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+
+You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
+Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+
+Deploy Example:
+
+    $ zappa deploy --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Update Example:
+
+    $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+
+If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
+
+    $ export ZAPPA_RUNNING_IN_DOCKER=True
+
+You can also add this to your Dockerfile like this:
+
+```
+ENV ZAPPA_RUNNING_IN_DOCKER=True
+```
 
 ### Rollback
 
@@ -854,6 +877,7 @@ to change Zappa's behavior. Use these at your own risk!
 ```javascript
  {
     "dev": {
+        "additional_text_mimetypes": [], // allows you to provide additional mimetypes to be handled as text when binary_support is true.
         "alb_enabled": false, // enable provisioning of application load balancing resources. If set to true, you _must_ fill out the alb_vpc_config option as well.
         "alb_vpc_config": {
             "CertificateArn": "your_acm_certificate_arn", // ACM certificate ARN for ALB
@@ -927,7 +951,7 @@ to change Zappa's behavior. Use these at your own risk!
         ],
         "endpoint_configuration": ["EDGE", "REGIONAL", "PRIVATE"],  // Specify APIGateway endpoint None (default) or list `EDGE`, `REGION`, `PRIVATE`
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
-        "exclude": ["file.gz", "tests/"], // A list of regex patterns to exclude from the archive.
+        "exclude": ["file.gz", "tests"], // A list of filename patterns to exclude from the archive (see `fnmatch` module for patterns).
         "exclude_glob": ["*.gz", "*.rar", "tests/**/*"], // A list of glob patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
         "extra_permissions": [{ // Attach any extra permissions to this policy. Default None
