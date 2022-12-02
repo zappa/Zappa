@@ -237,6 +237,16 @@ Update Example:
 
 Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
 
+If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
+
+    $ export ZAPPA_RUNNING_IN_DOCKER=True
+
+You can also add this to your Dockerfile like this:
+
+```
+    ENV ZAPPA_RUNNING_IN_DOCKER=True
+```
+
 ### Rollback
 
 You can also `rollback` the deployed code to a previous version by supplying the number of revisions to return to. For instance, to rollback to the version deployed 3 versions ago:
