@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -7,13 +8,12 @@ def running_in_docker() -> bool:
     Determine if zappa is running in docker.
     - When docker is used allow usage of any python version
     """
-    # https://stackoverflow.com/a/20012536/24718
-    cgroup_content = Path("/proc/1/cgroup").read_text()
-    in_docker = "/docker/" in cgroup_content or "/lxc/" in cgroup_content
-    return in_docker
+    # https://stackoverflow.com/questions/63116419
+    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in ("true", "1", "t")
+    return running_in_docker_flag
 
 
-SUPPORTED_VERSIONS = [(3, 7), (3, 8), (3, 9), (3, 10), (3, 11)]
+SUPPORTED_VERSIONS = [(3, 7), (3, 8), (3, 9)]
 
 if not running_in_docker() and sys.version_info[:2] not in SUPPORTED_VERSIONS:
     print(running_in_docker())
