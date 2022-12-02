@@ -25,4 +25,4 @@ if not running_in_docker() and sys.version_info[:2] not in SUPPORTED_VERSIONS:
     raise RuntimeError(err_msg)
 
 
-__version__ = "0.56.0"
+__version__ = "0.56.1"
