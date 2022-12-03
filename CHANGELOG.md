@@ -2,6 +2,7 @@
 
 ## 0.56.1
 
+* Fix FileNotFoundError in running_in_docker (#1201)
 * Use ZAPPA_RUNNING_IN_DOCKER environment variable to use any Python version inside Docker container (#1140)
 
 ## 0.56.0

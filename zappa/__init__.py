@@ -1,6 +1,5 @@
 import os
 import sys
-from pathlib import Path
 
 
 # Alternative solution to: https://github.com/zappa/Zappa/issues/1140
@@ -10,7 +9,7 @@ def running_in_docker() -> bool:
     - When docker is used allow usage of any python version
     """
     # https://stackoverflow.com/questions/63116419
-    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in {'y', 'yes', 't', 'true', '1'}
+    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in {"y", "yes", "t", "true", "1"}
     return running_in_docker_flag
 
 
@@ -31,6 +30,5 @@ elif running_in_docker() and sys.version_info.minor < MINIMUM_SUPPORTED_MINOR_VE
         f"Zappa requires a minimum version of 3.{MINIMUM_SUPPORTED_MINOR_VERSION}"
     )
     raise RuntimeError(err_msg)
-
 
 __version__ = "0.56.1"
