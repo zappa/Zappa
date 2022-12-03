@@ -346,15 +346,15 @@ class TestZappa(unittest.TestCase):
         )
         self.assertEqual(
             "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-            parsable_template["Resources"]["OPTIONS0"]["Properties"]["Integration"]["IntegrationResponses"][0]["ResponseParameters"][
-                "method.response.header.Access-Control-Allow-Headers"
-            ],
+            parsable_template["Resources"]["OPTIONS0"]["Properties"]["Integration"]["IntegrationResponses"][0][
+                "ResponseParameters"
+            ]["method.response.header.Access-Control-Allow-Headers"],
         )
         self.assertEqual(
             "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-            parsable_template["Resources"]["OPTIONS1"]["Properties"]["Integration"]["IntegrationResponses"][0]["ResponseParameters"][
-                "method.response.header.Access-Control-Allow-Headers"
-            ],
+            parsable_template["Resources"]["OPTIONS1"]["Properties"]["Integration"]["IntegrationResponses"][0][
+                "ResponseParameters"
+            ]["method.response.header.Access-Control-Allow-Headers"],
         )
         self.assertTrue(
             parsable_template["Resources"]["OPTIONS0"]["Properties"]["MethodResponses"][0]["ResponseParameters"][
@@ -1953,7 +1953,9 @@ class TestZappa(unittest.TestCase):
             "IsTruncated": False,
             "HostedZones": [{"Id": "somezone"}],
         }
-        zappa_core.route53.list_resource_record_sets.return_value = {"ResourceRecordSets": [{"Type": "CNAME", "Name": "test_domain1"}]}
+        zappa_core.route53.list_resource_record_sets.return_value = {
+            "ResourceRecordSets": [{"Type": "CNAME", "Name": "test_domain1"}]
+        }
 
         record = zappa_core.get_domain_name("test_domain")
         self.assertIsNotNone(record)
@@ -2219,7 +2221,9 @@ class TestZappa(unittest.TestCase):
 
         # get valid versions from tags
         version_match_string = "v?[0-9]+.[0-9]+.[0-9]+"
-        tags = [tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())]
+        tags = [
+            tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())
+        ]
 
         latest_release_tag = sorted(tags, key=version.parse)[-1]
         zappa_cli.create_package(use_zappa_release=latest_release_tag)
