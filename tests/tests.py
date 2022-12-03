@@ -2604,7 +2604,7 @@ class TestZappa(unittest.TestCase):
 
             reload(zappa)
 
-    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("os.getenv", return_value="True")
     @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 6))
     def test_minor_version_only_check_when_in_docker(self, *_):
         from importlib import reload
@@ -2614,7 +2614,7 @@ class TestZappa(unittest.TestCase):
 
             reload(zappa)
 
-    @mock.patch("pathlib.Path.read_text", return_value="/docker/")
+    @mock.patch("os.getenv", return_value="True")
     @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 7))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
