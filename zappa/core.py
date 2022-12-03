@@ -2943,8 +2943,7 @@ class Zappa:
             raise EnvironmentError(
                 "Length Constraints:"
                 "Maximum length of 63 ({{expression index}}-{{event['name']}}?-{{event['function']}}):"
-                "{}"
-                .format(name)
+                "{}".format(name)
             )
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
         event_name = self.get_event_name(lambda_name, name)
