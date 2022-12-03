@@ -2920,6 +2920,12 @@ class Zappa:
         Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
         This allows support for rule names that may be longer than the 64 char limit.
         """
+        function_regex = re.compile("^[._A-Za-z0-9]+$")
+        if not re.fullmatch(function_regex, function):
+            # Validation Rule: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Rule.html
+            # '-' cannot be used because it is a delimiter
+            raise EnvironmentError("event['function']: Pattern '[._A-Za-z0-9]+'.")
+
         name = event.get("name", function)
         if name != function:
             # a custom event name has been provided, make sure function name is included as postfix,
@@ -2930,6 +2936,16 @@ class Zappa:
             # prefix all entries bar the first with the index
             # Related: https://github.com/Miserlou/Zappa/pull/1051
             name = "{}-{}".format(index, name)
+
+        # https://github.com/zappa/Zappa/issues/1036
+        # Error because the name cannot be obtained if the function name is longer than 64 characters
+        if len(name) >= 64:
+            raise EnvironmentError(
+                "Length Constraints:"
+                "Maximum length of 63 ({{expression index}}-{{event['name']}}?-{{event['function']}}):"
+                "{}"
+                .format(name)
+            )
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
         event_name = self.get_event_name(lambda_name, name)
         # if it's possible that we truncated name, generate a unique, shortened name
