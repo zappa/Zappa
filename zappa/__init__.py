@@ -2,7 +2,6 @@ import os
 import sys
 
 
-# Alternative solution to: https://github.com/zappa/Zappa/issues/1140
 def running_in_docker() -> bool:
     """
     Determine if zappa is running in docker.
