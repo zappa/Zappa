@@ -2920,13 +2920,13 @@ class Zappa:
         Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
         This allows support for rule names that may be longer than the 64 char limit.
 
-        function pattern: '^[._A-Za-z0-9]{63}$'
+        function pattern: '^[._A-Za-z0-9]{,63}$'
         """
-        function_regex = re.compile("^[._A-Za-z0-9]{63}$")
+        function_regex = re.compile("^[._A-Za-z0-9]{,63}$")
         if not re.fullmatch(function_regex, function):
             # Validation Rule: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Rule.html
             # '-' cannot be used because it is a delimiter
-            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{63}$'.")
+            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{,63}$'.")
 
         name = event.get("name", function)
         if name != function:
