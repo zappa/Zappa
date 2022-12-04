@@ -145,7 +145,7 @@ _Before you begin, make sure you are running Python 3.7/3.8/3.9 and you have a v
 
 Please note that Zappa _**must**_ be installed into your project's [virtual environment](https://docs.python-guide.org/dev/virtualenvs/). The virtual environment name should not be the same as the Zappa project name, as this may cause errors.
 
-_(If you use [pyenv](https://github.com/yyuu/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](https://docs.conda.io/) users should comment [here](https://github.com/Miserlou/Zappa/pull/108).)_
+_(If you use [pyenv](https://github.com/pyenv/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](https://docs.conda.io/) users should comment [here](https://github.com/Miserlou/Zappa/pull/108).)_
 
 Next, you'll need to define your local and server-side settings.
 
@@ -186,7 +186,7 @@ or for Django:
 }
 ```
 
-_Psst: If you're deploying a Django application with Zappa for the first time, you might want to read Edgar Roman's [Django Zappa Guide](https://edgarroman.github.io/zappa-django-guide/)._
+_Psst: If you're deploying a Django application with Zappa for the first time, you might want to read Edgar Roman's [Django Zappa Guide](https://romandc.com/zappa-django-guide/)._
 
 You can define as many stages as your like - we recommend having _dev_, _staging_, and _production_.
 
@@ -1512,17 +1512,17 @@ Lambda may provide additional resources than provisioned during cold start initi
 * [Django-Zappa tutorial (screencast)](https://www.youtube.com/watch?v=plUrbPN0xc8&feature=youtu.be).
 * [Using Django-Zappa, Part 1](https://serverlesscode.com/post/zappa-wsgi-for-python/).
 * [Using Django-Zappa, Part 2: VPCs](https://serverlesscode.com/post/zappa-wsgi-for-python-pt-2/).
-* [Building Serverless Microservices with Zappa and Flask](https://gun.io/blog/serverless-microservices-with-zappa-and-flask/)
+* [Building Serverless Microservices with Zappa and Flask](https://gun.io/news/2017/04/serverless-microservices-with-zappa-and-flask/)
 * [Zappa で Hello World するまで (Japanese)](https://qiita.com/satoshi_iwashita/items/505492193317819772c7)
 * [How to Deploy Zappa with CloudFront, RDS and VPC](https://jinwright.net/how-deploy-serverless-wsgi-app-using-zappa/)
 * [Secure 'Serverless' File Uploads with AWS Lambda, S3, and Zappa](https://blog.stratospark.com/secure-serverless-file-uploads-with-aws-lambda-s3-zappa.html)
 * [Deploy a Serverless WSGI App using Zappa, CloudFront, RDS, and VPC](https://docs.google.com/presentation/d/1aYeOMgQl4V_fFgT5VNoycdXtob1v6xVUWlyxoTEiTw0/edit#slide=id.p)
 * [AWS: Deploy Alexa Ask Skills with Flask-Ask and Zappa](https://developer.amazon.com/blogs/post/8e8ad73a-99e9-4c0f-a7b3-60f92287b0bf/New-Alexa-Tutorial-Deploy-Flask-Ask-Skills-to-AWS-Lambda-with-Zappa)
-* [Guide to using Django with Zappa](https://edgarroman.github.io/zappa-django-guide/)
-* [Zappa and LambCI](https://seancoates.com/blogs/zappa-and-lambci/)
+* [Guide to using Django with Zappa](https://romandc.com/zappa-django-guide/)
+* [Zappa and LambCI](https://seancoates.com/blogs/zappa-and-lambci)
 * [Building A Serverless Image Processing SaaS using Zappa](https://medium.com/99serverless/building-a-serverless-image-processing-saas-9ef68b594076)
 * [Serverless Slack Slash Commands with Python and Zappa](https://renzo.lucioni.xyz/serverless-slash-commands-with-python/)
-* [Bringing Tokusatsu to AWS using Python, Flask, Zappa and Contentful](https://www.contentful.com/blog/2018/03/07/bringing-tokusatsu-to-aws-using-python-flask-zappa-and-contentful/)
+* [Bringing Tokusatsu to AWS using Python, Flask, Zappa and Contentful](https://www.contentful.com/blog/bringing-tokusatsu-to-aws-using-python-flask-zappa-and-contentful/)
 * [AWS Summit 2018 Seoul - Zappa와 함께하는 Serverless Microservice](https://www.slideshare.net/YunSeopSong/zappa-serverless-microservice-94410308/)
 * [Book - Building Serverless Python Web Services with Zappa](https://github.com/PacktPublishing/Building-Serverless-Python-Web-Services-with-Zappa)
 * [Vider sa flask dans une lambda](https://free_zed.gitlab.io/articles/2019/11/vider-sa-flask-dans-une-lambda/)[French]
@@ -1609,7 +1609,7 @@ To use the git HEAD, you *probably can't* use `pip install -e `. Instead, you sh
 
 If you or your company uses **Zappa**, please consider giving what you can to support the ongoing development of the project!
 
-You can become a patron by **[visiting our Patreon page](https://patreon.com/zappa)**.
+You can become a patron by **[visiting our Patreon page](https://www.patreon.com/zappa)**.
 
 Zappa is currently supported by these awesome individuals and companies:
 
