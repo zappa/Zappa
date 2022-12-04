@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="http://i.imgur.com/oePnHJn.jpg" alt="Zappa Rocks!"/>
+  <img src="https://i.imgur.com/oePnHJn.jpg" alt="Zappa Rocks!"/>
 </p>
 
 ## Zappa - Serverless Python
@@ -97,7 +97,7 @@
 ## About
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/Miserlou/Talks/master/serverless-sf/big.quickstart.html"><img src="http://i.imgur.com/c23kDNT.png?1" alt="Zappa Slides"/></a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/Miserlou/Talks/master/serverless-sf/big.quickstart.html"><img src="https://i.imgur.com/c23kDNT.png?1" alt="Zappa Slides"/></a>
 </p>
 <p align="center">
   <i>In a hurry? Click to see <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/Miserlou/Talks/master/serverless-sf/big.quickstart.html">(now slightly out-dated) slides from Serverless SF</a>!</i>
@@ -132,7 +132,7 @@ And finally, Zappa is **super easy to use**. You can deploy your application wit
 __Awesome!__
 
 <p align="center">
-  <img src="http://i.imgur.com/f1PJxCQ.gif" alt="Zappa Demo Gif"/>
+  <img src="https://i.imgur.com/f1PJxCQ.gif" alt="Zappa Demo Gif"/>
 </p>
 
 ## Installation and Configuration
@@ -143,9 +143,9 @@ _Before you begin, make sure you are running Python 3.7/3.8/3.9 and you have a v
 
     $ pip install zappa
 
-Please note that Zappa _**must**_ be installed into your project's [virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/). The virtual environment name should not be the same as the Zappa project name, as this may cause errors.
+Please note that Zappa _**must**_ be installed into your project's [virtual environment](https://docs.python-guide.org/dev/virtualenvs/). The virtual environment name should not be the same as the Zappa project name, as this may cause errors.
 
-_(If you use [pyenv](https://github.com/yyuu/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](http://conda.pydata.org/docs/) users should comment [here](https://github.com/Miserlou/Zappa/pull/108).)_
+_(If you use [pyenv](https://github.com/yyuu/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](https://docs.conda.io/) users should comment [here](https://github.com/Miserlou/Zappa/pull/108).)_
 
 Next, you'll need to define your local and server-side settings.
 
@@ -257,7 +257,7 @@ You can also `rollback` the deployed code to a previous version by supplying the
 
 Zappa can be used to easily schedule functions to occur on regular intervals. This provides a much nicer, maintenance-free alternative to Celery!
 These functions will be packaged and deployed along with your `app_function` and called from the handler automatically.
-Just list your functions and the expression to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your *zappa_settings.json* file:
+Just list your functions and the expression to schedule them using [cron or rate syntax](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudwatchevents-expressions.html) in your *zappa_settings.json* file:
 
 ```javascript
 {
@@ -290,7 +290,7 @@ See the [example](example/) for more details.
 
 ##### Multiple Expressions
 
-Sometimes a function needs multiple expressions to describe its schedule. To set multiple expressions, simply list your functions, and the list of expressions to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your *zappa_settings.json* file:
+Sometimes a function needs multiple expressions to describe its schedule. To set multiple expressions, simply list your functions, and the list of expressions to schedule them using [cron or rate syntax](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudwatchevents-expressions.html) in your *zappa_settings.json* file:
 
 ```javascript
 {
@@ -384,7 +384,7 @@ In addition, Zappa will also automatically set the correct execution permissions
 To further reduce the final package file size, you can:
 
 * Set `slim_handler` to `True` to upload a small handler to Lambda and the rest of the package to S3. For more details, see the [merged pull request](https://github.com/Miserlou/Zappa/pull/548) and the [discussion in the original issue](https://github.com/Miserlou/Zappa/issues/510). See also: [Large Projects](#large-projects).
-* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
+* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html).
 
 ### Template
 
@@ -430,7 +430,7 @@ You can filter out the contents of the logs with `--filter`, like so:
 
     $ zappa tail production --http --filter "POST" # Only show POST HTTP requests
 
-Note that this uses the [CloudWatch Logs filter syntax](http://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
+Note that this uses the [CloudWatch Logs filter syntax](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
 
 To tail logs without following (to exit immediately after displaying the end of the requested logs), pass `--disable-keep-open`:
 
@@ -466,7 +466,7 @@ For commands which have their own arguments, you can also pass the command in as
 
     $ zappa manage production "shell --version"
 
-Commands which require direct user input, such as `createsuperuser`, should be [replaced by commands](http://stackoverflow.com/a/26091252) which use `zappa invoke <env> --raw`.
+Commands which require direct user input, such as `createsuperuser`, should be [replaced by commands](https://stackoverflow.com/a/26091252) which use `zappa invoke <env> --raw`.
 
 For more Django integration, take a look at the [zappa-django-utils](https://github.com/Miserlou/zappa-django-utils) project.
 
@@ -519,7 +519,7 @@ However, it's now far easier to use Route 53-based DNS authentication, which wil
 
 Similarly, you can have your functions execute in response to events that happen in the AWS ecosystem, such as S3 uploads, DynamoDB entries, Kinesis streams, SNS messages, and SQS queues.
 
-In your *zappa_settings.json* file, define your [event sources](http://docs.aws.amazon.com/lambda/latest/dg/invoking-lambda-function.html) and the function you wish to execute. For instance, this will execute `your_module.process_upload_function` in response to new objects in your `my-bucket` S3 bucket. Note that `process_upload_function` must accept `event` and `context` parameters.
+In your *zappa_settings.json* file, define your [event sources](https://docs.aws.amazon.com/lambda/latest/dg/lambda-services.html) and the function you wish to execute. For instance, this will execute `your_module.process_upload_function` in response to new objects in your `my-bucket` S3 bucket. Note that `process_upload_function` must accept `event` and `context` parameters.
 
 ```javascript
 {
@@ -530,7 +530,7 @@ In your *zappa_settings.json* file, define your [event sources](http://docs.aws.
             "event_source": {
                   "arn":  "arn:aws:s3:::my-bucket",
                   "events": [
-                    "s3:ObjectCreated:*" // Supported event types: http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#supported-notification-event-types
+                    "s3:ObjectCreated:*" // Supported event types: https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html#supported-notification-event-types
                   ],
                   "key_filters": [{ // optional
                     "type": "suffix",
@@ -589,7 +589,7 @@ Similarly, for a [Simple Notification Service](https://aws.amazon.com/sns/) even
         ]
 ```
 
-Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/latest/dg/message-filtering.html):
+Optionally you can add [SNS message filters](https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html):
 
 ```javascript
         "events": [
@@ -607,7 +607,7 @@ Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/late
         ]
 ```
 
-[DynamoDB](http://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html) and [Kinesis](http://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html) are slightly different as it is not event based but pulling from a stream:
+[DynamoDB](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html) and [Kinesis](https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html) are slightly different as it is not event based but pulling from a stream:
 
 ```javascript
        "events": [
@@ -673,7 +673,7 @@ def your_recurring_function(event, context):
 ```
 
 
-You can find more [example event sources here](http://docs.aws.amazon.com/lambda/latest/dg/eventsources.html).
+You can find more [example event sources here](https://docs.aws.amazon.com/lambda/latest/dg/lambda-services.html).
 
 ## Asynchronous Task Execution
 
@@ -818,7 +818,7 @@ In __subnet-b__:
 
 You can place your lambda in multiple subnets that are configured the same way as __subnet-b__ for high availability.
 
-Some helpful resources are [this tutorial](http://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Tutorials.WebServerDB.CreateVPC.html), [this other tutorial](https://gist.github.com/reggi/dc5f2620b7b4f515e68e46255ac042a7) and [this AWS doc page](http://docs.aws.amazon.com/lambda/latest/dg/vpc.html#vpc-internet).
+Some helpful resources are [this tutorial](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Tutorials.WebServerDB.CreateVPC.html), [this other tutorial](https://gist.github.com/reggi/dc5f2620b7b4f515e68e46255ac042a7) and [this AWS doc page](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html#vpc-internet).
 
 ### Responses
 
@@ -920,7 +920,7 @@ to change Zappa's behavior. Use these at your own risk!
         "cognito": { // for Cognito event triggers
             "user_pool": "user-pool-id", // User pool ID from AWS Cognito
             "triggers": [{
-                "source": "PreSignUp_SignUp", // triggerSource from http://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools-working-with-aws-lambda-triggers.html#cognito-user-pools-lambda-trigger-syntax-pre-signup
+                "source": "PreSignUp_SignUp", // triggerSource from https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools-working-with-aws-lambda-triggers.html#cognito-user-pools-lambda-trigger-syntax-pre-signup
                 "function": "my_app.pre_signup_function"
             }]
         },
@@ -1054,7 +1054,7 @@ However, generally Zappa is designed for running your application code, not for 
 
 Your web application framework will likely be able to handle this for you automatically. For Flask, there is [Flask-S3](https://github.com/e-dard/flask-s3), and for Django, there is [Django-Storages](https://django-storages.readthedocs.io/en/latest/).
 
-Similarly, you may want to design your application so that static binary uploads go [directly to S3](http://docs.aws.amazon.com/AWSJavaScriptSDK/guide/browser-examples.html#Uploading_a_local_file_using_the_File_API), which then triggers an event response defined in your `events` setting! That's thinking serverlessly!
+Similarly, you may want to design your application so that static binary uploads go [directly to S3](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sdk-code-samples.html#Uploading_a_local_file_using_the_File_API), which then triggers an event response defined in your `events` setting! That's thinking serverlessly!
 
 ### Enabling CORS
 
@@ -1250,7 +1250,7 @@ db_string = os.environ.get('DB_CONNECTION_STRING')
 
 ### API Gateway Context Variables
 
-If you want to map an API Gateway context variable (http://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-mapping-template-reference.html) to an HTTP header you can set up the mapping in `zappa_settings.json`:
+If you want to map an API Gateway context variable (https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-mapping-template-reference.html) to an HTTP header you can set up the mapping in `zappa_settings.json`:
 
 ```javascript
 {
@@ -1388,7 +1388,7 @@ def hello_world:
     return 'Hello'
 ```
 
-You may use the capture decorator to create subsegments around functions, or `xray_recorder.begin_subsegment('subsegment_name')` and `xray_recorder.end_subsegment()` within a function. The official [X-Ray documentation for Python](http://docs.aws.amazon.com/xray-sdk-for-python/latest/reference/) has more information on how to use this with your code.
+You may use the capture decorator to create subsegments around functions, or `xray_recorder.begin_subsegment('subsegment_name')` and `xray_recorder.end_subsegment()` within a function. The official [X-Ray documentation for Python](https://docs.aws.amazon.com/xray-sdk-for-python/latest/reference/) has more information on how to use this with your code.
 
 Note that you may create subsegments in your code but an exception will be raised if you try to create a segment, as it is [created by the lambda worker](https://github.com/aws/aws-xray-sdk-python/issues/2). This also means that if you use Flask you must not use the [XRayMiddleware the documentation suggests](https://docs.aws.amazon.com/xray/latest/devguide/xray-sdk-python-middleware.html).
 
@@ -1396,7 +1396,7 @@ Note that you may create subsegments in your code but an exception will be raise
 
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://github.com/Miserlou/Talks/blob/master/serverless-london/global.html#0"><img src="http://i.imgur.com/oR61Qau.png" alt="Global Zappa Slides"/></a>
+  <a href="https://htmlpreview.github.io/?https://github.com/Miserlou/Talks/blob/master/serverless-london/global.html#0"><img src="https://i.imgur.com/oR61Qau.png" alt="Global Zappa Slides"/></a>
 </p>
 <p align="center">
   <i>Click to see <a href="https://htmlpreview.github.io/?https://github.com/Miserlou/Talks/blob/master/serverless-london/global.html#0">slides from ServerlessConf London</a>!</i>
@@ -1408,13 +1408,13 @@ To learn more about these capabilities, see [these slides](https://htmlpreview.g
 
 ### Raising AWS Service Limits
 
-Out of the box, AWS sets a limit of [1000 concurrent executions](http://docs.aws.amazon.com/lambda/latest/dg/limits.html) for your functions. If you start to breach these limits, you may start to see errors like `ClientError: An error occurred (LimitExceededException) when calling the PutTargets.."` or something similar.
+Out of the box, AWS sets a limit of [1000 concurrent executions](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) for your functions. If you start to breach these limits, you may start to see errors like `ClientError: An error occurred (LimitExceededException) when calling the PutTargets.."` or something similar.
 
 To avoid this, you can file a [service ticket](https://console.aws.amazon.com/support/home#/) with Amazon to raise your limits up to the many tens of thousands of concurrent executions which you may need. This is a fairly common practice with Amazon, designed to prevent you from accidentally creating extremely expensive bug reports. So, before raising your service limits, make sure that you don't have any rogue scripts which could accidentally create tens of thousands of parallel executions that you don't want to pay for.
 
 ### Dead Letter Queues
 
-If you want to utilise [AWS Lambda's Dead Letter Queue feature](http://docs.aws.amazon.com/lambda/latest/dg/dlq.html) simply add the key `dead_letter_arn`, with the value being the complete ARN to the corresponding SNS topic or SQS queue in your `zappa_settings.json`.
+If you want to utilise [AWS Lambda's Dead Letter Queue feature](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html) simply add the key `dead_letter_arn`, with the value being the complete ARN to the corresponding SNS topic or SQS queue in your `zappa_settings.json`.
 
 You must have already created the corresponding SNS/SQS topic/queue, and the Lambda function execution role must have been provisioned with read/publish/sendMessage access to the DLQ resource.
 
@@ -1513,9 +1513,9 @@ Lambda may provide additional resources than provisioned during cold start initi
 * [Using Django-Zappa, Part 1](https://serverlesscode.com/post/zappa-wsgi-for-python/).
 * [Using Django-Zappa, Part 2: VPCs](https://serverlesscode.com/post/zappa-wsgi-for-python-pt-2/).
 * [Building Serverless Microservices with Zappa and Flask](https://gun.io/blog/serverless-microservices-with-zappa-and-flask/)
-* [Zappa で Hello World するまで (Japanese)](http://qiita.com/satoshi_iwashita/items/505492193317819772c7)
+* [Zappa で Hello World するまで (Japanese)](https://qiita.com/satoshi_iwashita/items/505492193317819772c7)
 * [How to Deploy Zappa with CloudFront, RDS and VPC](https://jinwright.net/how-deploy-serverless-wsgi-app-using-zappa/)
-* [Secure 'Serverless' File Uploads with AWS Lambda, S3, and Zappa](http://blog.stratospark.com/secure-serverless-file-uploads-with-aws-lambda-s3-zappa.html)
+* [Secure 'Serverless' File Uploads with AWS Lambda, S3, and Zappa](https://blog.stratospark.com/secure-serverless-file-uploads-with-aws-lambda-s3-zappa.html)
 * [Deploy a Serverless WSGI App using Zappa, CloudFront, RDS, and VPC](https://docs.google.com/presentation/d/1aYeOMgQl4V_fFgT5VNoycdXtob1v6xVUWlyxoTEiTw0/edit#slide=id.p)
 * [AWS: Deploy Alexa Ask Skills with Flask-Ask and Zappa](https://developer.amazon.com/blogs/post/8e8ad73a-99e9-4c0f-a7b3-60f92287b0bf/New-Alexa-Tutorial-Deploy-Flask-Ask-Skills-to-AWS-Lambda-with-Zappa)
 * [Guide to using Django with Zappa](https://edgarroman.github.io/zappa-django-guide/)
@@ -1525,13 +1525,13 @@ Lambda may provide additional resources than provisioned during cold start initi
 * [Bringing Tokusatsu to AWS using Python, Flask, Zappa and Contentful](https://www.contentful.com/blog/2018/03/07/bringing-tokusatsu-to-aws-using-python-flask-zappa-and-contentful/)
 * [AWS Summit 2018 Seoul - Zappa와 함께하는 Serverless Microservice](https://www.slideshare.net/YunSeopSong/zappa-serverless-microservice-94410308/)
 * [Book - Building Serverless Python Web Services with Zappa](https://github.com/PacktPublishing/Building-Serverless-Python-Web-Services-with-Zappa)
-* [Vider sa flask dans une lambda](http://free_zed.gitlab.io/articles/2019/11/vider-sa-flask-dans-une-lambda/)[French]
+* [Vider sa flask dans une lambda](https://free_zed.gitlab.io/articles/2019/11/vider-sa-flask-dans-une-lambda/)[French]
 * _Your guide here?_
 
 ## Zappa in the Press
 
-* _[Zappa Serves Python, Minus the Servers](http://www.infoworld.com/article/3031665/application-development/zappa-serves-python-web-apps-minus-the-servers.html)_
-* _[Zappa lyfter serverlösa applikationer med Python](http://computersweden.idg.se/2.2683/1.649895/zappa-lyfter-python)_
+* _[Zappa Serves Python, Minus the Servers](https://www.infoworld.com/article/3031665/zappa-serves-python-web-apps-minus-the-servers.html)_
+* _[Zappa lyfter serverlösa applikationer med Python](https://computersweden.idg.se/2.2683/1.649895/zappa-lyfter-python)_
 * _[Interview: Rich Jones on Zappa](https://serverlesscode.com/post/rich-jones-interview-django-zappa/)_
 * [Top 10 Python Libraries of 2016](https://tryolabs.com/blog/2016/12/20/top-10-python-libraries-of-2016/)
 
@@ -1554,7 +1554,7 @@ Are you using Zappa? Let us know and we'll list your site here!
 
 * [Mackenzie](http://github.com/Miserlou/Mackenzie) - AWS Lambda Infection Toolkit
 * [NoDB](https://github.com/Miserlou/NoDB) - A simple, server-less, Pythonic object store based on S3.
-* [zappa-cms](http://github.com/Miserlou/zappa-cms) - A tiny server-less CMS for busy hackers. Work in progress.
+* [zappa-cms](https://github.com/Miserlou/zappa-cms) - A tiny server-less CMS for busy hackers. Work in progress.
 * [zappa-django-utils](https://github.com/Miserlou/zappa-django-utils) - Utility commands to help Django deployments.
 * [flask-ask](https://github.com/johnwheeler/flask-ask) - A framework for building Amazon Alexa applications. Uses Zappa for deployments.
 * [zappa-file-widget](https://github.com/anush0247/zappa-file-widget) - A Django plugin for supporting binary file uploads in Django on Zappa.
@@ -1654,5 +1654,5 @@ Good news! We're currently available for remote and on-site consulting for small
 
 <br />
 <p align="center">
-  <a href="https://gun.io"><img src="http://i.imgur.com/M7wJipR.png" alt="Made by Gun.io"/></a>
+  <a href="https://gun.io"><img src="https://i.imgur.com/M7wJipR.png" alt="Made by Gun.io"/></a>
 </p>
