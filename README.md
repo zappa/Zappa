@@ -1514,7 +1514,7 @@ Lambda may provide additional resources than provisioned during cold start initi
 * [Using Django-Zappa, Part 2: VPCs](https://serverlesscode.com/post/zappa-wsgi-for-python-pt-2/).
 * [Building Serverless Microservices with Zappa and Flask](https://gun.io/news/2017/04/serverless-microservices-with-zappa-and-flask/)
 * [Zappa で Hello World するまで (Japanese)](https://qiita.com/satoshi_iwashita/items/505492193317819772c7)
-* [How to Deploy Zappa with CloudFront, RDS and VPC](https://jinwright.net/how-deploy-serverless-wsgi-app-using-zappa/)
+* [How to Deploy Zappa with CloudFront, RDS and VPC](https://prod-apigw.jinwright.net/how-deploy-serverless-wsgi-app-using-zappa/)
 * [Secure 'Serverless' File Uploads with AWS Lambda, S3, and Zappa](https://blog.stratospark.com/secure-serverless-file-uploads-with-aws-lambda-s3-zappa.html)
 * [Deploy a Serverless WSGI App using Zappa, CloudFront, RDS, and VPC](https://docs.google.com/presentation/d/1aYeOMgQl4V_fFgT5VNoycdXtob1v6xVUWlyxoTEiTw0/edit#slide=id.p)
 * [AWS: Deploy Alexa Ask Skills with Flask-Ask and Zappa](https://developer.amazon.com/blogs/post/8e8ad73a-99e9-4c0f-a7b3-60f92287b0bf/New-Alexa-Tutorial-Deploy-Flask-Ask-Skills-to-AWS-Lambda-with-Zappa)
@@ -1543,8 +1543,6 @@ Lambda may provide additional resources than provisioned during cold start initi
 * [Zappa BitTorrent Tracker](https://github.com/Miserlou/zappa-bittorrent-tracker) - An experimental server-less BitTorrent tracker. Work in progress.
 * [JankyGlance](https://github.com/Miserlou/JankyGlance) - A server-less Yahoo! Pipes replacement.
 * [LambdaMailer](https://github.com/tryolabs/lambda-mailer) - A server-less endpoint for processing a contact form.
-* [Voter Registration Microservice](https://topics.arlingtonva.us/2016/11/voter-registration-search-microservice/) - Official backup to to the Virginia Department of Elections portal.
-* [FreePoll Online](https://www.freepoll.online) - A simple and awesome say for groups to make decisions.
 * [PasteOfCode](https://paste.ofcode.org/) - A Zappa-powered paste bin.
 * And many more, including banks, governments, startups, enterprises and schools!
 
@@ -1552,7 +1550,6 @@ Are you using Zappa? Let us know and we'll list your site here!
 
 ## Related Projects
 
-* [Mackenzie](http://github.com/Miserlou/Mackenzie) - AWS Lambda Infection Toolkit
 * [NoDB](https://github.com/Miserlou/NoDB) - A simple, server-less, Pythonic object store based on S3.
 * [zappa-cms](https://github.com/Miserlou/zappa-cms) - A tiny server-less CMS for busy hackers. Work in progress.
 * [zappa-django-utils](https://github.com/Miserlou/zappa-django-utils) - Utility commands to help Django deployments.
@@ -1597,7 +1594,6 @@ If you are adding a non-trivial amount of new code, please include a functioning
 Please include the GitHub issue or pull request URL that has discussion related to your changes as a comment in the code ([example](https://github.com/zappa/Zappa/blob/fae2925431b820eaedf088a632022e4120a29f89/zappa/zappa.py#L241-L243)). This greatly helps for project maintainability, as it allows us to trace back use cases and explain decision making. Similarly, please make sure that you meet all of the requirements listed in the [pull request template](https://raw.githubusercontent.com/zappa/Zappa/master/.github/PULL_REQUEST_TEMPLATE.md).
 
 Please feel free to work on any open ticket, especially any ticket marked with the "help-wanted" label. If you get stuck or want to discuss an issue further, please join [our Slack channel](https://zappateam.slack.com/), where you'll find a community of smart and interesting people working dilligently on hard problems.
-[Zappa Slack Auto Invite](https://slackautoinviter.herokuapp.com)
 
 Zappa does not intend to conform to PEP8, isolate your commits so that changes to functionality with changes made by your linter.
 
