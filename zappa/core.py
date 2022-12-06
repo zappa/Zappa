@@ -2098,9 +2098,21 @@ class Zappa:
         """
         Generator that allows to iterate per every available apis.
         """
-        all_apis = self.apigateway_client.get_rest_apis(limit=500)
+        all_apis = []
 
-        for api in all_apis["items"]:
+        pagination_position = "init"
+
+        while pagination_position:
+            if pagination_position != "init":
+                response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
+            else:
+                response = self.apigateway_client.get_rest_apis(limit=500)
+
+            all_apis.extend(response.get("items", []))
+
+            pagination_position = response.get("position")
+
+        for api in all_apis:
             if api["name"] != project_name:
                 continue
             yield api
@@ -2422,11 +2434,23 @@ class Zappa:
         except Exception:  # pragma: no cover
             try:
                 # Try the old method (project was probably made on an older, non CF version)
-                response = self.apigateway_client.get_rest_apis(limit=500)
+                rest_apis_list = []
 
-                for item in response["items"]:
-                    if item["name"] == lambda_name:
-                        return item["id"]
+                pagination_position = "init"
+
+                while pagination_position:
+                    if pagination_position != "init":
+                        response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
+                    else:
+                        response = self.apigateway_client.get_rest_apis(limit=500)
+
+                    rest_apis_list.extend(response.get("items", []))
+
+                    pagination_position = response.get("position")
+
+                for rest_api in rest_apis_list:
+                    if rest_api["name"] == lambda_name:
+                        return rest_api["id"]
 
                 logger.exception("Could not get API ID.")
                 return None
