@@ -2098,8 +2098,6 @@ class Zappa:
         """
         Generator that allows to iterate per every available apis.
         """
-        all_apis = []
-
         pagination_position = "init"
 
         while pagination_position:
@@ -2108,14 +2106,9 @@ class Zappa:
             else:
                 response = self.apigateway_client.get_rest_apis(limit=500)
 
-            all_apis.extend(response.get("items", []))
+            yield from [api for api in response.get("items", []) if api["name"] == project_name]
 
             pagination_position = response.get("position")
-
-        for api in all_apis:
-            if api["name"] != project_name:
-                continue
-            yield api
 
     def undeploy_api_gateway(self, lambda_name, domain_name=None, base_path=None):
         """
@@ -2434,8 +2427,6 @@ class Zappa:
         except Exception:  # pragma: no cover
             try:
                 # Try the old method (project was probably made on an older, non CF version)
-                rest_apis_list = []
-
                 pagination_position = "init"
 
                 while pagination_position:
@@ -2444,13 +2435,11 @@ class Zappa:
                     else:
                         response = self.apigateway_client.get_rest_apis(limit=500)
 
-                    rest_apis_list.extend(response.get("items", []))
+                    for rest_api in response.get("items", []):
+                        if rest_api["name"] == lambda_name:
+                            return rest_api["id"]
 
                     pagination_position = response.get("position")
-
-                for rest_api in rest_apis_list:
-                    if rest_api["name"] == lambda_name:
-                        return rest_api["id"]
 
                 logger.exception("Could not get API ID.")
                 return None
