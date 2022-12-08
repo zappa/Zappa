@@ -2594,7 +2594,12 @@ class ZappaCLI:
             arn = event.get("event_source", {}).get("arn")
             function = event.get("function")
             if arn and function:
-                event_mapping[arn] = function
+                if "aws:kafka" in arn:
+                    topics = event.get("event_source", {}).get("topics")
+                    for topic in topics:
+                        event_mapping[f"{arn}:{topic.strip()}"] = function
+                else:
+                    event_mapping[arn] = function
         settings_s = settings_s + "AWS_EVENT_MAPPING={0!s}\n".format(event_mapping)
 
         # Map Lext bot events

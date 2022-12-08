@@ -672,6 +672,24 @@ def your_recurring_function(event, context):
 
 ```
 
+For configuring MSK triggered events:
+```javascript
+    "events": [
+           {
+               "function": "your_module.process_messages",
+               "event_source": {
+                    "arn":  "arn:aws:kafka:sa-east-1:123456789012:cluster/vpc-2priv-2pub/751d2973-a626-431c-9d4e-d7975eb44dd7-2",",
+                    "batch_size": 10, 
+                    "topics": [
+                      "test_msk"
+                    ],
+                    "group_id": "test_msk_group",
+                    "starting_position": "LATEST",
+                    "enabled": true
+               }
+           }
+       ]
+```
 
 You can find more [example event sources here](http://docs.aws.amazon.com/lambda/latest/dg/eventsources.html).
 

@@ -364,6 +364,16 @@ class LambdaHandler:
 
         return None
 
+    # AWS MSK
+    def get_function_for_kafka_trigger(self, event):
+        arn = event.get("eventSourceArn")
+        records = event.get("records", None)
+        if records:
+            return {
+                kafka_topic: self.settings.AWS_EVENT_MAPPING.get("{}:{}".format(arn, kafka_topic.split("-")[0].strip()))
+                for kafka_topic in records.keys()}
+        return None
+
     def get_function_from_bot_intent_trigger(self, event):
         """
         For the given event build ARN and return the configured function
@@ -469,6 +479,19 @@ class LambdaHandler:
                 app_function = self.import_module_and_get_function(whole_function)
                 result = self.run_function(app_function, event, context)
                 logger.debug(result)
+            else:
+                logger.error("Cannot find a function to process the triggered event.")
+            return result
+
+        # this is an AWS-event triggered from MSK
+        elif event.get("eventSource") == "aws:kafka":
+            result = None
+            topic_functions = self.get_function_for_kafka_trigger(event)
+            if topic_functions:
+                for topic, whole_function in topic_functions.items():
+                    app_function = self.import_module_and_get_function(whole_function)
+                    result = self.run_function(app_function, event, context)
+                    logger.debug(result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
