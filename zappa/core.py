@@ -2098,15 +2098,18 @@ class Zappa:
         """
         Generator that allows to iterate per every available apis.
         """
-        pagination_position = "init"
+        initial_request_done = False
 
-        while pagination_position:
-            if pagination_position != "init":
+        pagination_position = None
+
+        while pagination_position or not initial_request_done:
+            if pagination_position:
                 response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
             else:
                 response = self.apigateway_client.get_rest_apis(limit=500)
+                initial_request_done = True
 
-            yield from [api for api in response.get("items", []) if api["name"] == project_name]
+            yield from (api for api in response.get("items", []) if api["name"] == project_name)
 
             pagination_position = response.get("position")
 
@@ -2427,13 +2430,16 @@ class Zappa:
         except Exception:  # pragma: no cover
             try:
                 # Try the old method (project was probably made on an older, non CF version)
-                pagination_position = "init"
+                pagination_position = None
 
-                while pagination_position:
-                    if pagination_position != "init":
+                initial_request_done = False
+
+                while pagination_position or not initial_request_done:
+                    if pagination_position:
                         response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
                     else:
                         response = self.apigateway_client.get_rest_apis(limit=500)
+                        initial_request_done = True
 
                     for rest_api in response.get("items", []):
                         if rest_api["name"] == lambda_name:
