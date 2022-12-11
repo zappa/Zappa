@@ -265,7 +265,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
-
+    architecture = None
     ##
     # Credentials
     ##
@@ -285,6 +285,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
+        architecture=None
     ):
         """
         Instantiate this new Zappa instance, loading any custom credentials if necessary.
@@ -315,13 +316,17 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
+        if not self.architecture:
+            self.architecture = "x86_64"
+
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
         self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
+            f'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{self.architecture}[.])?manylinux({"|".join(manylinux_suffixes)})_{self.architecture}[.]whl$'
         )
         self.manylinux_wheel_abi3_file_match = re.compile(
-            rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
+            f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_{self.architecture}.whl$'
+
         )
 
         self.endpoint_urls = endpoint_urls
@@ -1120,6 +1125,7 @@ class Zappa:
         layers=None,
         concurrency=None,
         docker_image_uri=None,
+        architecture=None
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1137,6 +1143,8 @@ class Zappa:
             aws_kms_key_arn = ""
         if not layers:
             layers = []
+        if not architecture:
+            self.architecture = "x86_64"
 
         kwargs = dict(
             FunctionName=function_name,
@@ -1151,6 +1159,7 @@ class Zappa:
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
             Layers=layers,
+            Architectures=architecture,
         )
         if not docker_image_uri:
             kwargs["Runtime"] = runtime
@@ -1209,6 +1218,7 @@ class Zappa:
         num_revisions=None,
         concurrency=None,
         docker_image_uri=None,
+        architecture=None
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1299,6 +1309,7 @@ class Zappa:
         aws_kms_key_arn=None,
         layers=None,
         wait=True,
+        architecture=None
     ):
         """
         Given an existing function ARN, update the configuration variables.
