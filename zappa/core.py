@@ -2922,11 +2922,13 @@ class Zappa:
 
         function pattern: '^[._A-Za-z0-9]{,63}$'
         """
-        function_regex = re.compile("^[._A-Za-z0-9]{,63}$")
+        max_event_rule_name_length = 64
+        max_name_length = max_event_rule_name_length - 1  # Because it must contain the delimiter "-".
+        function_regex = re.compile(f"^[._A-Za-z0-9]{{0,{max_name_length}}}$")
         if not re.fullmatch(function_regex, function):
             # Validation Rule: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Rule.html
             # '-' cannot be used because it is a delimiter
-            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{,63}$'.")
+            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{0,63}$'.")
 
         name = event.get("name", function)
         if name != function:
@@ -2941,9 +2943,9 @@ class Zappa:
 
         # https://github.com/zappa/Zappa/issues/1036
         # Error because the name cannot be obtained if the function name is longer than 64 characters
-        if len(name) >= 64:
+        if len(name) > max_name_length:
             raise EnvironmentError(
-                "Length Constraints:"
+                "Too long schedule function name. Please shortening the schedule function name:"
                 "Maximum length of 63 ({{expression index}}-{{event['name']}}?-{{event['function']}}):"
                 "{}".format(name)
             )
@@ -2951,7 +2953,7 @@ class Zappa:
         event_name = self.get_event_name(lambda_name, name)
         # if it's possible that we truncated name, generate a unique, shortened name
         # https://github.com/Miserlou/Zappa/issues/970
-        if len(event_name) >= 64:
+        if len(event_name) >= max_event_rule_name_length:
             lambda_name = self.get_hashed_lambda_name(lambda_name)
             event_name = self.get_event_name(lambda_name, name)
 
