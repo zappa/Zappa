@@ -285,7 +285,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
-        architecture=None
+        architecture=None,
     ):
         """
         Instantiate this new Zappa instance, loading any custom credentials if necessary.
@@ -316,17 +316,18 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
+        self.architecture = architecture
         if not self.architecture:
             self.architecture = "x86_64"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
         self.manylinux_wheel_file_match = re.compile(
-            f'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{self.architecture}[.])?manylinux({"|".join(manylinux_suffixes)})_{self.architecture}[.]whl$'
+            rf"^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{self.architecture}"
+            rf'[.])?manylinux({"|".join(manylinux_suffixes)})_{self.architecture}[.]whl$'
         )
         self.manylinux_wheel_abi3_file_match = re.compile(
             f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_{self.architecture}.whl$'
-
         )
 
         self.endpoint_urls = endpoint_urls
@@ -1125,7 +1126,7 @@ class Zappa:
         layers=None,
         concurrency=None,
         docker_image_uri=None,
-        architecture=None
+        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1218,7 +1219,7 @@ class Zappa:
         num_revisions=None,
         concurrency=None,
         docker_image_uri=None,
-        architecture=None
+        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1309,7 +1310,7 @@ class Zappa:
         aws_kms_key_arn=None,
         layers=None,
         wait=True,
-        architecture=None
+        architecture=None,
     ):
         """
         Given an existing function ARN, update the configuration variables.
