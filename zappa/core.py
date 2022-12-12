@@ -1160,7 +1160,9 @@ class Zappa:
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
             Layers=layers,
-            Architectures=[architecture, ],
+            Architectures=[
+                architecture,
+            ],
         )
         if not docker_image_uri:
             kwargs["Runtime"] = runtime
