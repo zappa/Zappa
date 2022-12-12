@@ -2105,6 +2105,14 @@ class TestZappa(unittest.TestCase):
             f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
 
+    def test_get_scheduled_event_name__using_invalid_character(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo$"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
     def test_get_scheduled_event_name__using_hyphen(self):
         zappa = Zappa()
         event = {}
