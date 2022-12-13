@@ -2920,7 +2920,7 @@ class Zappa:
         Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
         This allows support for rule names that may be longer than the 64 char limit.
 
-        function pattern: '^[._A-Za-z0-9]{,63}$'
+        function pattern: '^[._A-Za-z0-9]{0,63}$'
         """
         max_event_rule_name_length = 64
         max_name_length = max_event_rule_name_length - 1  # Because it must contain the delimiter "-".
