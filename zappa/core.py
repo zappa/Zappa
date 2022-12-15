@@ -2944,11 +2944,7 @@ class Zappa:
         # https://github.com/zappa/Zappa/issues/1036
         # Error because the name cannot be obtained if the function name is longer than 64 characters
         if len(name) > max_name_length:
-            raise EnvironmentError(
-                "Too long schedule function name. Please shortening the schedule function name:"
-                "Maximum length of 63 ({{expression index}}-{{event['name']}}?-{{event['function']}}):"
-                "{}".format(name)
-            )
+            raise EnvironmentError(f"Generated scheduled event name is too long, shorten the function name!: '{name}'")
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
         event_name = self.get_event_name(lambda_name, name)
         # if it's possible that we truncated name, generate a unique, shortened name
