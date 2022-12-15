@@ -285,7 +285,6 @@ class TestZappa(unittest.TestCase):
         """
         Ensure zappa response bodies are NOT base64 encoded when BINARY_SUPPORT is enabled and the mimetype is "application/json" or starts with "text/".
         """
-
         lh = LambdaHandler("tests.test_binary_support_settings")
 
         text_plain_event = {
@@ -320,7 +319,6 @@ class TestZappa(unittest.TestCase):
         """
         Ensure zappa response bodies are base64 encoded when BINARY_SUPPORT is enabled and Content-Encoding is absent.
         """
-
         lh = LambdaHandler("tests.test_binary_support_settings")
 
         text_plain_event = {
@@ -577,3 +575,35 @@ class TestZappa(unittest.TestCase):
         response = lh.handler(event, None)
 
         self.assertEqual(response, True)
+
+    def test_wsgi_script_name_on_v2_formatted_event(self):
+        """
+        Ensure that requests with payload format version 2.0 succeed
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "host": "1234567890.execute-api.us-east-1.amazonaws.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+            },
+            "isBase64Encoded": False,
+            "body": "",
+            "cookies": ["Cookie_1=Value1; Expires=21 Oct 2021 07:48 GMT", "Cookie_2=Value2; Max-Age=78000"],
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(
+            response["body"],
+            "https://1234567890.execute-api.us-east-1.amazonaws.com/dev/return/request/url",
+        )
