@@ -2309,9 +2309,6 @@ class ZappaCLI:
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
 
-        # Architectures
-        self.architecture = [self.stage_config.get("architecture", "x86_64")]
-
         desired_role_name = self.lambda_name + "-ZappaLambdaExecutionRole"
         self.zappa = Zappa(
             boto_session=session,

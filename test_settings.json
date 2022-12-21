@@ -20,6 +20,7 @@
            "CognitoIdentityId": "identity.cognitoIdentityId",
            "APIStage": "stage"
        },
+       "architecture": "arm64",
        "events": [
            {
                "function": "tests.test_app.schedule_me",

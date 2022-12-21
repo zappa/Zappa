@@ -316,9 +316,9 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
-        if architecture not in {"x86_64", "arm64"}:
+        if not set(architecture).issubset({"x86_64", "arm64"}):
             raise ValueError("Invalid architecture. Please, use x86_64 or arm64.")
-        self.architecture = architecture if architecture else "x86_64"
+        self.architecture = architecture if architecture else ["x86_64"]
         
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
