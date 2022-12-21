@@ -1491,10 +1491,10 @@ class Zappa:
 
     def update_function_url_policy(self, function_name, function_url_config):
         statements = self.list_function_url_policy(function_name)
-        
+
         if function_url_config["authorizer"] == "NONE":
             if not statements:
-                permission_response = self.lambda_client.add_permission(
+                self.lambda_client.add_permission(
                     FunctionName=function_name,
                     StatementId="FunctionURLAllowPublicAccess",
                     Action="lambda:InvokeFunctionUrl",
