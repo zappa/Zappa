@@ -819,7 +819,6 @@ class ZappaCLI:
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
-                architecture=self.architecture,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -1024,7 +1023,6 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
-            architecture=self.architecture,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1061,7 +1059,6 @@ class ZappaCLI:
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
             wait=False,
-            architecture=self.architecture,
         )
 
         # Finally, delete the local copy our zip package
