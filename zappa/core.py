@@ -317,22 +317,24 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
+        if not architecture:
+            architecture = ['x86_64']
         if not set(architecture).issubset({"x86_64", "arm64"}):
             raise ValueError("Invalid architecture. Please, use x86_64 or arm64.")
         if sys.version_info.major == 3 and sys.version_info.minor < 8 and 'arm64' in architecture:
             raise ValueError("arm64 support requires Python 3.8 or newer.")
         
-        self.architecture = architecture if architecture else ["x86_64"]
+        self.architecture = architecture
         
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
-        arch_suffixes = ("x86_64", "arm64", "aarch64")
+        self.arch_suffixes = ("x86_64", "arm64", "aarch64")
         self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{"|".join(arch_suffixes)}'
-            rf'[.])?manylinux({"|".join(manylinux_suffixes)})_{"|".join(arch_suffixes)}[.]whl$'
+            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_({"|".join(self.arch_suffixes)})'
+            rf'[.])?manylinux({"|".join(manylinux_suffixes)})_({"|".join(self.arch_suffixes)})[.]whl$'
         )
         self.manylinux_wheel_abi3_file_match = re.compile(
-            f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_{"|".join(arch_suffixes)}.whl$'
+            f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_({"|".join(self.arch_suffixes)}).whl$'
         )
 
         self.endpoint_urls = endpoint_urls
@@ -928,7 +930,7 @@ class Zappa:
         else:
             # Check if we already have a cached copy
             wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, re.UNICODE)
-            wheel_file = f"{wheel_name}-{package_version}-*_x86_64.whl"
+            wheel_file = f'{wheel_name}-{package_version}-*_{self.architecture[0]}.whl'
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
@@ -1131,7 +1133,6 @@ class Zappa:
         layers=None,
         concurrency=None,
         docker_image_uri=None,
-        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1149,8 +1150,6 @@ class Zappa:
             aws_kms_key_arn = ""
         if not layers:
             layers = []
-        if not architecture:
-            architecture = self.architecture
 
         kwargs = dict(
             FunctionName=function_name,
@@ -1165,9 +1164,7 @@ class Zappa:
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
             Layers=layers,
-            Architectures=[
-                architecture,
-            ],
+            Architectures=self.architecture,
         )
         if not docker_image_uri:
             kwargs["Runtime"] = runtime
@@ -1226,7 +1223,6 @@ class Zappa:
         num_revisions=None,
         concurrency=None,
         docker_image_uri=None,
-        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1317,7 +1313,6 @@ class Zappa:
         aws_kms_key_arn=None,
         layers=None,
         wait=True,
-        architecture=None,
     ):
         """
         Given an existing function ARN, update the configuration variables.

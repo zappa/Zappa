@@ -12,7 +12,7 @@ def running_in_docker() -> bool:
     return running_in_docker_flag
 
 
-SUPPORTED_VERSIONS = [(3, 7), (3, 8), (3, 9), (3, 10)]
+SUPPORTED_VERSIONS = [(3, 7), (3, 8), (3, 9)]
 MINIMUM_SUPPORTED_MINOR_VERSION = 7
 
 if not running_in_docker() and sys.version_info[:2] not in SUPPORTED_VERSIONS:
