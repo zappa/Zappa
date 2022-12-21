@@ -1,5 +1,10 @@
 # Zappa Changelog
 
+## 0.56.1
+
+* Fix FileNotFoundError in running_in_docker (#1201)
+* Use ZAPPA_RUNNING_IN_DOCKER environment variable to use any Python version inside Docker container (#1140)
+
 ## 0.56.0
 * Not recognizing virtaulenv created with pyenv (#1132)
 * Remove six from zappa dependencies (#1164)
