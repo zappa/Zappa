@@ -1,4 +1,4 @@
-from zappa.asynchronous import task
++from zappa.asynchronous import task
 
 try:
     from urllib.parse import parse_qs

@@ -316,18 +316,19 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp39"
 
-        self.architecture = architecture
-        if not self.architecture:
-            self.architecture = "x86_64"
-
+        if architecture not in {"x86_64", "arm64"}:
+            raise ValueError("Invalid architecture. Please, use x86_64 or arm64.")
+        self.architecture = architecture if architecture else "x86_64"
+        
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        arch_suffixes = ("x86_64", "arm64", "aarch64")
         self.manylinux_wheel_file_match = re.compile(
-            rf"^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{self.architecture}"
-            rf'[.])?manylinux({"|".join(manylinux_suffixes)})_{self.architecture}[.]whl$'
+            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_{"|".join(arch_suffixes)}'
+            rf'[.])?manylinux({"|".join(manylinux_suffixes)})_{"|".join(arch_suffixes)}[.]whl$'
         )
         self.manylinux_wheel_abi3_file_match = re.compile(
-            f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_{self.architecture}.whl$'
+            f'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_{"|".join(arch_suffixes)}.whl$'
         )
 
         self.endpoint_urls = endpoint_urls
