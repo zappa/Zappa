@@ -1106,13 +1106,18 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(False, zappa_cli.stage_config["touch"])
 
     def test_load_extended_settings(self):
-
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendo"
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual("lmbda", zappa_cli.stage_config["s3_bucket"])
         self.assertEqual(True, zappa_cli.stage_config["touch"])
-        self.assertEqual('arm64', zappa_cli.stage_config['architecture'])
+        self.assertIn('x86_64', zappa_cli.architecture)
+        
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "arch_arm64"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertIn('arm64', zappa_cli.stage_config["architecture"])
+        self.assertIn('arm64', zappa_cli.architecture)
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendofail"
@@ -1132,9 +1137,9 @@ class TestZappa(unittest.TestCase):
         self.assertTrue(zappa_cli.stage_config["delete_local_zip"])  # The base
         
         zappa_cli = ZappaCLI()
-        zappa_cli.api_stage = "ttt888"
+        zappa_cli.api_stage = "archfail"
         with self.assertRaises(ValueError):
-            zappa_cli.load_settings("tests/test_bad_architecture_settings.json")
+            zappa_cli.load_settings("test_settings.json")
 
     def test_load_settings__lambda_concurrency_enabled(self):
         zappa_cli = ZappaCLI()
