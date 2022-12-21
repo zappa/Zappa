@@ -1112,6 +1112,7 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual("lmbda", zappa_cli.stage_config["s3_bucket"])
         self.assertEqual(True, zappa_cli.stage_config["touch"])
+        self.assertEqual('arm64', zappa_cli.stage_config['architecture'])
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendofail"
@@ -1129,6 +1130,11 @@ class TestZappa(unittest.TestCase):
         self.assertEqual("lmbda2", zappa_cli.stage_config["s3_bucket"])  # Second Extension
         self.assertTrue(zappa_cli.stage_config["touch"])  # First Extension
         self.assertTrue(zappa_cli.stage_config["delete_local_zip"])  # The base
+        
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        with self.assertRaises(ValueError):
+            zappa_cli.load_settings("tests/test_bad_architecture_settings.json")
 
     def test_load_settings__lambda_concurrency_enabled(self):
         zappa_cli = ZappaCLI()
