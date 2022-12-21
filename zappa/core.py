@@ -16,6 +16,7 @@ import re
 import shutil
 import string
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -318,6 +319,9 @@ class Zappa:
 
         if not set(architecture).issubset({"x86_64", "arm64"}):
             raise ValueError("Invalid architecture. Please, use x86_64 or arm64.")
+        if sys.version_info.major == 3 and sys.version_info.minor < 8 and 'arm64' in architecture:
+            raise ValueError("arm64 support requires Python 3.8 or newer.")
+        
         self.architecture = architecture if architecture else ["x86_64"]
         
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
