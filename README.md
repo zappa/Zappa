@@ -145,7 +145,7 @@ _Before you begin, make sure you are running Python 3.7/3.8/3.9 and you have a v
 
 Please note that Zappa _**must**_ be installed into your project's [virtual environment](https://docs.python-guide.org/dev/virtualenvs/). The virtual environment name should not be the same as the Zappa project name, as this may cause errors.
 
-_(If you use [pyenv](https://github.com/pyenv/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](https://docs.conda.io/) users should comment [here](https://github.com/Miserlou/Zappa/pull/108).)_
+_(If you use [pyenv](https://github.com/pyenv/pyenv) and love to manage virtualenvs with **pyenv-virtualenv**, you just have to call `pyenv local [your_venv_name]` and it's ready. [Conda](https://docs.conda.io/) users should comment [here](https://github.com/zappa/Zappa/issues/43).)_
 
 Next, you'll need to define your local and server-side settings.
 
