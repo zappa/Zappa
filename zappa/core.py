@@ -318,14 +318,14 @@ class Zappa:
             self.manylinux_suffix_start = "cp39"
 
         if not architecture:
-            architecture = ['x86_64']
+            architecture = ["x86_64"]
         if not set(architecture).issubset({"x86_64", "arm64"}):
             raise ValueError("Invalid architecture. Please, use x86_64 or arm64.")
-        if sys.version_info.major == 3 and sys.version_info.minor < 8 and 'arm64' in architecture:
+        if sys.version_info.major == 3 and sys.version_info.minor < 8 and "arm64" in architecture:
             raise ValueError("arm64 support requires Python 3.8 or newer.")
-        
+
         self.architecture = architecture
-        
+
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
         self.arch_suffixes = ("x86_64", "arm64", "aarch64")
@@ -930,7 +930,7 @@ class Zappa:
         else:
             # Check if we already have a cached copy
             wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, re.UNICODE)
-            wheel_file = f'{wheel_name}-{package_version}-*_{self.architecture[0]}.whl'
+            wheel_file = f"{wheel_name}-{package_version}-*_{self.architecture[0]}.whl"
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
