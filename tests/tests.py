@@ -1113,11 +1113,19 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(True, zappa_cli.stage_config["touch"])
         self.assertIn("x86_64", zappa_cli.architecture)
 
-        zappa_cli = ZappaCLI()
-        zappa_cli.api_stage = "arch_arm64"
-        zappa_cli.load_settings("test_settings.json")
-        self.assertIn("arm64", zappa_cli.stage_config["architecture"])
-        self.assertIn("arm64", zappa_cli.architecture)
+        if sys.version_info.major == 3 and sys.version_info.minor < 8:
+            with self.assertRaises(ValueError):
+                zappa_cli = ZappaCLI()
+                zappa_cli.api_stage = "arch_arm64"
+                zappa_cli.load_settings("test_settings.json")
+                self.assertIn("arm64", zappa_cli.stage_config["architecture"])
+                self.assertIn("arm64", zappa_cli.architecture)
+        else:
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "arch_arm64"
+            zappa_cli.load_settings("test_settings.json")
+            self.assertIn("arm64", zappa_cli.stage_config["architecture"])
+            self.assertIn("arm64", zappa_cli.architecture)
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendofail"
