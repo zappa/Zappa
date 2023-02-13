@@ -265,6 +265,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
+    extra_s3_args = {}
 
     ##
     # Credentials
@@ -285,6 +286,8 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
+        aws_s3_sse=None,
+        aws_s3_sse_kms_key_id=None,
     ):
         """
         Instantiate this new Zappa instance, loading any custom credentials if necessary.
@@ -326,6 +329,12 @@ class Zappa:
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
+
+        # If SSE is set add the SSE related args
+        if aws_s3_sse is not None:
+            self.extra_s3_args["ServerSideEncryption"] = aws_s3_sse
+            if aws_s3_sse_kms_key_id is not None:
+                self.extra_s3_args["SSEKMSKeyId"] = aws_s3_sse_kms_key_id
 
         # Some common invocations, such as DB migrations,
         # can take longer than the default.
@@ -1038,10 +1047,12 @@ class Zappa:
             # If we're unable to do that, try one more time using a session client,
             # which cannot use the progress bar.
             # Related: https://github.com/boto/boto3/issues/611
+            # Support extra s3 arguments so we can write to buckets encrypted
+            # with KMS keys owned by other accounts and shared with us
             try:
-                self.s3_client.upload_file(source_path, bucket_name, dest_path, Callback=progress.update)
+                self.s3_client.upload_file(source_path, bucket_name, dest_path, Callback=progress.update, ExtraArgs=self.extra_s3_args)
             except Exception:  # pragma: no cover
-                self.s3_client.upload_file(source_path, bucket_name, dest_path)
+                self.s3_client.upload_file(source_path, bucket_name, dest_path, ExtraArgs=self.extra_s3_args)
 
             progress.close()
         except (KeyboardInterrupt, SystemExit):  # pragma: no cover
@@ -1065,8 +1076,10 @@ class Zappa:
                 return False
 
         copy_src = {"Bucket": bucket_name, "Key": src_file_name}
+        # Support extra s3 arguments so we can write to buckets encrypted
+        # with KMS keys owned by other accounts and shared with us
         try:
-            self.s3_client.copy(CopySource=copy_src, Bucket=bucket_name, Key=dst_file_name)
+            self.s3_client.copy(CopySource=copy_src, Bucket=bucket_name, Key=dst_file_name, ExtraArgs=self.extra_s3_args)
             return True
         except botocore.exceptions.ClientError:  # pragma: no cover
             return False

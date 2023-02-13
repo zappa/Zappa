@@ -2317,6 +2317,8 @@ class ZappaCLI:
             tags=self.tags,
             endpoint_urls=self.stage_config.get("aws_endpoint_urls", {}),
             xray_tracing=self.xray_tracing,
+            aws_s3_sse=self.stage_config.get("aws_s3_sse", None),
+            aws_s3_sse_kms_key_id=self.stage_config.get("aws_s3_sse_kms_key_id", None)
         )
 
         for setting in CUSTOM_SETTINGS:

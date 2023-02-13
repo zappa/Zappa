@@ -15,6 +15,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
+- [Zappa - Serverless Python](#zappa---serverless-python)
 - [About](#about)
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
@@ -898,8 +899,10 @@ to change Zappa's behavior. Use these at your own risk!
         "async_response_table_write_capacity": 1,  // DynamoDB table write capacity; defaults to 1
         "aws_endpoint_urls": { "aws_service_name": "endpoint_url" }, // a dictionary of endpoint_urls that emulate the appropriate service.  Usually used for testing, for instance with `localstack`.
         "aws_environment_variables" : {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app via AWS Lambdas native environment variables. See also "environment_variables" and "remote_env" . Default {}.
-        "aws_kms_key_arn": "your_aws_kms_key_arn", // Your AWS KMS Key ARN
+        "aws_kms_key_arn": "your_aws_kms_key_arn", // The ARN of the Key Management Service (KMS) key that's used to encrypt your function's environment variables. If it's not provided, Lambda uses a default service key.
         "aws_region": "aws-region-name", // optional, uses region set in profile or environment variables if not set here,
+        "aws_s3_sse": "your_s3_encryption_type", // Specifies server-side encryption of the object in S3.  Valid values are AES256 and aws:kms.
+        "aws_s3_sse_kms_key_id": "your_aws_s3_kms_key_arn", // The customer-managed AWS Key Management Service (KMS) key ID that should be used to server-side encrypt the object in S3. You should only provide this parameter if you are using a customer managed customer master key (CMK) and not the AWS managed KMS CMK.
         "binary_support": true, // Enable automatic MIME-type based response encoding through API Gateway. Default true.
         "callbacks": { // Call custom functions during the local Zappa deployment/update process
             "settings": "my_app.settings_callback", // After loading the settings
