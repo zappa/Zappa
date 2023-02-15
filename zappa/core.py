@@ -265,7 +265,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
-    extra_s3_args = {}
+    extra_s3_args = None
 
     ##
     # Credentials
@@ -331,10 +331,7 @@ class Zappa:
         self.xray_tracing = xray_tracing
 
         # If SSE is set add the SSE related args
-        if aws_s3_sse is not None:
-            self.extra_s3_args["ServerSideEncryption"] = aws_s3_sse
-            if aws_s3_sse_kms_key_id is not None:
-                self.extra_s3_args["SSEKMSKeyId"] = aws_s3_sse_kms_key_id
+        self.set_s3_extra_args(aws_s3_sse, aws_s3_sse_kms_key_id)
 
         # Some common invocations, such as DB migrations,
         # can take longer than the default.
@@ -377,6 +374,12 @@ class Zappa:
         self.cf_template = troposphere.Template()
         self.cf_api_resources = []
         self.cf_parameters = {}
+
+    def set_s3_extra_args(self, aws_s3_sse, aws_s3_sse_kms_key_id):
+        if aws_s3_sse is not None:
+            self.extra_s3_args = {"ServerSideEncryption": aws_s3_sse}
+            if aws_s3_sse_kms_key_id is not None:
+                self.extra_s3_args["SSEKMSKeyId"] = aws_s3_sse_kms_key_id
 
     def configure_boto_session_method_kwargs(self, service, kw):
         """Allow for custom endpoint urls for non-AWS (testing and bootleg cloud) deployments"""
