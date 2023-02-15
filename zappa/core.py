@@ -265,7 +265,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
-    extra_s3_args = None
+    extra_s3_args = None # for https://github.com/zappa/Zappa/issues/1221
 
     ##
     # Credentials
@@ -286,7 +286,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
-        aws_s3_sse=None,
+        aws_s3_sse=None, # for https://github.com/zappa/Zappa/issues/1221
         aws_s3_sse_kms_key_id=None,
     ):
         """
@@ -330,7 +330,8 @@ class Zappa:
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
 
-        # If SSE is set add the SSE related args
+        # If SSE is set add the SSE related args for
+        # https://github.com/zappa/Zappa/issues/1221
         self.set_s3_extra_args(aws_s3_sse, aws_s3_sse_kms_key_id)
 
         # Some common invocations, such as DB migrations,
@@ -375,7 +376,9 @@ class Zappa:
         self.cf_api_resources = []
         self.cf_parameters = {}
 
+    # For https://github.com/zappa/Zappa/issues/1221
     def set_s3_extra_args(self, aws_s3_sse, aws_s3_sse_kms_key_id):
+        """Translate any SSE related settings to what boto3 expects"""
         if aws_s3_sse is not None:
             self.extra_s3_args = {"ServerSideEncryption": aws_s3_sse}
             if aws_s3_sse_kms_key_id is not None:
