@@ -1,8 +1,9 @@
 import unittest
-
 from unittest import mock
-from zappa.core import Zappa
+
 from zappa.cli import ZappaCLI
+from zappa.core import Zappa
+
 
 class BrycesTest(unittest.TestCase):
 
@@ -32,7 +33,7 @@ class BrycesTest(unittest.TestCase):
             aws_region="test",
             load_credentials=True,
             aws_s3_sse=None,
-            aws_s3_sse_kms_key_id="arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678"
+            aws_s3_sse_kms_key_id="arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678",
         )
         expected = None
         self.assertEqual(zappa.extra_s3_args, expected)
@@ -42,11 +43,7 @@ class BrycesTest(unittest.TestCase):
     def test_s3_sse(self, *_):
         boto_mock = mock.MagicMock()
         zappa = Zappa(
-            boto_session=boto_mock,
-            profile_name="test",
-            aws_region="test",
-            load_credentials=True,
-            aws_s3_sse="aws:kms"
+            boto_session=boto_mock, profile_name="test", aws_region="test", load_credentials=True, aws_s3_sse="aws:kms"
         )
         expected = {"ServerSideEncryption": "aws:kms"}
         self.assertEqual(zappa.extra_s3_args, expected)
@@ -61,12 +58,12 @@ class BrycesTest(unittest.TestCase):
             aws_region="test",
             load_credentials=True,
             aws_s3_sse="aws:kms",
-            aws_s3_sse_kms_key_id="arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678"
+            aws_s3_sse_kms_key_id="arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678",
         )
         expected = {
             "ServerSideEncryption": "aws:kms",
-            "SSEKMSKeyId": "arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678"
-            }
+            "SSEKMSKeyId": "arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678",
+        }
         self.assertEqual(zappa.extra_s3_args, expected)
 
     # Also test that the transition from settings file into ExtraArgs works
@@ -79,6 +76,6 @@ class BrycesTest(unittest.TestCase):
         zappa_cli.load_settings("tests/test_sse_settings.json", boto_mock)
         expected = {
             "ServerSideEncryption": "aws:kms",
-            "SSEKMSKeyId": "arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678"
-            }
+            "SSEKMSKeyId": "arn:aws:kms:us-east-1:012345678910:key/abcdef01-2345-6789-0abc-def012345678",
+        }
         self.assertEqual(zappa_cli.zappa.extra_s3_args, expected)

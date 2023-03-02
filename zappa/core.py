@@ -265,7 +265,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
-    extra_s3_args = None # for https://github.com/zappa/Zappa/issues/1221
+    extra_s3_args = None
 
     ##
     # Credentials
@@ -286,7 +286,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
-        aws_s3_sse=None, # for https://github.com/zappa/Zappa/issues/1221
+        aws_s3_sse=None,
         aws_s3_sse_kms_key_id=None,
     ):
         """
@@ -1056,7 +1056,9 @@ class Zappa:
             # Support extra s3 arguments so we can write to buckets encrypted
             # with KMS keys owned by other accounts and shared with us
             try:
-                self.s3_client.upload_file(source_path, bucket_name, dest_path, Callback=progress.update, ExtraArgs=self.extra_s3_args)
+                self.s3_client.upload_file(
+                    source_path, bucket_name, dest_path, Callback=progress.update, ExtraArgs=self.extra_s3_args
+                )
             except Exception:  # pragma: no cover
                 self.s3_client.upload_file(source_path, bucket_name, dest_path, ExtraArgs=self.extra_s3_args)
 
