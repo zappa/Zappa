@@ -452,6 +452,7 @@ You can also invoke interpretable Python 3.7/3.8/3.9 strings directly by using `
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
 For instance, it can come in handy if you want to create your first `superuser` on a RDS database running in a VPC (like Serverless Aurora):
+
     $ zappa invoke staging "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('username', 'email', 'password')" --raw
 
 ### Django Management Commands
