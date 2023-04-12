@@ -117,14 +117,19 @@ def create_wsgi_request(
 
     # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
     # Extract remote_user, authorizer if Authorizer is enabled
+    # Also extract the client source IP address, if availale
     remote_user = None
     if "requestContext" in event_info:
-        authorizer = event_info["requestContext"].get("authorizer", None)
+        request_context = event_info["requestContext"]
+        authorizer = request_context.get("authorizer", None)
         if authorizer:
             remote_user = authorizer.get("principalId")
             environ["API_GATEWAY_AUTHORIZER"] = authorizer
-        elif event_info["requestContext"].get("identity"):
-            remote_user = event_info["requestContext"]["identity"].get("userArn")
+        elif request_context.get("identity"):
+            remote_user = request_context["identity"].get("userArn")
+
+        if "identity" in request_context and "sourceIp" in request_context["identity"]:
+            environ["CLIENT_SOURCE_IP"] = request_context["identity"]["sourceIp"]
 
     # Input processing
     if method in ["POST", "PUT", "PATCH", "DELETE"]:
