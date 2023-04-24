@@ -8,8 +8,6 @@
 [![Coverage](https://img.shields.io/coveralls/zappa/Zappa.svg)](https://coveralls.io/github/zappa/Zappa)
 [![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa)
 [![Slack](https://img.shields.io/badge/chat-slack-ff69b4.svg)](https://zappateam.slack.com/)
-[![Gun.io](https://img.shields.io/badge/made%20by-gun.io-blue.svg)](https://gun.io/)
-[![Patreon](https://img.shields.io/badge/support-patreon-brightgreen.svg)](https://patreon.com/zappa)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -1588,7 +1586,7 @@ Zappa goes quite far beyond what Lambda and API Gateway were ever intended to ha
 
 ## Contributing
 
-This project is still young, so there is still plenty to be done. Contributions are more than welcome!
+Contributions are very welcome!
 
 Please file tickets for discussion before submitting patches. Pull requests should target `master` and should leave Zappa in a "shippable" state if merged.
 
@@ -1604,55 +1602,3 @@ Zappa does not intend to conform to PEP8, isolate your commits so that changes t
 #### Using a Local Repo
 
 To use the git HEAD, you *probably can't* use `pip install -e `. Instead, you should clone the repo to your machine and then `pip install /path/to/zappa/repo` or `ln -s /path/to/zappa/repo/zappa zappa` in your local project.
-
-## Patrons
-
-If you or your company uses **Zappa**, please consider giving what you can to support the ongoing development of the project!
-
-You can become a patron by **[visiting our Patreon page](https://patreon.com/zappa)**.
-
-Zappa is currently supported by these awesome individuals and companies:
-
-  * Nathan Lawrence
-  * LaunchLab
-  * Sean Paley
-  * Theo Chitayat
-  * George Sibble
-  * Joe Weiss
-  * Nik Bora
-  * Zerong Toby Wang
-  * Gareth E
-  * Matt Jackson
-  * Sean Coates
-  * Alexander Loschilov
-  * Korey Peters
-  * Joe Weiss
-  * Kimmo Parvianen-Jalanko
-  * Patrick Agin
-  * Roberto Martinez
-  * Charles Dimino
-  * Doug Beney
-  * Dan "The Man" Gayle
-  * Juancito
-  * Will Childs-Klein
-  * Efi Merdler Kravitz
-  * **Philippe Trounev**
-
-Thank you very, very much!
-
-## Support / Development / Training / Consulting
-
-Do you need help with..
-
-  * Porting existing Flask and Django applications to Zappa?
-  * Building new applications and services that scale infinitely?
-  * Reducing your operations and hosting costs?
-  * Adding new custom features into Zappa?
-  * Training your team to use AWS and other server-less paradigms?
-
-Good news! We're currently available for remote and on-site consulting for small, large and enterprise teams. Please contact <miserlou@gmail.com> with your needs and let's work together!
-
-<br />
-<p align="center">
-  <a href="https://gun.io"><img src="http://i.imgur.com/M7wJipR.png" alt="Made by Gun.io"/></a>
-</p>
