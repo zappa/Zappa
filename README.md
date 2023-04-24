@@ -222,7 +222,30 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+
+You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
+Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+
+Deploy Example:
+
+    $ zappa deploy --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Update Example:
+
+    $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+
+If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
+
+    $ export ZAPPA_RUNNING_IN_DOCKER=True
+
+You can also add this to your Dockerfile like this:
+
+```
+ENV ZAPPA_RUNNING_IN_DOCKER=True
+```
 
 ### Rollback
 

@@ -31,7 +31,7 @@ requirements:
 	pipenv lock
 	pipenv sync --dev
 
-build: clean requirements-install
+build: clean requirements
 	python setup.py sdist
 	python setup.py bdist_wheel 
 
