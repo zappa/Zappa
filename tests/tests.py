@@ -2,6 +2,7 @@
 import base64
 import collections
 import hashlib
+import io
 import json
 import os
 import random
@@ -13,6 +14,7 @@ import tempfile
 import unittest
 import uuid
 import zipfile
+from contextlib import redirect_stdout
 from functools import partial
 from io import BytesIO
 from subprocess import check_output
@@ -1787,8 +1789,6 @@ class TestZappa(unittest.TestCase):
         * Writes errors when certificate settings haven't been specified.
         * Calls Zappa correctly for creates vs. updates.
         """
-        old_stdout = sys.stderr
-
         try:
             zappa_cli = ZappaCLI()
             zappa_cli.domain = "test.example.com"
@@ -1888,22 +1888,26 @@ class TestZappa(unittest.TestCase):
                     "certificate_chain": cert_file.name,
                 }
             )
-            sys.stdout.truncate(0)
-            zappa_cli.certify()
-            zappa_cli.zappa.create_domain_name.assert_called_once()
-            zappa_cli.zappa.update_route53_records.assert_called_once()
-            zappa_cli.zappa.update_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
+
+            f = io.StringIO()
+            with redirect_stdout(f):
+                zappa_cli.certify()
+                zappa_cli.zappa.create_domain_name.assert_called_once()
+                zappa_cli.zappa.update_route53_records.assert_called_once()
+                zappa_cli.zappa.update_domain_name.assert_not_called()
+            log_output = f.getvalue()
             self.assertIn("Created a new domain name", log_output)
 
             zappa_cli.zappa.reset_mock()
             zappa_cli.zappa.domain_names["test.example.com"] = "*.example.com"
-            sys.stdout.truncate(0)
-            zappa_cli.certify()
-            zappa_cli.zappa.update_domain_name.assert_called_once()
-            zappa_cli.zappa.update_route53_records.assert_not_called()
-            zappa_cli.zappa.create_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
+
+            f = io.StringIO()
+            with redirect_stdout(f):
+                zappa_cli.certify()
+                zappa_cli.zappa.update_domain_name.assert_called_once()
+                zappa_cli.zappa.update_route53_records.assert_not_called()
+                zappa_cli.zappa.create_domain_name.assert_not_called()
+            log_output = f.getvalue()
             self.assertNotIn("Created a new domain name", log_output)
 
             # Test creating domain without Route53
@@ -1914,15 +1918,17 @@ class TestZappa(unittest.TestCase):
             )
             zappa_cli.zappa.reset_mock()
             zappa_cli.zappa.domain_names["test.example.com"] = ""
-            sys.stdout.truncate(0)
-            zappa_cli.certify()
-            zappa_cli.zappa.create_domain_name.assert_called_once()
-            zappa_cli.zappa.update_route53_records.assert_not_called()
-            zappa_cli.zappa.update_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
+
+            f = io.StringIO()
+            with redirect_stdout(f):
+                zappa_cli.certify()
+                zappa_cli.zappa.create_domain_name.assert_called_once()
+                zappa_cli.zappa.update_route53_records.assert_not_called()
+                zappa_cli.zappa.update_domain_name.assert_not_called()
+            log_output = f.getvalue()
             self.assertIn("Created a new domain name", log_output)
         finally:
-            sys.stdout = old_stdout
+            pass
 
     @mock.patch("troposphere.Template")
     @mock.patch("botocore.client")
