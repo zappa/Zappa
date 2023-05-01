@@ -585,7 +585,7 @@ class TestZappa(unittest.TestCase):
     #         pattern = Zappa.selection_pattern(code)
 
     #         for url in test_urls:
-    #             self.assertRegexpMatches(url, pattern)
+    #             self.assertRegex(url, pattern)
 
     # def test_b64_pattern(self):
     #     head = '\{"http_status": '
@@ -594,7 +594,7 @@ class TestZappa(unittest.TestCase):
     #         pattern = Zappa.selection_pattern(code)
 
     #         document = head + code + random_string(50)
-    #         self.assertRegexpMatches(document, pattern)
+    #         self.assertRegex(document, pattern)
 
     #         for bad_code in ['200', '301', '302']:
     #             document = base64.b64encode(head + bad_code + random_string(50))
@@ -1413,7 +1413,7 @@ class TestZappa(unittest.TestCase):
 
     #     error_msg = output.getvalue().strip()
     #     expected = r".*This argument must be positive \(got -1\)$"
-    #     self.assertRegexpMatches(error_msg, expected)
+    #     self.assertRegex(error_msg, expected)
     #     sys.stderr = old_stderr
 
     # @mock.patch('zappa.cli.ZappaCLI.dispatch_command')
