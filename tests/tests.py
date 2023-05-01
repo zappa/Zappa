@@ -195,7 +195,6 @@ class TestZappa(unittest.TestCase):
 
         # pyenv test
         with mock.patch.dict("os.environ", {}, clear=True):
-
             with mock.patch("subprocess.check_output", side_effect=[None, b"/expected", b"path"]):
                 current_venv = z.get_current_venv()
                 self.assertEqual(current_venv, expected)
@@ -608,7 +607,6 @@ class TestZappa(unittest.TestCase):
     ##
 
     def test_wsgi_event(self):
-
         ## This is a pre-proxy+ event
         # event = {
         #     "body": "",
@@ -1106,7 +1104,6 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(False, zappa_cli.stage_config["touch"])
 
     def test_load_extended_settings(self):
-
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendo"
         zappa_cli.load_settings("test_settings.json")
@@ -2133,7 +2130,6 @@ class TestZappa(unittest.TestCase):
         # self.assertEqual(m.group(1), 's3://lmbda-env/prod/env.json')
 
     def test_package_only(self):
-
         for delete_local_zip in [True, False]:
             zappa_cli = ZappaCLI()
             if delete_local_zip:
@@ -2150,7 +2146,6 @@ class TestZappa(unittest.TestCase):
             os.remove(zappa_cli.zip_path)
 
     def test_package_output(self):
-
         for delete_local_zip in [True]:
             zappa_cli = ZappaCLI()
             if delete_local_zip:
