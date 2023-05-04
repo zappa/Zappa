@@ -2,9 +2,7 @@ import base64
 import logging
 import sys
 from io import BytesIO
-from urllib.parse import urlencode
-
-from werkzeug import urls
+from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 
@@ -43,7 +41,7 @@ def create_wsgi_request(
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = urls.url_unquote(query_string)
+    query_string = unquote(query_string)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
@@ -81,7 +79,7 @@ def create_wsgi_request(
     # https://github.com/Miserlou/Zappa/issues/1188
     headers = titlecase_keys(headers)
 
-    path = urls.url_unquote(event_info["path"])
+    path = unquote(event_info["path"])
     if base_path:
         script_name = "/" + base_path
 
