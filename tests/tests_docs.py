@@ -8,7 +8,6 @@ DIR = path.realpath(path.dirname(__file__))
 
 class TestDocs(unittest.TestCase):
     def test_readmetoc(self):
-
         # this test serves as a reminder to update the README toc.
         # More information here: https://github.com/Miserlou/Zappa/issues/1228
 
@@ -35,22 +34,18 @@ class TestDocs(unittest.TestCase):
             state = "prologue"
 
             for line in contents:
-
                 if state == "prologue":
-
                     if line == start_marker:
                         state = "toc"
                     else:
                         prologue = prologue + line
 
                 elif state == "toc":
-
                     # we don't need to capture the old TOC
                     if line == end_marker:
                         state = "epilogue"
 
                 elif state == "epilogue":
-
                     epilogue = epilogue + line
 
                     # we only capture TOC contents *after* the TOC markers

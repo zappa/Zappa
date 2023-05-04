@@ -24,7 +24,6 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         self.headers[:] = headers
 
     def test_all_casings(self):
-
         # 2^9
         input_string = "Set-Cookie"
         x = 0
@@ -141,7 +140,6 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         self.assertEqual(user, "no_user")
 
     def test_wsgi_map_context_headers_handling(self):
-
         # Validate a single context value mapping is translated into a HTTP header
         event = {
             "httpMethod": "GET",

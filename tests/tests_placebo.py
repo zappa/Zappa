@@ -508,7 +508,6 @@ class TestZappa(unittest.TestCase):
 
     @placebo_session
     def test_add_event_source(self, session):
-
         event_source = {"arn": "blah:blah:blah:blah", "events": ["s3:ObjectCreated:*"]}
         # Sanity. This should fail.
         try:
