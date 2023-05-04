@@ -443,7 +443,7 @@ class TestZappa(unittest.TestCase):
 
         # Ensure Zappa does return 401 if no function was defined.
         lh.settings.AUTHORIZER_FUNCTION = None
-        with self.assertRaisesRegexp(Exception, "Unauthorized"):
+        with self.assertRaisesRegex(Exception, "Unauthorized"):
             lh.handler(event, None)
 
         # Unhandled event
