@@ -779,9 +779,7 @@ class Zappa:
             archivef = tarfile.open(archive_path, "w|gz")
 
         for root, dirs, files in os.walk(temp_project_path):
-
             for filename in files:
-
                 # Skip .pyc files for Django migrations
                 # https://github.com/Miserlou/Zappa/issues/436
                 # https://github.com/Miserlou/Zappa/issues/464
@@ -795,7 +793,6 @@ class Zappa:
                     abs_filname = os.path.join(root, filename)
                     abs_pyc_filename = abs_filname + "c"
                     if os.path.isfile(abs_pyc_filename):
-
                         # but only if the pyc is older than the py,
                         # otherwise we'll deploy outdated code!
                         py_time = os.stat(abs_filname).st_mtime
@@ -2112,7 +2109,6 @@ class Zappa:
         print("Deleting API Gateway..")
 
         if domain_name:
-
             # XXX - Remove Route53 smartly here?
             # XXX - This doesn't raise, but doesn't work either.
 
@@ -2252,7 +2248,7 @@ class Zappa:
 
         auth_type = "NONE"
         if iam_authorization and authorizer:
-            logger.warn(
+            logger.warning(
                 "Both IAM Authorization and Authorizer are specified, this is not possible. "
                 "Setting Auth method to IAM Authorization"
             )
@@ -3286,7 +3282,6 @@ class Zappa:
         """
         # Automatically load credentials from config or environment
         if not boto_session:
-
             # If provided, use the supplied profile name.
             if profile_name:
                 self.boto_session = boto3.Session(profile_name=profile_name, region_name=self.aws_region)
