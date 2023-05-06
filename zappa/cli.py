@@ -578,7 +578,6 @@ class ZappaCLI:
         elif command == "rollback":  # pragma: no cover
             self.rollback(self.vargs["num_rollback"])
         elif command == "invoke":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the function to invoke.")
                 return
@@ -589,7 +588,6 @@ class ZappaCLI:
                 no_color=self.vargs["no_color"],
             )
         elif command == "manage":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the management command to invoke.")
                 return
@@ -853,7 +851,6 @@ class ZappaCLI:
             self.zappa.deploy_lambda_alb(**kwargs)
 
         if self.use_apigateway:
-
             # Create and configure the API Gateway
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
@@ -1067,7 +1064,6 @@ class ZappaCLI:
                 self.remove_local_zip()
 
         if self.use_apigateway:
-
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
                 lambda_name=self.lambda_name,
@@ -1434,7 +1430,6 @@ class ZappaCLI:
         final_string = string
 
         try:
-
             # Line headers
             try:
                 for token in ["START", "END", "REPORT", "[DEBUG]"]:
@@ -1633,7 +1628,7 @@ class ZappaCLI:
         """
 
         non_strings = []
-        for (k, v) in environment.items():
+        for k, v in environment.items():
             if not isinstance(v, str):
                 non_strings.append(k)
         if non_strings:
@@ -2145,7 +2140,6 @@ class ZappaCLI:
                 module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
 
             except (ImportError, AttributeError):
-
                 try:  # Callback func might be in virtualenv
                     module_ = importlib.import_module(mod_path)
                 except ImportError:  # pragma: no cover
@@ -2470,7 +2464,6 @@ class ZappaCLI:
             handler_zip = self.zip_path
 
         with zipfile.ZipFile(handler_zip, "a") as lambda_zip:
-
             settings_s = self.get_zappa_settings_string()
 
             # Copy our Django app into root of our package.
@@ -2756,7 +2749,6 @@ class ZappaCLI:
 
         final_string = string
         try:
-
             # First, do stuff in square brackets
             inside_squares = re.findall(r"\[([^]]*)\]", string)
             for token in inside_squares:
@@ -2844,7 +2836,6 @@ class ZappaCLI:
             module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
 
         except (ImportError, AttributeError):
-
             try:  # Prebuild func might be in virtualenv
                 module_ = importlib.import_module(pb_mod_path)
             except ImportError:  # pragma: no cover

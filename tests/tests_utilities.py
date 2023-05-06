@@ -360,7 +360,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         rt_us = 15
         environ, expected = self._build_expected_format_string(status_code, {}, content_length, rt_us=15)
         actual = formatter(status_code, environ, content_length, rt_us=rt_us)
-        self.assertRegexpMatches(actual, self.datetime_regex)
+        self.assertRegex(actual, self.datetime_regex)
         # extract and remove matched datetime
         result = self.datetime_regex.search(actual)
         match_start, match_end = result.span()
@@ -380,7 +380,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         additional_environ = {"QUERY_STRING": "name=hello&data=hello"}
         environ, expected = self._build_expected_format_string(status_code, additional_environ, content_length, rt_us=15)
         actual = formatter(status_code, environ, content_length, rt_us=rt_us)
-        self.assertRegexpMatches(actual, self.datetime_regex)
+        self.assertRegex(actual, self.datetime_regex)
         # extract and remove matched datetime
         result = self.datetime_regex.search(actual)
         match_start, match_end = result.span()
@@ -401,7 +401,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         content_length = 10
         environ, expected = self._build_expected_format_string(status_code, {}, content_length)
         actual = formatter(status_code, environ, content_length)
-        self.assertRegexpMatches(actual, self.datetime_regex)
+        self.assertRegex(actual, self.datetime_regex)
         # extract and remove matched datetime
         result = self.datetime_regex.search(actual)
         match_start, match_end = result.span()
@@ -420,7 +420,7 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         additional_environ = {"QUERY_STRING": "name=hello&data=hello"}
         environ, expected = self._build_expected_format_string(status_code, additional_environ, content_length)
         actual = formatter(status_code, environ, content_length)
-        self.assertRegexpMatches(actual, self.datetime_regex)
+        self.assertRegex(actual, self.datetime_regex)
         # extract and remove matched datetime
         result = self.datetime_regex.search(actual)
         match_start, match_end = result.span()
