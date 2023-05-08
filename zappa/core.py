@@ -312,8 +312,10 @@ class Zappa:
             # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
             # See https://github.com/pypa/manylinux for a more detailed explanation
             self.manylinux_suffix_start = "cp38"
-        else:
+        elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
+        else:
+            self.manylinux_suffix_start = "cp310"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
