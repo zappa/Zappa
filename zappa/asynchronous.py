@@ -199,7 +199,6 @@ class SnsAsyncResponse(LambdaAsyncResponse):
     """
 
     def __init__(self, lambda_function_name=None, aws_region=None, capture_response=False, **kwargs):
-
         self.lambda_function_name = lambda_function_name
         self.aws_region = aws_region
 
@@ -396,7 +395,6 @@ def task(*args, **kwargs):
     capture_response = kwargs.get("capture_response", False)
 
     def func_wrapper(func):
-
         task_path = get_func_task_path(func)
 
         @wraps(func)
