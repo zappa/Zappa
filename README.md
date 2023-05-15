@@ -12,7 +12,6 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-
 - [About](#about)
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
@@ -87,8 +86,6 @@
 - [Hacks](#hacks)
 - [Contributing](#contributing)
     - [Using a Local Repo](#using-a-local-repo)
-- [Patrons](#patrons)
-- [Support / Development / Training / Consulting](#support--development--training--consulting)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
