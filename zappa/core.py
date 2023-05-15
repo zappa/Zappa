@@ -317,8 +317,8 @@ class Zappa:
         else:
             self.manylinux_suffix_start = "cp310"
 
-        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # AWS Lambda supports manylinux1/2010, manylinux2014, manylinux_2_24, and manylinux_2_28
+        manylinux_suffixes = ("_2_28", "_2_24", "2014", "2010", "1")
         self.manylinux_wheel_file_match = re.compile(
             rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
