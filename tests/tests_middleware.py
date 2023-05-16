@@ -1,6 +1,7 @@
 # -*- coding: utf8 -*-
 import sys
 import unittest
+from io import BytesIO
 
 from zappa.middleware import ZappaWSGIMiddleware, all_casings
 from zappa.wsgi import create_wsgi_request
@@ -78,7 +79,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {"principalId": "user1"}},
@@ -94,7 +95,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {"principalId": ""}},
@@ -111,7 +112,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {},
@@ -128,7 +129,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {}},
@@ -146,7 +147,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -170,7 +171,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -207,6 +208,16 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         self.assertNotIn("HTTP_INVALIDVALUE", environ)
         self.assertNotIn("HTTP_OTHERINVALID", environ)
 
+    def test_wsgi_input_as_file_like_object(self):
+        event = {
+            "httpMethod": "GET",
+            "path": "/v1/runs",
+            "body": None,
+        }
+
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
+        self.assertEqual(type(environ["wsgi.input"]), BytesIO)
+
     def test_should_allow_empty_query_params(self):
         event = {
             "httpMethod": "GET",
@@ -214,7 +225,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "multiValueQueryStringParameters": {},
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -244,7 +255,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "multiValueQueryStringParameters": {"foo": [1, 2]},
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
