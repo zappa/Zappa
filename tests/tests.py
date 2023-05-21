@@ -1131,12 +1131,13 @@ class TestZappa(unittest.TestCase):
         process = subprocess.Popen(
             ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
         )
-        process.communicate("dev\ndefault\nmy-zappa-bucket\ntest_settings\nn\ny\n")
+        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
         self.assertTrue(os.path.exists("zappa_settings.json"))
 
         with open("zappa_settings.json", "r") as f:
             zappa_settings = json.load(f)
             self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
             self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
 
         # delete the file
