@@ -778,7 +778,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_path_info_unquoted(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path%3A1",  # encoded /path:1
@@ -791,7 +791,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_latin1(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path/%E4%BB%8A%E6%97%A5%E3%81%AF",
@@ -807,7 +807,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_logging(self):
         # event = {
-        #     "body": {},
+        #     "body": None,
         #     "headers": {},
         #     "params": {
         #         "parameter_1": "asdf1",
@@ -874,7 +874,7 @@ class TestZappa(unittest.TestCase):
         # event = {'body': 'LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=', 'headers': {'Content-Type': 'multipart/form-data; boundary=---------------------------7695228484678176580630961', 'Via': '1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)', 'Accept-Language': 'en-US,en;q=0.5', 'Accept-Encoding': 'gzip, deflate, br', 'CloudFront-Is-SmartTV-Viewer': 'false', 'CloudFront-Forwarded-Proto': 'https', 'X-Forwarded-For': '71.231.27.57, 104.246.180.51', 'CloudFront-Viewer-Country': 'US', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0', 'Host': 'xo2z7zafjh.execute-api.us-east-1.amazonaws.com', 'X-Forwarded-Proto': 'https', 'Cookie': 'zappa=AQ4', 'CloudFront-Is-Tablet-Viewer': 'false', 'X-Forwarded-Port': '443', 'Referer': 'https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post', 'CloudFront-Is-Mobile-Viewer': 'false', 'X-Amz-Cf-Id': '31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==', 'CloudFront-Is-Desktop-Viewer': 'true'}, 'params': {'parameter_1': 'post'}, 'method': 'POST', 'query': {}}
 
         event = {
-            "body": "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=",
+            "body": "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=".encode(),
             "resource": "/",
             "requestContext": {
                 "resourceId": "6cqjw9qu0b",
@@ -2235,7 +2235,7 @@ class TestZappa(unittest.TestCase):
         https://github.com/Miserlou/Zappa/issues/283
         """
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/",
@@ -2675,7 +2675,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_query_string_unquoted(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path/path1",
