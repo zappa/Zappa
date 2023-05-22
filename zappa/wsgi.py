@@ -106,7 +106,12 @@ def create_wsgi_request(
         "SERVER_PROTOCOL": str("HTTP/1.1"),
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": headers.get("X-Forwarded-Proto", "http"),
-        "wsgi.input": body,
+        # This must be Bytes or None
+        # - https://docs.djangoproject.com/en/4.2/releases/4.2/#miscellaneous
+        # - https://wsgi.readthedocs.io/en/latest/definitions.html#envvar-wsgi.input
+        # > Manually instantiated WSGIRequest objects must be provided
+        # > a file-like object for wsgi.input.
+        "wsgi.input": BytesIO(body),
         "wsgi.errors": sys.stderr,
         "wsgi.multiprocess": False,
         "wsgi.multithread": False,
@@ -129,8 +134,6 @@ def create_wsgi_request(
         if "Content-Type" in headers:
             environ["CONTENT_TYPE"] = headers["Content-Type"]
 
-        # This must be Bytes or None
-        environ["wsgi.input"] = BytesIO(body)
         if body:
             environ["CONTENT_LENGTH"] = str(len(body))
         else:

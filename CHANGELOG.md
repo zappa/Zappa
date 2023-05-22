@@ -1,5 +1,12 @@
 # Zappa Changelog
 
+## 0.57.0
+
+* Python 3.10 support (#1124, #1160)
+* Remove patron link from README (#1200)
+* migrate test framework from nose to pytest (#1146)
+* Upgrading Django to 4.2 crashes the zappa based deployment with Error 500 (#1230)
+
 ## 0.56.1
 
 * Fix FileNotFoundError in running_in_docker (#1201)

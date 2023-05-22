@@ -9,8 +9,10 @@ DIR = path.realpath(path.dirname(__file__))
 class TestDocs(unittest.TestCase):
     def test_readmetoc(self):
         # this test serves as a reminder to update the README toc.
-        # More information here: https://github.com/Miserlou/Zappa/issues/1228
+        # If you're here because the test is failing, you can update the toc by running `doctoc README.md`
 
+        # doctoc: https://github.com/thlorenz/doctoc
+        # More information here: https://github.com/Miserlou/Zappa/issues/1228
         # borrowed in part from https://github.com/PrzemekWirkus/git-toc/blob/729fe22417d2b310b4131bb592cd18b235633a8c/gittoc/gittoc.py (Apache license)
 
         start_marker = "<!-- START doctoc generated TOC please keep comment here to allow auto update -->\n"
