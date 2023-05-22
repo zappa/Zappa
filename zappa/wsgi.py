@@ -2,9 +2,7 @@ import base64
 import logging
 import sys
 from io import BytesIO
-from urllib.parse import urlencode
-
-from werkzeug import urls
+from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 
@@ -43,7 +41,7 @@ def create_wsgi_request(
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = urls.url_unquote(query_string)
+    query_string = unquote(query_string)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
@@ -81,7 +79,7 @@ def create_wsgi_request(
     # https://github.com/Miserlou/Zappa/issues/1188
     headers = titlecase_keys(headers)
 
-    path = urls.url_unquote(event_info["path"])
+    path = unquote(event_info["path"])
     if base_path:
         script_name = "/" + base_path
 
@@ -108,7 +106,12 @@ def create_wsgi_request(
         "SERVER_PROTOCOL": str("HTTP/1.1"),
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": headers.get("X-Forwarded-Proto", "http"),
-        "wsgi.input": body,
+        # This must be Bytes or None
+        # - https://docs.djangoproject.com/en/4.2/releases/4.2/#miscellaneous
+        # - https://wsgi.readthedocs.io/en/latest/definitions.html#envvar-wsgi.input
+        # > Manually instantiated WSGIRequest objects must be provided
+        # > a file-like object for wsgi.input.
+        "wsgi.input": BytesIO(body),
         "wsgi.errors": sys.stderr,
         "wsgi.multiprocess": False,
         "wsgi.multithread": False,
@@ -131,8 +134,6 @@ def create_wsgi_request(
         if "Content-Type" in headers:
             environ["CONTENT_TYPE"] = headers["Content-Type"]
 
-        # This must be Bytes or None
-        environ["wsgi.input"] = BytesIO(body)
         if body:
             environ["CONTENT_LENGTH"] = str(len(body))
         else:
