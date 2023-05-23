@@ -318,13 +318,17 @@ class Zappa:
             self.manylinux_suffix_start = "cp310"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # Currently python3.7 lambda runtime does not support manylinux_2_24
+        # See https://github.com/zappa/Zappa/issues/1249 for more details
+        if self.runtime == "python3.7":
+            self.manylinux_suffixes = ("2014", "2010", "1")
+        else:
+            self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+
         self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
+            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
-        self.manylinux_wheel_abi3_file_match = re.compile(
-            rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
-        )
+        self.manylinux_wheel_abi3_file_match = re.compile(rf"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
@@ -920,11 +924,14 @@ class Zappa:
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
-                if re.match(self.manylinux_wheel_file_match, pathname) or re.match(
-                    self.manylinux_wheel_abi3_file_match, pathname
-                ):
+                if re.match(self.manylinux_wheel_file_match, pathname):
                     print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                     return pathname
+                elif re.match(self.manylinux_wheel_abi3_file_match, pathname):
+                    for manylinux_suffix in self.manylinux_suffixes:
+                        if f"manylinux{manylinux_suffix}_x86_64" in pathname:
+                            print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                            return pathname
 
         # The file is not cached, download it.
         wheel_url, filename = self.get_manylinux_wheel_url(package_name, package_version)
@@ -984,6 +991,9 @@ class Zappa:
             if re.match(self.manylinux_wheel_file_match, f["filename"]):
                 return f["url"], f["filename"]
             elif re.match(self.manylinux_wheel_abi3_file_match, f["filename"]):
+                for manylinux_suffix in self.manylinux_suffixes:
+                    if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
+                        return f["url"], f["filename"]
                 return f["url"], f["filename"]
         return None, None
 
