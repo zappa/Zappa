@@ -2726,7 +2726,8 @@ class Zappa:
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=s["Sid"])
+                    print(2729, s)
+                    # delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=s["Sid"])
                     if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
                         logger.error("Failed to delete an obsolete policy statement: {}".format(policy_response))
             else:
