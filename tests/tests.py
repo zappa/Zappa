@@ -197,6 +197,31 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_verify_python37_does_not_download_2_24_manylinux_wheel(self):
+        z = Zappa(runtime="python3.7")
+        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        expected_wheel_path = os.path.join(
+            cached_wheels_dir, "cryptography-35.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.whl"
+        )
+
+        # Check with known manylinux wheel package
+        actual_wheel_path = z.get_cached_manylinux_wheel("cryptography", "35.0.0")
+        self.assertEqual(actual_wheel_path, expected_wheel_path)
+        os.remove(actual_wheel_path)
+
+    def test_verify_downloaded_manylinux_wheel(self):
+        z = Zappa(runtime="python3.10")
+        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        expected_wheel_path = os.path.join(
+            cached_wheels_dir,
+            "pycryptodome-3.16.0-cp35-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        )
+
+        # check with a known manylinux wheel package
+        actual_wheel_path = z.get_cached_manylinux_wheel("pycryptodome", "3.16.0")
+        self.assertEqual(actual_wheel_path, expected_wheel_path)
+        os.remove(actual_wheel_path)
+
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.7")
 
