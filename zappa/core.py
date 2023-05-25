@@ -994,7 +994,6 @@ class Zappa:
                 for manylinux_suffix in self.manylinux_suffixes:
                     if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
                         return f["url"], f["filename"]
-                return f["url"], f["filename"]
         return None, None
 
     ##
