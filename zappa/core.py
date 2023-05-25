@@ -989,11 +989,13 @@ class Zappa:
 
         for f in data["releases"][package_version]:
             if re.match(self.manylinux_wheel_file_match, f["filename"]):
-                return f["url"], f["filename"]
+                # Since we have already lowered package names in get_installed_packages
+                # manylinux caching is not working for packages with capital case in names like MarkupSafe
+                return f["url"], f["filename"].lower()
             elif re.match(self.manylinux_wheel_abi3_file_match, f["filename"]):
                 for manylinux_suffix in self.manylinux_suffixes:
                     if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
-                        return f["url"], f["filename"]
+                        return f["url"], f["filename"].lower()
         return None, None
 
     ##
