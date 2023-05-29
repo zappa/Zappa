@@ -583,6 +583,27 @@ class TestZappa(unittest.TestCase):
                 {"Variables": end_result_should_be},
             )
 
+    def test_aws_region_not_found(self):
+        aws_region = os.environ.get("AWS_DEFAULT_REGION")
+
+        if aws_region:
+            os.environ.pop("AWS_DEFAULT_REGION")
+
+        try:
+            Zappa()
+        except LookupError as e:
+            assert (
+                str(e) == "No aws_region found - "
+                "set the aws_region in zappa_settings or "
+                "set the AWS_DEFAULT_REGION as env variable"
+            )
+            pass
+        else:
+            assert False
+
+        if aws_region:
+            os.environ["AWS_DEFAULT_REGION"] = aws_region
+
     ##
     # Logging
     ##
