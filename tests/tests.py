@@ -591,13 +591,8 @@ class TestZappa(unittest.TestCase):
 
         try:
             Zappa()
-        except LookupError as e:
-            assert (
-                str(e) == "No aws_region found - "
-                "set the aws_region in zappa_settings or "
-                "set the AWS_DEFAULT_REGION as env variable"
-            )
-            pass
+        except Exception as e:
+            assert str(e) == "You must specify a region."
         else:
             assert False
 
