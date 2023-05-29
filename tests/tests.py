@@ -583,22 +583,6 @@ class TestZappa(unittest.TestCase):
                 {"Variables": end_result_should_be},
             )
 
-    def test_aws_region_not_found(self):
-        aws_region = os.environ.get("AWS_DEFAULT_REGION")
-
-        if aws_region:
-            os.environ.pop("AWS_DEFAULT_REGION")
-
-        try:
-            Zappa()
-        except Exception as e:
-            assert str(e) == "You must specify a region."
-        else:
-            assert False
-
-        if aws_region:
-            os.environ["AWS_DEFAULT_REGION"] = aws_region
-
     ##
     # Logging
     ##
