@@ -3288,7 +3288,13 @@ class Zappa:
             if profile_name:
                 self.boto_session = boto3.Session(profile_name=profile_name, region_name=self.aws_region)
             elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
-                region_name = self.aws_region
+                region_name = self.aws_region or os.environ.get("AWS_DEFAULT_REGION")
+                if region_name is None:
+                    raise LookupError(
+                        "No aws_region found - "
+                        "set the aws_region in zappa_settings or "
+                        "set the AWS_DEFAULT_REGION as env variable"
+                    )
                 session_kw = {
                     "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID"),
                     "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY"),
