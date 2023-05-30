@@ -312,8 +312,10 @@ class Zappa:
             # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
             # See https://github.com/pypa/manylinux for a more detailed explanation
             self.manylinux_suffix_start = "cp38"
-        else:
+        elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
+        else:
+            self.manylinux_suffix_start = "cp310"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
@@ -625,8 +627,18 @@ class Zappa:
                 )
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
+            
+            ignore_excludes = []
+
+            for glob_path in exclude_glob:
+                if glob_path.startswith("!"):
+                    ignore_excludes.extend(glob.glob(os.path.join(temp_project_path, glob_path[1:])))
+
             for glob_path in exclude_glob:
                 for path in glob.glob(os.path.join(temp_project_path, glob_path)):
+                    if path in ignore_excludes:
+                        continue
+
                     try:
                         os.remove(path)
                     except OSError:  # is a directory
@@ -757,8 +769,17 @@ class Zappa:
                 # XXX - What should we do here?
 
         # Cleanup
+        ignore_excludes = []
+
+        for glob_path in exclude_glob:
+            if glob_path.startswith("!"):
+                ignore_excludes.extend(glob.glob(os.path.join(temp_project_path, glob_path[1:])))
+
         for glob_path in exclude_glob:
             for path in glob.glob(os.path.join(temp_project_path, glob_path)):
+                if path in ignore_excludes:
+                    continue
+
                 try:
                     os.remove(path)
                 except OSError:  # is a directory
@@ -779,9 +800,7 @@ class Zappa:
             archivef = tarfile.open(archive_path, "w|gz")
 
         for root, dirs, files in os.walk(temp_project_path):
-
             for filename in files:
-
                 # Skip .pyc files for Django migrations
                 # https://github.com/Miserlou/Zappa/issues/436
                 # https://github.com/Miserlou/Zappa/issues/464
@@ -795,7 +814,6 @@ class Zappa:
                     abs_filname = os.path.join(root, filename)
                     abs_pyc_filename = abs_filname + "c"
                     if os.path.isfile(abs_pyc_filename):
-
                         # but only if the pyc is older than the py,
                         # otherwise we'll deploy outdated code!
                         py_time = os.stat(abs_filname).st_mtime
@@ -2098,20 +2116,12 @@ class Zappa:
         """
         Generator that allows to iterate per every available apis.
         """
-        initial_request_done = False
+        all_apis = self.apigateway_client.get_rest_apis(limit=500)
 
-        pagination_position = None
-
-        while pagination_position or not initial_request_done:
-            if pagination_position:
-                response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
-            else:
-                response = self.apigateway_client.get_rest_apis(limit=500)
-                initial_request_done = True
-
-            yield from (api for api in response.get("items", []) if api["name"] == project_name)
-
-            pagination_position = response.get("position")
+        for api in all_apis["items"]:
+            if api["name"] != project_name:
+                continue
+            yield api
 
     def undeploy_api_gateway(self, lambda_name, domain_name=None, base_path=None):
         """
@@ -2120,7 +2130,6 @@ class Zappa:
         print("Deleting API Gateway..")
 
         if domain_name:
-
             # XXX - Remove Route53 smartly here?
             # XXX - This doesn't raise, but doesn't work either.
 
@@ -2260,7 +2269,7 @@ class Zappa:
 
         auth_type = "NONE"
         if iam_authorization and authorizer:
-            logger.warn(
+            logger.warning(
                 "Both IAM Authorization and Authorizer are specified, this is not possible. "
                 "Setting Auth method to IAM Authorization"
             )
@@ -2430,22 +2439,11 @@ class Zappa:
         except Exception:  # pragma: no cover
             try:
                 # Try the old method (project was probably made on an older, non CF version)
-                pagination_position = None
+                response = self.apigateway_client.get_rest_apis(limit=500)
 
-                initial_request_done = False
-
-                while pagination_position or not initial_request_done:
-                    if pagination_position:
-                        response = self.apigateway_client.get_rest_apis(limit=500, position=pagination_position)
-                    else:
-                        response = self.apigateway_client.get_rest_apis(limit=500)
-                        initial_request_done = True
-
-                    for rest_api in response.get("items", []):
-                        if rest_api["name"] == lambda_name:
-                            return rest_api["id"]
-
-                    pagination_position = response.get("position")
+                for item in response["items"]:
+                    if item["name"] == lambda_name:
+                        return item["id"]
 
                 logger.exception("Could not get API ID.")
                 return None
@@ -3305,7 +3303,6 @@ class Zappa:
         """
         # Automatically load credentials from config or environment
         if not boto_session:
-
             # If provided, use the supplied profile name.
             if profile_name:
                 self.boto_session = boto3.Session(profile_name=profile_name, region_name=self.aws_region)
