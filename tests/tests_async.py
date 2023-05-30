@@ -46,7 +46,6 @@ class TestZappa(unittest.TestCase):
         self.assertFalse(False)
 
     def test_nofails_classes(self):
-
         boto_session = boto3.Session(region_name=os.environ["AWS_DEFAULT_REGION"])
 
         a = AsyncException()
