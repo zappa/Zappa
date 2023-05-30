@@ -287,7 +287,7 @@ class TestZappa(unittest.TestCase):
             "AWS_SECRET_ACCESS_KEY": "JKL456",
             "AWS_DEFAULT_REGION": "us-west-1",
         }
-        with mock.patch.dict("os.environ", creds):
+        with mock.patch("os.environ", creds):
             z.aws_region = None
             z.load_credentials()
             loaded_creds = z.boto_session._session.get_credentials()
@@ -301,7 +301,7 @@ class TestZappa(unittest.TestCase):
             "AWS_SECRET_ACCESS_KEY": "JKL456",
         }
 
-        with mock.patch.dict("os.environ", creds):
+        with mock.patch("os.environ", creds):
             assert "AWS_DEFAULT_REGION" not in os.environ
             z.aws_region = None
             try:
