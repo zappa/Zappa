@@ -296,6 +296,25 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(loaded_creds.secret_key, "JKL456")
         self.assertEqual(z.boto_session.region_name, "us-west-1")
 
+        creds = {
+            "AWS_ACCESS_KEY_ID": "AK123",
+            "AWS_SECRET_ACCESS_KEY": "JKL456",
+        }
+
+        with mock.patch.dict("os.environ", creds):
+            assert "AWS_DEFAULT_REGION" not in os.environ
+            z.aws_region = None
+            try:
+                z.load_credentials()
+            except LookupError as e:
+                assert (
+                    str(e) == "No aws_region found - "
+                    "set the aws_region in zappa_settings or "
+                    "set the AWS_DEFAULT_REGION as env variable"
+                )
+            else:
+                assert False
+
     def test_create_api_gateway_routes_with_different_auth_methods(self):
         z = Zappa()
         z.parameter_depth = 1
