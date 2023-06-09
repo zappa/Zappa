@@ -222,6 +222,14 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(actual_wheel_path, expected_wheel_path)
         os.remove(actual_wheel_path)
 
+    def test_verify_manylinux_filename_is_lowered(self):
+        z = Zappa(runtime="python3.10")
+        expected_filename = "markupsafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+
+        # check with a known manylinux wheel package MarkupSafe with capital case letters
+        wheel_url, file_name = z.get_manylinux_wheel_url("markupsafe", "2.1.3")
+        self.assertEqual(file_name, expected_filename)
+
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.7")
 
