@@ -312,8 +312,10 @@ class Zappa:
             # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
             # See https://github.com/pypa/manylinux for a more detailed explanation
             self.manylinux_suffix_start = "cp38"
-        else:
+        elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
+        else:
+            self.manylinux_suffix_start = "cp310"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
@@ -779,9 +781,7 @@ class Zappa:
             archivef = tarfile.open(archive_path, "w|gz")
 
         for root, dirs, files in os.walk(temp_project_path):
-
             for filename in files:
-
                 # Skip .pyc files for Django migrations
                 # https://github.com/Miserlou/Zappa/issues/436
                 # https://github.com/Miserlou/Zappa/issues/464
@@ -795,7 +795,6 @@ class Zappa:
                     abs_filname = os.path.join(root, filename)
                     abs_pyc_filename = abs_filname + "c"
                     if os.path.isfile(abs_pyc_filename):
-
                         # but only if the pyc is older than the py,
                         # otherwise we'll deploy outdated code!
                         py_time = os.stat(abs_filname).st_mtime
@@ -2112,7 +2111,6 @@ class Zappa:
         print("Deleting API Gateway..")
 
         if domain_name:
-
             # XXX - Remove Route53 smartly here?
             # XXX - This doesn't raise, but doesn't work either.
 
@@ -2252,7 +2250,7 @@ class Zappa:
 
         auth_type = "NONE"
         if iam_authorization and authorizer:
-            logger.warn(
+            logger.warning(
                 "Both IAM Authorization and Authorizer are specified, this is not possible. "
                 "Setting Auth method to IAM Authorization"
             )
@@ -3198,12 +3196,22 @@ class Zappa:
         """Return zone id which name is closer matched with domain name."""
 
         # Related: https://github.com/Miserlou/Zappa/issues/459
-        public_zones = [zone for zone in all_zones["HostedZones"] if not zone["Config"]["PrivateZone"]]
+        domain_components = domain.split(".")[::-1]  # match in reverse
+        candidate_zones = {}
+        for zone in all_zones["HostedZones"]:
+            if not zone["Config"]["PrivateZone"]:
+                public_zone_name = zone["Name"][:-1]  # zone "Name" expected to end with "." - remove "."
+                zone_components = public_zone_name.split(".")[::-1]  # reverse order
+                if all(z == d for z, d in zip(zone_components, domain_components)):
+                    # zones that match the shortest comparison considered a candidate
+                    candidate_zones[public_zone_name] = zone["Id"]
 
-        zones = {zone["Name"][:-1]: zone["Id"] for zone in public_zones if zone["Name"][:-1] in domain}
-        if zones:
-            keys = max(zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
-            return zones[keys]
+        if candidate_zones:
+            if domain in candidate_zones:  # if exact match use it
+                best_match_key = domain
+            else:  # otherwise, use longest matched
+                best_match_key = max(candidate_zones.keys(), key=lambda a: len(a))  # get longest key -- best match.
+            return candidate_zones[best_match_key]
         else:
             return None
 
@@ -3276,7 +3284,6 @@ class Zappa:
         """
         # Automatically load credentials from config or environment
         if not boto_session:
-
             # If provided, use the supplied profile name.
             if profile_name:
                 self.boto_session = boto3.Session(profile_name=profile_name, region_name=self.aws_region)
