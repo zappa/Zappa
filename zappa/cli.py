@@ -366,8 +366,14 @@ class ZappaCLI:
         tail_parser.add_argument(
             "--since",
             type=str,
-            default="100000s",
+            default="120s",
             help="Only show lines since a certain timeframe.",
+        )
+        tail_parser.add_argument(
+            "--region",
+            type=str,
+            default=None,
+            help="Look for logs from specific region despite zappa_settings",
         )
         tail_parser.add_argument("--filter", type=str, default="", help="Apply a filter pattern to the logs.")
         tail_parser.add_argument(
