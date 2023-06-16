@@ -3123,11 +3123,13 @@ class Zappa:
     # CloudWatch Logging
     ##
 
-    def fetch_logs(self, lambda_name, filter_pattern="", limit=10000, start_time=0):
+    def fetch_logs(self, lambda_name, filter_pattern="", limit=10000, start_time=0, aws_region_name=None):
         """
         Fetch the CloudWatch logs for a given Lambda name.
         """
         log_name = "/aws/lambda/" + lambda_name
+        if aws_region_name:
+            self.logs_client = self.boto_client("logs", region_name=aws_region_name)
         streams = self.logs_client.describe_log_streams(logGroupName=log_name, descending=True, orderBy="LastEventTime")
 
         all_streams = streams["logStreams"]

@@ -617,6 +617,7 @@ class ZappaCLI:
                 filter_pattern=self.vargs["filter"],
                 force_colorize=self.vargs["force_color"] or None,
                 keep_open=not self.vargs["disable_keep_open"],
+                aws_region_name=self.vargs["region"]
             )
         elif command == "undeploy":  # pragma: no cover
             self.undeploy(no_confirm=self.vargs["yes"], remove_logs=self.vargs["remove_logs"])
@@ -1161,6 +1162,7 @@ class ZappaCLI:
         http=False,
         non_http=False,
         force_colorize=False,
+        aws_region_name=None
     ):
         """
         Tail this function's logs.
@@ -1177,6 +1179,7 @@ class ZappaCLI:
                     start_time=since_stamp,
                     limit=limit,
                     filter_pattern=filter_pattern,
+                    aws_region_name=aws_region_name
                 )
 
                 new_logs = [e for e in new_logs if e["timestamp"] > last_since]
