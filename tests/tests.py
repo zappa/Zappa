@@ -2,6 +2,7 @@
 import base64
 import collections
 import hashlib
+import io
 import json
 import os
 import random
@@ -13,6 +14,7 @@ import tempfile
 import unittest
 import uuid
 import zipfile
+from contextlib import redirect_stdout
 from functools import partial
 from io import BytesIO
 from subprocess import check_output
@@ -168,6 +170,33 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_get_manylinux_python310(self):
+        z = Zappa(runtime="python3.10")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.1"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg2-binary": "2.9.1"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.10")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "2.8"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.10")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.7")
 
@@ -195,7 +224,6 @@ class TestZappa(unittest.TestCase):
 
         # pyenv test
         with mock.patch.dict("os.environ", {}, clear=True):
-
             with mock.patch("subprocess.check_output", side_effect=[None, b"/expected", b"path"]):
                 current_venv = z.get_current_venv()
                 self.assertEqual(current_venv, expected)
@@ -584,7 +612,7 @@ class TestZappa(unittest.TestCase):
     #         pattern = Zappa.selection_pattern(code)
 
     #         for url in test_urls:
-    #             self.assertRegexpMatches(url, pattern)
+    #             self.assertRegex(url, pattern)
 
     # def test_b64_pattern(self):
     #     head = '\{"http_status": '
@@ -593,7 +621,7 @@ class TestZappa(unittest.TestCase):
     #         pattern = Zappa.selection_pattern(code)
 
     #         document = head + code + random_string(50)
-    #         self.assertRegexpMatches(document, pattern)
+    #         self.assertRegex(document, pattern)
 
     #         for bad_code in ['200', '301', '302']:
     #             document = base64.b64encode(head + bad_code + random_string(50))
@@ -608,7 +636,6 @@ class TestZappa(unittest.TestCase):
     ##
 
     def test_wsgi_event(self):
-
         ## This is a pre-proxy+ event
         # event = {
         #     "body": "",
@@ -750,7 +777,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_path_info_unquoted(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path%3A1",  # encoded /path:1
@@ -763,7 +790,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_latin1(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path/%E4%BB%8A%E6%97%A5%E3%81%AF",
@@ -779,7 +806,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_logging(self):
         # event = {
-        #     "body": {},
+        #     "body": None,
         #     "headers": {},
         #     "params": {
         #         "parameter_1": "asdf1",
@@ -846,7 +873,7 @@ class TestZappa(unittest.TestCase):
         # event = {'body': 'LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=', 'headers': {'Content-Type': 'multipart/form-data; boundary=---------------------------7695228484678176580630961', 'Via': '1.1 38205a04d96d60185e88658d3185ccee.cloudfront.net (CloudFront)', 'Accept-Language': 'en-US,en;q=0.5', 'Accept-Encoding': 'gzip, deflate, br', 'CloudFront-Is-SmartTV-Viewer': 'false', 'CloudFront-Forwarded-Proto': 'https', 'X-Forwarded-For': '71.231.27.57, 104.246.180.51', 'CloudFront-Viewer-Country': 'US', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:45.0) Gecko/20100101 Firefox/45.0', 'Host': 'xo2z7zafjh.execute-api.us-east-1.amazonaws.com', 'X-Forwarded-Proto': 'https', 'Cookie': 'zappa=AQ4', 'CloudFront-Is-Tablet-Viewer': 'false', 'X-Forwarded-Port': '443', 'Referer': 'https://xo8z7zafjh.execute-api.us-east-1.amazonaws.com/former/post', 'CloudFront-Is-Mobile-Viewer': 'false', 'X-Amz-Cf-Id': '31zxcUcVyUxBOMk320yh5NOhihn5knqrlYQYpGGyOngKKwJb0J0BAQ==', 'CloudFront-Is-Desktop-Viewer': 'true'}, 'params': {'parameter_1': 'post'}, 'method': 'POST', 'query': {}}
 
         event = {
-            "body": "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=",
+            "body": "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS03Njk1MjI4NDg0Njc4MTc2NTgwNjMwOTYxDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9Im15c3RyaW5nIg0KDQpkZGQNCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tNzY5NTIyODQ4NDY3ODE3NjU4MDYzMDk2MS0tDQo=".encode(),
             "resource": "/",
             "requestContext": {
                 "resourceId": "6cqjw9qu0b",
@@ -1106,7 +1133,6 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(False, zappa_cli.stage_config["touch"])
 
     def test_load_extended_settings(self):
-
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendo"
         zappa_cli.load_settings("test_settings.json")
@@ -1414,7 +1440,7 @@ class TestZappa(unittest.TestCase):
 
     #     error_msg = output.getvalue().strip()
     #     expected = r".*This argument must be positive \(got -1\)$"
-    #     self.assertRegexpMatches(error_msg, expected)
+    #     self.assertRegex(error_msg, expected)
     #     sys.stderr = old_stderr
 
     # @mock.patch('zappa.cli.ZappaCLI.dispatch_command')
@@ -1790,142 +1816,143 @@ class TestZappa(unittest.TestCase):
         * Writes errors when certificate settings haven't been specified.
         * Calls Zappa correctly for creates vs. updates.
         """
-        old_stdout = sys.stderr
+        zappa_cli = ZappaCLI()
+        zappa_cli.domain = "test.example.com"
+        try:
+            zappa_cli.certify()
+        except AttributeError:
+            # Since zappa_cli.zappa isn't initialized, the certify() call
+            # fails when it tries to inspect what Zappa has deployed.
+            pass
+
+        # Set up a core.Zappa mock and let us save some state about
+        # domains and lambdas
+        zappa_mock = mock.create_autospec(Zappa)
+        zappa_mock.function_versions = []
+        zappa_mock.domain_names = {}
+
+        def get_lambda_function_versions(_function_name, *_args, **_kwargs):
+            return zappa_mock.function_versions
+
+        def get_domain_name(domain, *_args, **_kwargs):
+            return zappa_mock.domain_names.get(domain)
+
+        zappa_mock.get_domain_name.side_effect = get_domain_name
+        zappa_mock.get_lambda_function_versions.side_effect = get_lambda_function_versions
+
+        zappa_cli.zappa = zappa_mock
+        self.assertRaises(ClickException, zappa_cli.certify)
+
+        # Make sure we get an error if we don't configure the domain.
+        zappa_cli.zappa.function_versions = ["$LATEST"]
+        zappa_cli.api_stage = "stage"
+        zappa_cli.zappa_settings = {"stage": {}}
+        zappa_cli.api_stage = "stage"
+        zappa_cli.domain = "test.example.com"
 
         try:
-            zappa_cli = ZappaCLI()
-            zappa_cli.domain = "test.example.com"
-            try:
-                zappa_cli.certify()
-            except AttributeError:
-                # Since zappa_cli.zappa isn't initialized, the certify() call
-                # fails when it tries to inspect what Zappa has deployed.
-                pass
+            zappa_cli.certify()
+        except ClickException as e:
+            log_output = str(e)
+            self.assertIn("Can't certify a domain without", log_output)
+            self.assertIn("domain", log_output)
 
-            # Set up a core.Zappa mock and let us save some state about
-            # domains and lambdas
-            zappa_mock = mock.create_autospec(Zappa)
-            zappa_mock.function_versions = []
-            zappa_mock.domain_names = {}
+        # Without any LetsEncrypt settings, we should get a message about
+        # not having a lets_encrypt_key setting.
+        zappa_cli.zappa_settings["stage"]["domain"] = "test.example.com"
+        try:
+            zappa_cli.certify()
+            self.fail("Expected a ClickException")
+        except ClickException as e:
+            log_output = str(e)
+            self.assertIn("Can't certify a domain without", log_output)
+            self.assertIn("lets_encrypt_key", log_output)
 
-            def get_lambda_function_versions(_function_name, *_args, **_kwargs):
-                return zappa_mock.function_versions
+        # With partial settings, we should get a message about not having
+        # certificate, certificate_key, and certificate_chain
+        zappa_cli.zappa_settings["stage"]["certificate"] = "foo"
+        try:
+            zappa_cli.certify()
+            self.fail("Expected a ClickException")
+        except ClickException as e:
+            log_output = str(e)
+            self.assertIn("Can't certify a domain without", log_output)
+            self.assertIn("certificate_key", log_output)
+            self.assertIn("certificate_chain", log_output)
 
-            def get_domain_name(domain, *_args, **_kwargs):
-                return zappa_mock.domain_names.get(domain)
+        zappa_cli.zappa_settings["stage"]["certificate_key"] = "key"
+        try:
+            zappa_cli.certify()
+            self.fail("Expected a ClickException")
+        except ClickException as e:
+            log_output = str(e)
+            self.assertIn("Can't certify a domain without", log_output)
+            self.assertIn("certificate_key", log_output)
+            self.assertIn("certificate_chain", log_output)
 
-            zappa_mock.get_domain_name.side_effect = get_domain_name
-            zappa_mock.get_lambda_function_versions.side_effect = get_lambda_function_versions
+        zappa_cli.zappa_settings["stage"]["certificate_chain"] = "chain"
+        del zappa_cli.zappa_settings["stage"]["certificate_key"]
+        try:
+            zappa_cli.certify()
+            self.fail("Expected a ClickException")
+        except ClickException as e:
+            log_output = str(e)
+            self.assertIn("Can't certify a domain without", log_output)
+            self.assertIn("certificate_key", log_output)
+            self.assertIn("certificate_chain", log_output)
 
-            zappa_cli.zappa = zappa_mock
-            self.assertRaises(ClickException, zappa_cli.certify)
+        # With all certificate settings, make sure Zappa's domain calls
+        # are executed.
+        cert_file = tempfile.NamedTemporaryFile()
+        cert_file.write(b"Hello world")
+        cert_file.flush()
 
-            # Make sure we get an error if we don't configure the domain.
-            zappa_cli.zappa.function_versions = ["$LATEST"]
-            zappa_cli.api_stage = "stage"
-            zappa_cli.zappa_settings = {"stage": {}}
-            zappa_cli.api_stage = "stage"
-            zappa_cli.domain = "test.example.com"
+        zappa_cli.zappa_settings["stage"].update(
+            {
+                "certificate": cert_file.name,
+                "certificate_key": cert_file.name,
+                "certificate_chain": cert_file.name,
+            }
+        )
 
-            try:
-                zappa_cli.certify()
-            except ClickException as e:
-                log_output = str(e)
-                self.assertIn("Can't certify a domain without", log_output)
-                self.assertIn("domain", log_output)
-
-            # Without any LetsEncrypt settings, we should get a message about
-            # not having a lets_encrypt_key setting.
-            zappa_cli.zappa_settings["stage"]["domain"] = "test.example.com"
-            try:
-                zappa_cli.certify()
-                self.fail("Expected a ClickException")
-            except ClickException as e:
-                log_output = str(e)
-                self.assertIn("Can't certify a domain without", log_output)
-                self.assertIn("lets_encrypt_key", log_output)
-
-            # With partial settings, we should get a message about not having
-            # certificate, certificate_key, and certificate_chain
-            zappa_cli.zappa_settings["stage"]["certificate"] = "foo"
-            try:
-                zappa_cli.certify()
-                self.fail("Expected a ClickException")
-            except ClickException as e:
-                log_output = str(e)
-                self.assertIn("Can't certify a domain without", log_output)
-                self.assertIn("certificate_key", log_output)
-                self.assertIn("certificate_chain", log_output)
-
-            zappa_cli.zappa_settings["stage"]["certificate_key"] = "key"
-            try:
-                zappa_cli.certify()
-                self.fail("Expected a ClickException")
-            except ClickException as e:
-                log_output = str(e)
-                self.assertIn("Can't certify a domain without", log_output)
-                self.assertIn("certificate_key", log_output)
-                self.assertIn("certificate_chain", log_output)
-
-            zappa_cli.zappa_settings["stage"]["certificate_chain"] = "chain"
-            del zappa_cli.zappa_settings["stage"]["certificate_key"]
-            try:
-                zappa_cli.certify()
-                self.fail("Expected a ClickException")
-            except ClickException as e:
-                log_output = str(e)
-                self.assertIn("Can't certify a domain without", log_output)
-                self.assertIn("certificate_key", log_output)
-                self.assertIn("certificate_chain", log_output)
-
-            # With all certificate settings, make sure Zappa's domain calls
-            # are executed.
-            cert_file = tempfile.NamedTemporaryFile()
-            cert_file.write(b"Hello world")
-            cert_file.flush()
-
-            zappa_cli.zappa_settings["stage"].update(
-                {
-                    "certificate": cert_file.name,
-                    "certificate_key": cert_file.name,
-                    "certificate_chain": cert_file.name,
-                }
-            )
-            sys.stdout.truncate(0)
+        f = io.StringIO()
+        with redirect_stdout(f):
             zappa_cli.certify()
             zappa_cli.zappa.create_domain_name.assert_called_once()
             zappa_cli.zappa.update_route53_records.assert_called_once()
             zappa_cli.zappa.update_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
-            self.assertIn("Created a new domain name", log_output)
+        log_output = f.getvalue()
+        self.assertIn("Created a new domain name", log_output)
 
-            zappa_cli.zappa.reset_mock()
-            zappa_cli.zappa.domain_names["test.example.com"] = "*.example.com"
-            sys.stdout.truncate(0)
+        zappa_cli.zappa.reset_mock()
+        zappa_cli.zappa.domain_names["test.example.com"] = "*.example.com"
+
+        f = io.StringIO()
+        with redirect_stdout(f):
             zappa_cli.certify()
             zappa_cli.zappa.update_domain_name.assert_called_once()
             zappa_cli.zappa.update_route53_records.assert_not_called()
             zappa_cli.zappa.create_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
-            self.assertNotIn("Created a new domain name", log_output)
+        log_output = f.getvalue()
+        self.assertNotIn("Created a new domain name", log_output)
 
-            # Test creating domain without Route53
-            zappa_cli.zappa_settings["stage"].update(
-                {
-                    "route53_enabled": False,
-                }
-            )
-            zappa_cli.zappa.reset_mock()
-            zappa_cli.zappa.domain_names["test.example.com"] = ""
-            sys.stdout.truncate(0)
+        # Test creating domain without Route53
+        zappa_cli.zappa_settings["stage"].update(
+            {
+                "route53_enabled": False,
+            }
+        )
+        zappa_cli.zappa.reset_mock()
+        zappa_cli.zappa.domain_names["test.example.com"] = ""
+
+        f = io.StringIO()
+        with redirect_stdout(f):
             zappa_cli.certify()
             zappa_cli.zappa.create_domain_name.assert_called_once()
             zappa_cli.zappa.update_route53_records.assert_not_called()
             zappa_cli.zappa.update_domain_name.assert_not_called()
-            log_output = sys.stdout.getvalue()
-            self.assertIn("Created a new domain name", log_output)
-        finally:
-            sys.stdout = old_stdout
+        log_output = f.getvalue()
+        self.assertIn("Created a new domain name", log_output)
 
     @mock.patch("troposphere.Template")
     @mock.patch("botocore.client")
@@ -2179,7 +2206,6 @@ class TestZappa(unittest.TestCase):
         # self.assertEqual(m.group(1), 's3://lmbda-env/prod/env.json')
 
     def test_package_only(self):
-
         for delete_local_zip in [True, False]:
             zappa_cli = ZappaCLI()
             if delete_local_zip:
@@ -2196,7 +2222,6 @@ class TestZappa(unittest.TestCase):
             os.remove(zappa_cli.zip_path)
 
     def test_package_output(self):
-
         for delete_local_zip in [True]:
             zappa_cli = ZappaCLI()
             if delete_local_zip:
@@ -2234,7 +2259,7 @@ class TestZappa(unittest.TestCase):
         https://github.com/Miserlou/Zappa/issues/283
         """
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/",
@@ -2674,7 +2699,7 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_query_string_unquoted(self):
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "pathParameters": {},
             "path": "/path/path1",

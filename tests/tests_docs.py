@@ -8,10 +8,11 @@ DIR = path.realpath(path.dirname(__file__))
 
 class TestDocs(unittest.TestCase):
     def test_readmetoc(self):
-
         # this test serves as a reminder to update the README toc.
-        # More information here: https://github.com/Miserlou/Zappa/issues/1228
+        # If you're here because the test is failing, you can update the toc by running `doctoc README.md`
 
+        # doctoc: https://github.com/thlorenz/doctoc
+        # More information here: https://github.com/Miserlou/Zappa/issues/1228
         # borrowed in part from https://github.com/PrzemekWirkus/git-toc/blob/729fe22417d2b310b4131bb592cd18b235633a8c/gittoc/gittoc.py (Apache license)
 
         start_marker = "<!-- START doctoc generated TOC please keep comment here to allow auto update -->\n"
@@ -35,22 +36,18 @@ class TestDocs(unittest.TestCase):
             state = "prologue"
 
             for line in contents:
-
                 if state == "prologue":
-
                     if line == start_marker:
                         state = "toc"
                     else:
                         prologue = prologue + line
 
                 elif state == "toc":
-
                     # we don't need to capture the old TOC
                     if line == end_marker:
                         state = "epilogue"
 
                 elif state == "epilogue":
-
                     epilogue = epilogue + line
 
                     # we only capture TOC contents *after* the TOC markers
@@ -89,7 +86,7 @@ class TestDocs(unittest.TestCase):
         else:
             msg = "You can set environ[ZAPPA_TEST_SAVE_README_NEW]=1 to generate\n" "  README.test.md to manually compare."
 
-        self.assertEquals(
+        self.assertEqual(
             "".join(old_readme),
             new_readme,
             "README doesn't match after regenerating TOC\n\n" "You need to run doctoc after a heading change.\n{}".format(msg),
