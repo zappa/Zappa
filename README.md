@@ -619,7 +619,7 @@ Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/late
        ]
 ```
 
-[SQS](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html) is also pulling messages from a stream. Read the AWS Documentation carefully since Lambda calls the SQS DeleteMessage API on your behalf once your function completes successfully. By default, if your function encounters an error while processing a batch, all messages in that batch become visible in the queue again.
+[SQS](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html) is also pulling messages from a stream. Read the [AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html) carefully since Lambda calls the SQS DeleteMessage API on your behalf once your function completes successfully. By default, if your function encounters an error while processing a batch, all messages in that batch become visible in the queue again.
 
 ```javascript
        "events": [
