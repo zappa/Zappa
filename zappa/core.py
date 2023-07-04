@@ -925,12 +925,12 @@ class Zappa:
 
             for pathname in glob.iglob(wheel_path):
                 if re.match(self.manylinux_wheel_file_match, pathname):
-                    print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                    logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                     return pathname
                 elif re.match(self.manylinux_wheel_abi3_file_match, pathname):
                     for manylinux_suffix in self.manylinux_suffixes:
                         if f"manylinux{manylinux_suffix}_x86_64" in pathname:
-                            print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                            logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                             return pathname
 
         # The file is not cached, download it.
@@ -939,7 +939,7 @@ class Zappa:
             return None
 
         wheel_path = os.path.join(cached_wheels_dir, filename)
-        print(f" - {package_name}=={package_version}: Downloading")
+        logger.info(f" - {package_name}=={package_version}: Downloading")
         with open(wheel_path, "wb") as f:
             self.download_url_with_progress(wheel_url, f, disable_progress)
 
