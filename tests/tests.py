@@ -226,9 +226,38 @@ class TestZappa(unittest.TestCase):
         z = Zappa(runtime="python3.10")
         expected_filename = "markupsafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
 
-        # check with a known manylinux wheel package MarkupSafe with capital case letters
-        wheel_url, file_name = z.get_manylinux_wheel_url("markupsafe", "2.1.3")
+        mock_package_data = {
+            "releases": {
+                "2.1.3": [
+                    {
+                        "url": "https://files.pythonhosted.org/packages/a6/56/f1d4ee39e898a9e63470cbb7fae1c58cce6874f25f54220b89213a47f273/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
+                    },
+                    {
+                        "url": "https://files.pythonhosted.org/packages/12/b3/d9ed2c0971e1435b8a62354b18d3060b66c8cb1d368399ec0b9baa7c0ee5/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+                    },
+                    {
+                        "url": "https://files.pythonhosted.org/packages/bf/b7/c5ba9b7ad9ad21fc4a60df226615cf43ead185d328b77b0327d603d00cc5/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl"
+                    },
+                ]
+            }
+        }
+
+        with mock.patch("requests.get") as mock_get:
+            mock_get.return_value.json.return_value = mock_package_data
+            wheel_url, file_name = z.get_manylinux_wheel_url("markupsafe", "2.1.3")
+
         self.assertEqual(file_name, expected_filename)
+        mock_get.assert_called_once_with(
+            "https://pypi.python.org/pypi/markupsafe/json",
+            timeout=float(os.environ.get("PIP_TIMEOUT", 1.5))
+        )
+
+        # Clean the generated files
+        cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
+        os.remove(os.path.join(cached_pypi_info_dir, "markupsafe-2.1.3.json"))
 
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.7")
