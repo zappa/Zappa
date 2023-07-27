@@ -107,6 +107,18 @@
           "EXTENDO": "You bet"
        }
     },
+    "invalid_ephemeral_storage_out_of_range": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "Size": 99999
+        }
+    },
+    "invalid_ephemeral_storage_missing_key": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "BadKey": 99999
+        }
+    },
     "build_package_only_delete_local_zip_false": {
       "delete_local_zip": false,
       "use_precompiled_packages": false,

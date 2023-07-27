@@ -1132,6 +1132,24 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(False, zappa_cli.stage_config["touch"])
 
+    def test_load_settings_ephemeral_storage_overwrite(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(zappa_cli.stage_config["ephemeral_storage"]["Size"], 1024)
+
+    def test_load_settings_ephemeral_storage_out_of_range(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "invalid_ephemeral_storage_out_of_range"
+        with self.assertRaises(ClickException) as err:
+            zappa_cli.load_settings("test_settings.json")
+
+    def test_load_settings_ephemeral_storage_missing_key(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "invalid_ephemeral_storage_missing_key"
+        with self.assertRaises(ClickException) as err:
+            zappa_cli.load_settings("test_settings.json")
+
     def test_load_extended_settings(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendo"
