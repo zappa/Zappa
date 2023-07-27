@@ -116,7 +116,7 @@
     "invalid_ephemeral_storage_missing_key": {
         "extends": "ttt888",
         "ephemeral_storage": {
-            "BadKey": 99999
+            "BadKey": 1024
         }
     },
     "build_package_only_delete_local_zip_false": {
