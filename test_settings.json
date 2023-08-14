@@ -10,6 +10,9 @@
            "zip": "test_settings.callback"
        },
        "delete_local_zip": true,
+       "ephemeral_storage": {
+           "Size": 1024
+       },
        "debug": true,
        "parameter_depth": 2,
        "prebuild_script": "tests.test_app.prebuild_me",
