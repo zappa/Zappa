@@ -1156,8 +1156,6 @@ class TestZappa(unittest.TestCase):
             "isBase64Encoded": False,
         }
 
-
-
         environ = create_wsgi_request(event, trailing_slash=False)
         self.assertEqual(environ["CLIENT_SOURCE_IP"], source_ip_address)
 
