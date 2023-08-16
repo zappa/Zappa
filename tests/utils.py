@@ -80,7 +80,7 @@ def is_base64(test_string: str) -> bool:
         return False
 
 
-def get_unsupported_sys_versioninfo() -> tuple:
-    """Mock used to test the python unsupported version testcase"""
+def get_sys_versioninfo(minor_version: int = 6) -> tuple:
+    """Mock used to test the python version check testcases"""
     invalid_versioninfo = namedtuple("version_info", ["major", "minor", "micro", "releaselevel", "serial"])
-    return invalid_versioninfo(3, 6, 1, "final", 0)
+    return invalid_versioninfo(3, minor_version, 1, "final", 0)

@@ -212,8 +212,12 @@ def get_runtime_from_python_version():
             return "python3.7"
         elif sys.version_info[1] <= 8:
             return "python3.8"
-        else:
+        elif sys.version_info[1] <= 9:
             return "python3.9"
+        elif sys.version_info[1] <= 10:
+            return "python3.10"
+        else:
+            return "python3.11"
 
 
 ##
@@ -265,6 +269,10 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
             super().__init__(context, config)
             self._lambda = kappa.awsclient.create_client("lambda", context.session)
 
+        @property
+        def batch_window(self):
+            return self._config.get("batch_window", 1 if self.batch_size > 10 else 0)
+
         def _get_uuid(self, function):
             uuid = None
             response = self._lambda.call(
@@ -284,6 +292,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     FunctionName=function.name,
                     EventSourceArn=self.arn,
                     BatchSize=self.batch_size,
+                    MaximumBatchingWindowInSeconds=self.batch_window,
                     Enabled=self.enabled,
                 )
                 LOG.debug(response)
@@ -322,6 +331,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     response = self._lambda.call(
                         "update_event_source_mapping",
                         BatchSize=self.batch_size,
+                        MaximumBatchingWindowInSeconds=self.batch_window,
                         Enabled=self.enabled,
                         FunctionName=function.arn,
                     )
