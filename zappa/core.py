@@ -317,8 +317,10 @@ class Zappa:
             self.manylinux_suffix_start = "cp38"
         elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
-        else:
+        elif self.runtime == "python3.10":
             self.manylinux_suffix_start = "cp310"
+        else:
+            self.manylinux_suffix_start = "cp311"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         manylinux_suffixes = ("_2_24", "2014", "2010", "1")
