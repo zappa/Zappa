@@ -1,5 +1,35 @@
 # Zappa Changelog
 
+## 0.57.0
+
+* Python 3.10 support (#1124, #1160)
+* Remove patron link from README (#1200)
+* migrate test framework from nose to pytest (#1146)
+* Upgrading Django to 4.2 crashes the zappa based deployment with Error 500 (#1230)
+
+## 0.56.1
+
+* Fix FileNotFoundError in running_in_docker (#1201)
+* Use ZAPPA_RUNNING_IN_DOCKER environment variable to use any Python version inside Docker container (#1140)
+
+## 0.56.0
+* Not recognizing virtaulenv created with pyenv (#1132)
+* Remove six from zappa dependencies (#1164)
+* Handle optional space in x-forwarded-for header (#1127)
+* [Migrated] #2077 Fix url decoding for query string (#879)
+* [Migrated] [async] Check if args/kwargs are JSON Serializable while running locally (#704)
+* [Migrated] Add on Docs: event_source from S3 with key_filters (#446)
+* [Migrated] Logs are missing query strings (#410)
+* [Migrated] Update BINARY_SUPPORT to use Content-Encoding to identify if data is binary (#908)
+* Remove obsolete check for Django version < 1.7 (#1158)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Add exclude_glob documentation (#1052)
+* Unable to schedule SQS Batch Size of greater than 10 (#1117)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Allow any Python version if using Docker image for Lambda (#1140)
+* Incorrect hosted zone match (#1190)
+* Issue while trying to install or download zappa without binary file (#1199)
+
 ## 0.55.0
 * Fix "cd workflow fired event outside of the create tags event" (#1152)
 * Remove 'futures' package requirement (#826,#808)

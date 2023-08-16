@@ -8,8 +8,6 @@
 [![Coverage](https://img.shields.io/coveralls/zappa/Zappa.svg)](https://coveralls.io/github/zappa/Zappa)
 [![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa)
 [![Slack](https://img.shields.io/badge/chat-slack-ff69b4.svg)](https://zappateam.slack.com/)
-[![Gun.io](https://img.shields.io/badge/made%20by-gun.io-blue.svg)](https://gun.io/)
-[![Patreon](https://img.shields.io/badge/support-patreon-brightgreen.svg)](https://patreon.com/zappa)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -89,8 +87,6 @@
 - [Hacks](#hacks)
 - [Contributing](#contributing)
     - [Using a Local Repo](#using-a-local-repo)
-- [Patrons](#patrons)
-- [Support / Development / Training / Consulting](#support--development--training--consulting)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -137,7 +133,7 @@ __Awesome!__
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.7/3.8/3.9 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.7/3.8/3.9/3.10/3.11 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -222,7 +218,30 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+
+You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
+Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+
+Deploy Example:
+
+    $ zappa deploy --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Update Example:
+
+    $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+
+If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
+
+    $ export ZAPPA_RUNNING_IN_DOCKER=True
+
+You can also add this to your Dockerfile like this:
+
+```
+ENV ZAPPA_RUNNING_IN_DOCKER=True
+```
 
 ### Rollback
 
@@ -424,7 +443,7 @@ For instance, suppose you have a basic application in a file called "my_app.py",
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.7/3.8/3.9 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.7/3.8/3.9/3.10/3.11 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -965,7 +984,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.9", // Python runtime to use on Lambda. Can be one of "python3.7", "python3.8", or "python3.9". Defaults to whatever the current Python being used is.
+        "runtime": "python3.11", // Python runtime to use on Lambda. Can be one of "python3.7", "python3.8", "python3.9", or "python3.10", or "python3.11". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
@@ -1565,7 +1584,7 @@ Zappa goes quite far beyond what Lambda and API Gateway were ever intended to ha
 
 ## Contributing
 
-This project is still young, so there is still plenty to be done. Contributions are more than welcome!
+Contributions are very welcome!
 
 Please file tickets for discussion before submitting patches. Pull requests should target `master` and should leave Zappa in a "shippable" state if merged.
 
@@ -1581,55 +1600,3 @@ Zappa does not intend to conform to PEP8, isolate your commits so that changes t
 #### Using a Local Repo
 
 To use the git HEAD, you *probably can't* use `pip install -e `. Instead, you should clone the repo to your machine and then `pip install /path/to/zappa/repo` or `ln -s /path/to/zappa/repo/zappa zappa` in your local project.
-
-## Patrons
-
-If you or your company uses **Zappa**, please consider giving what you can to support the ongoing development of the project!
-
-You can become a patron by **[visiting our Patreon page](https://patreon.com/zappa)**.
-
-Zappa is currently supported by these awesome individuals and companies:
-
-  * Nathan Lawrence
-  * LaunchLab
-  * Sean Paley
-  * Theo Chitayat
-  * George Sibble
-  * Joe Weiss
-  * Nik Bora
-  * Zerong Toby Wang
-  * Gareth E
-  * Matt Jackson
-  * Sean Coates
-  * Alexander Loschilov
-  * Korey Peters
-  * Joe Weiss
-  * Kimmo Parvianen-Jalanko
-  * Patrick Agin
-  * Roberto Martinez
-  * Charles Dimino
-  * Doug Beney
-  * Dan "The Man" Gayle
-  * Juancito
-  * Will Childs-Klein
-  * Efi Merdler Kravitz
-  * **Philippe Trounev**
-
-Thank you very, very much!
-
-## Support / Development / Training / Consulting
-
-Do you need help with..
-
-  * Porting existing Flask and Django applications to Zappa?
-  * Building new applications and services that scale infinitely?
-  * Reducing your operations and hosting costs?
-  * Adding new custom features into Zappa?
-  * Training your team to use AWS and other server-less paradigms?
-
-Good news! We're currently available for remote and on-site consulting for small, large and enterprise teams. Please contact <miserlou@gmail.com> with your needs and let's work together!
-
-<br />
-<p align="center">
-  <a href="https://gun.io"><img src="http://i.imgur.com/M7wJipR.png" alt="Made by Gun.io"/></a>
-</p>
