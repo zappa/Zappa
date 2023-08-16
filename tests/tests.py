@@ -2275,7 +2275,9 @@ class TestZappa(unittest.TestCase):
         # get valid versions from tags
         version_match_string = "v?[0-9]+.[0-9]+.[0-9]+"
         tags = [
-            tag.strip() for tag in git_tag_command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())
+            tag.strip()
+            for tag in git_tag_command_output.split("\n")
+            if tag.strip() and re.match(version_match_string, tag.strip())
         ]
 
         latest_release_tag = sorted(tags, key=version.parse)[-1]
