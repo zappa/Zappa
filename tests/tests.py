@@ -2265,6 +2265,7 @@ class TestZappa(unittest.TestCase):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "slim_handler"
         zappa_cli.load_settings("test_settings.json")
+        zappa_cli.stage_config["exclude"] = ["placebo"]
 
         # create_package builds the package from the latest zappa pypi release
         # If the *current* minor release is not available on pypi create_package() will fail
