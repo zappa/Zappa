@@ -632,7 +632,8 @@ class Zappa:
             for glob_path in exclude_glob:
                 for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                     try:
-                        os.remove(path)
+                        if str(path).startswith(temp_project_path):
+                            os.remove(path)
                     except OSError:  # is a directory
                         shutil.rmtree(path)
 
@@ -648,39 +649,6 @@ class Zappa:
         package_info["build_time"] = build_time
         package_info["build_platform"] = os.sys.platform
         package_info["build_user"] = getpass.getuser()
-        # TODO: Add git head and info?
-
-        # Ex, from @scoates:
-        # def _get_git_branch():
-        #     chdir(DIR)
-        #     out = check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
-        #     lambci_branch = environ.get('LAMBCI_BRANCH', None)
-        #     if out == "HEAD" and lambci_branch:
-        #         out += " lambci:{}".format(lambci_branch)
-        #     return out
-
-        # def _get_git_hash():
-        #     chdir(DIR)
-        #     return check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        # def _get_uname():
-        #     return check_output(['uname', '-a']).strip()
-
-        # def _get_user():
-        #     return check_output(['whoami']).strip()
-
-        # def set_id_info(zappa_cli):
-        #     build_info = {
-        #         'branch': _get_git_branch(),
-        #         'hash': _get_git_hash(),
-        #         'build_uname': _get_uname(),
-        #         'build_user': _get_user(),
-        #         'build_time': datetime.datetime.utcnow().isoformat(),
-        #     }
-        #     with open(path.join(DIR, 'id_info.json'), 'w') as f:
-        #         json.dump(build_info, f)
-        #     return True
-
         package_id_file = open(os.path.join(temp_project_path, "package_info.json"), "w")
         dumped = json.dumps(package_info, indent=4)
         try:
@@ -764,7 +732,8 @@ class Zappa:
         for glob_path in exclude_glob:
             for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                 try:
-                    os.remove(path)
+                    if str(path).startswith(temp_project_path):
+                        os.remove(path)
                 except OSError:  # is a directory
                     shutil.rmtree(path)
 
