@@ -1,4 +1,3 @@
-# -*- coding: utf8 -*-
 import base64
 import collections
 import hashlib
@@ -23,6 +22,7 @@ import botocore
 import botocore.stub
 import flask
 import mock
+import pytest
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
@@ -2260,6 +2260,7 @@ class TestZappa(unittest.TestCase):
         finally:
             sys.stderr = old_stderr
 
+    @pytest.mark.skipif(sys.version_info >= (3, 11), reason="Only support released python runtimes")
     def test_slim_handler(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "slim_handler"
