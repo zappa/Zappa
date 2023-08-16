@@ -2,6 +2,7 @@ import base64
 import logging
 import sys
 from io import BytesIO
+from typing import Optional
 from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
