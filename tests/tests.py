@@ -2714,11 +2714,7 @@ class TestZappa(unittest.TestCase):
             "pathParameters": {},
             "path": "/path/path1",
             "httpMethod": "GET",
-            "queryStringParameters": {
-                "query": "Jane&John",
-                "otherquery": "B",
-                "test": "hello+m.te&how&are&you"
-            },
+            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
             "requestContext": {},
         }
         request = create_wsgi_request(event)
