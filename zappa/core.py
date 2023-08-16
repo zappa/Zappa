@@ -497,12 +497,14 @@ class Zappa:
         # This is the recommended method for installing packages if you don't
         # to depend on `setuptools`
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
-        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
-        pip_process.communicate()
+        pip_process_output = pip_process.communicate()
         pip_return_code = pip_process.returncode
 
         if pip_return_code:
+            logger.error(pip_process_output)
+            logger.error("Pypi lookup failed: pkg_list=%s", str(pkg_list))
             raise EnvironmentError("Pypi lookup failed")
 
         return ve_path
