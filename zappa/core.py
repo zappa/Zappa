@@ -316,8 +316,10 @@ class Zappa:
             self.manylinux_suffix_start = "cp38"
         elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
-        else:
+        elif self.runtime == "python3.10":
             self.manylinux_suffix_start = "cp310"
+        else:
+            self.manylinux_suffix_start = "cp311"
 
         if not architecture:
             architecture = ["x86_64"]
