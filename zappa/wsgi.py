@@ -41,7 +41,6 @@ def create_wsgi_request(
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = unquote(query_string)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
