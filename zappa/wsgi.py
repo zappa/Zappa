@@ -44,17 +44,18 @@ def create_wsgi_request(
     query_string = unquote(query_string)
 
     if context_header_mappings:
-        for key, value in context_header_mappings.items():
-            parts = value.split(".")
-            header_val = event_info["requestContext"]
+        request_context = event_info.get("requestContext", {})
+        for context_header_name, context_header_values in context_header_mappings.items():
+            context_header_value = None
+            parts = context_header_values.split(".")
             for part in parts:
-                if part not in header_val:
-                    header_val = None
+                if part not in request_context:
+                    context_header_value = None
                     break
                 else:
-                    header_val = header_val[part]
-            if header_val is not None:
-                headers[key] = header_val
+                    context_header_value = request_context[part]
+            if context_header_value is not None:
+                headers[context_header_name] = context_header_value
 
     # Related:  https://github.com/Miserlou/Zappa/issues/677
     #           https://github.com/Miserlou/Zappa/issues/683

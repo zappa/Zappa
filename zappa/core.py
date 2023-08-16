@@ -1312,7 +1312,7 @@ class Zappa:
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
         }
 
-        if lambda_aws_config["PackageType"] != "Image":
+        if lambda_aws_config.get("PackageType", None) != "Image":
             kwargs.update(
                 {
                     "Handler": handler,
@@ -1358,7 +1358,11 @@ class Zappa:
         response = self.lambda_client.list_versions_by_function(FunctionName=function_name)
 
         # https://github.com/Miserlou/Zappa/pull/2192
-        if len(response.get("Versions", [])) > 1 and response["Versions"][-1]["PackageType"] == "Image":
+        if (
+            len(response.get("Versions", [])) > 1
+            and "PackageType" in response["Versions"][-1]
+            and response["Versions"][-1]["PackageType"] == "Image"
+        ):
             raise NotImplementedError("Zappa's rollback functionality is not available for Docker based deployments")
 
         # Take into account $LATEST
