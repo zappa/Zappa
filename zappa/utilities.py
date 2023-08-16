@@ -704,4 +704,4 @@ def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
     try:
         json.dumps((args, kwargs))
     except (TypeError, OverflowError):
-        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
+        raise UnserializableJsonError("Arguments to asynchronous.task must be JSON serializable!")

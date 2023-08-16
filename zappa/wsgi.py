@@ -156,11 +156,12 @@ def create_wsgi_request(
     return environ
 
 
-def common_log(environ, response, response_time=None):
+def common_log(environ, response, response_time: Optional[int] = None):
     """
     Given the WSGI environ and the response,
     log this event in Common Log Format.
 
+    response_time: response time in micro-seconds
     """
 
     logger = logging.getLogger()
