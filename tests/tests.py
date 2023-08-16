@@ -240,10 +240,7 @@ class TestZappa(unittest.TestCase):
                 return_value=mock_installed_packages,
             ):
                 z = Zappa(runtime="python3.11")
-                path = z.create_lambda_zip(
-                    handler_file=os.path.realpath(__file__),
-                    exclude_glob=[str(file_to_not_delete)]
-                )
+                path = z.create_lambda_zip(handler_file=os.path.realpath(__file__), exclude_glob=[str(file_to_not_delete)])
                 self.assertTrue(os.path.isfile(path))
                 self.assertTrue(file_to_not_delete.exists())
                 os.remove(file_to_not_delete)
