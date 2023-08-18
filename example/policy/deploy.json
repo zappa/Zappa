@@ -31,6 +31,8 @@
                 "lambda:AddPermission",
                 "lambda:CreateFunction",
                 "lambda:DeleteFunction",
+                "lambda:DeleteFunctionConcurrency",
+                "lambda:GetAlias",
                 "lambda:GetFunction",
                 "lambda:GetFunctionConfiguration",
                 "lambda:GetPolicy",
