@@ -501,8 +501,10 @@ class Zappa:
 
         if pip_return_code:
             logger.info("command: %s", " ".join(command))
-            logger.error("stdout: %s", stdout_result)
-            logger.error("stderr: %s", stderror_result)
+            if stdout_result.strip():
+                logger.info("stdout: %s", stdout_result.strip())
+            if stderror_result.strip():
+                logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
         return ve_path
