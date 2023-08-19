@@ -314,8 +314,10 @@ class Zappa:
             self.manylinux_suffix_start = "cp38"
         elif self.runtime == "python3.9":
             self.manylinux_suffix_start = "cp39"
-        else:
+        elif self.runtime == "python3.10":
             self.manylinux_suffix_start = "cp310"
+        else:
+            self.manylinux_suffix_start = "cp311"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
         # Currently python3.7 lambda runtime does not support manylinux_2_24
@@ -1118,6 +1120,7 @@ class Zappa:
         description="Zappa Deployment",
         timeout=30,
         memory_size=512,
+        ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
@@ -1154,6 +1157,7 @@ class Zappa:
             Description=description,
             Timeout=timeout,
             MemorySize=memory_size,
+            EphemeralStorage=ephemeral_storage,
             Publish=publish,
             VpcConfig=vpc_config,
             DeadLetterConfig=dead_letter_config,
@@ -1302,6 +1306,7 @@ class Zappa:
         description="Zappa Deployment",
         timeout=30,
         memory_size=512,
+        ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
         runtime="python3.7",
@@ -1346,6 +1351,7 @@ class Zappa:
             "Description": description,
             "Timeout": timeout,
             "MemorySize": memory_size,
+            "EphemeralStorage": ephemeral_storage,
             "VpcConfig": vpc_config,
             "Environment": {"Variables": aws_environment_variables},
             "KMSKeyArn": aws_kms_key_arn,
