@@ -24,8 +24,8 @@ import zipfile
 from builtins import bytes, int
 from distutils.dir_util import copy_tree
 from io import open
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 import boto3
 import botocore
