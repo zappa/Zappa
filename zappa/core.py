@@ -25,6 +25,7 @@ from builtins import bytes, int
 from distutils.dir_util import copy_tree
 from io import open
 from typing import Optional
+from pathlib import Path
 
 import boto3
 import botocore
@@ -950,7 +951,7 @@ class Zappa:
 
         return wheel_path
 
-    def get_manylinux_wheel_url(self, package_name, package_version):
+    def get_manylinux_wheel_url(self, package_name, package_version, ignore_cache: bool = False):
         """
         For a given package name, returns a link to the download URL,
         else returns None.
@@ -961,27 +962,31 @@ class Zappa:
         also caches the JSON file so that we don't have to poll Pypi
         every time.
         """
-        cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
-        if not os.path.isdir(cached_pypi_info_dir):
+        cached_pypi_info_dir = Path(tempfile.gettempdir()) / "cached_pypi_info"
+        if not cached_pypi_info_dir.is_dir():
             os.makedirs(cached_pypi_info_dir)
+
         # Even though the metadata is for the package, we save it in a
         # filename that includes the package's version. This helps in
         # invalidating the cached file if the user moves to a different
         # version of the package.
         # Related: https://github.com/Miserlou/Zappa/issues/899
-        json_file = "{0!s}-{1!s}.json".format(package_name, package_version)
-        json_file_path = os.path.join(cached_pypi_info_dir, json_file)
-        if os.path.exists(json_file_path):
-            with open(json_file_path, "rb") as metafile:
+        data = None
+        json_file_name = "{0!s}-{1!s}.json".format(package_name, package_version)
+        json_file_path = cached_pypi_info_dir / json_file_name
+        if json_file_path.exists():
+            with json_file_path.open("rb") as metafile:
                 data = json.load(metafile)
-        else:
+
+        if not data or ignore_cache:
             url = "https://pypi.python.org/pypi/{}/json".format(package_name)
             try:
                 res = requests.get(url, timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)))
                 data = res.json()
             except Exception:  # pragma: no cover
                 return None, None
-            with open(json_file_path, "wb") as metafile:
+
+            with json_file_path.open("wb") as metafile:
                 jsondata = json.dumps(data)
                 metafile.write(bytes(jsondata, "utf-8"))
 
