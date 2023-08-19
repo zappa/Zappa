@@ -245,7 +245,7 @@ class TestZappa(unittest.TestCase):
             }
         }
 
-        with mock.patch("requests.get") as mock_get:
+        with mock.patch("zappa.core.requests.get") as mock_get:
             mock_get.return_value.json.return_value = mock_package_data
             wheel_url, file_name = z.get_manylinux_wheel_url("markupsafe", "2.1.3")
 
