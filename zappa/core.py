@@ -635,7 +635,9 @@ class Zappa:
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
             for glob_path in exclude_glob:
-                for path in glob.glob(os.path.join(temp_project_path, glob_path)):
+                # Use `recursive` to match paths deep in the directory tree
+                # https://github.com/zappa/Zappa/issues/1269
+                for path in glob.glob(os.path.join(temp_project_path, glob_path), recursive=True):
                     try:
                         os.remove(path)
                     except OSError:  # is a directory
@@ -767,7 +769,9 @@ class Zappa:
 
         # Cleanup
         for glob_path in exclude_glob:
-            for path in glob.glob(os.path.join(temp_project_path, glob_path)):
+            # Use `recursive` to match paths deep in the directory tree
+            # https://github.com/zappa/Zappa/issues/1269
+            for path in glob.glob(os.path.join(temp_project_path, glob_path), recursive=True):
                 try:
                     os.remove(path)
                 except OSError:  # is a directory
