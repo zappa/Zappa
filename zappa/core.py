@@ -21,6 +21,7 @@ import zipfile
 from builtins import bytes, int
 from distutils.dir_util import copy_tree
 from io import open
+from pathlib import Path
 from typing import Optional
 
 import boto3
@@ -317,13 +318,17 @@ class Zappa:
             self.manylinux_suffix_start = "cp311"
 
         # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # Currently python3.7 lambda runtime does not support manylinux_2_24
+        # See https://github.com/zappa/Zappa/issues/1249 for more details
+        if self.runtime == "python3.7":
+            self.manylinux_suffixes = ("2014", "2010", "1")
+        else:
+            self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+
         self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
+            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
-        self.manylinux_wheel_abi3_file_match = re.compile(
-            rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
-        )
+        self.manylinux_wheel_abi3_file_match = re.compile(rf"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
@@ -924,11 +929,14 @@ class Zappa:
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
-                if re.match(self.manylinux_wheel_file_match, pathname) or re.match(
-                    self.manylinux_wheel_abi3_file_match, pathname
-                ):
-                    print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                if re.match(self.manylinux_wheel_file_match, pathname):
+                    logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                     return pathname
+                elif re.match(self.manylinux_wheel_abi3_file_match, pathname):
+                    for manylinux_suffix in self.manylinux_suffixes:
+                        if f"manylinux{manylinux_suffix}_x86_64" in pathname:
+                            logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                            return pathname
 
         # The file is not cached, download it.
         wheel_url, filename = self.get_manylinux_wheel_url(package_name, package_version)
@@ -936,7 +944,7 @@ class Zappa:
             return None
 
         wheel_path = os.path.join(cached_wheels_dir, filename)
-        print(f" - {package_name}=={package_version}: Downloading")
+        logger.info(f" - {package_name}=={package_version}: Downloading")
         with open(wheel_path, "wb") as f:
             self.download_url_with_progress(wheel_url, f, disable_progress)
 
@@ -945,7 +953,7 @@ class Zappa:
 
         return wheel_path
 
-    def get_manylinux_wheel_url(self, package_name, package_version):
+    def get_manylinux_wheel_url(self, package_name, package_version, ignore_cache: bool = False):
         """
         For a given package name, returns a link to the download URL,
         else returns None.
@@ -956,27 +964,31 @@ class Zappa:
         also caches the JSON file so that we don't have to poll Pypi
         every time.
         """
-        cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
-        if not os.path.isdir(cached_pypi_info_dir):
+        cached_pypi_info_dir = Path(tempfile.gettempdir()) / "cached_pypi_info"
+        if not cached_pypi_info_dir.is_dir():
             os.makedirs(cached_pypi_info_dir)
+
         # Even though the metadata is for the package, we save it in a
         # filename that includes the package's version. This helps in
         # invalidating the cached file if the user moves to a different
         # version of the package.
         # Related: https://github.com/Miserlou/Zappa/issues/899
-        json_file = "{0!s}-{1!s}.json".format(package_name, package_version)
-        json_file_path = os.path.join(cached_pypi_info_dir, json_file)
-        if os.path.exists(json_file_path):
-            with open(json_file_path, "rb") as metafile:
+        data = None
+        json_file_name = "{0!s}-{1!s}.json".format(package_name, package_version)
+        json_file_path = cached_pypi_info_dir / json_file_name
+        if json_file_path.exists():
+            with json_file_path.open("rb") as metafile:
                 data = json.load(metafile)
-        else:
+
+        if not data or ignore_cache:
             url = "https://pypi.python.org/pypi/{}/json".format(package_name)
             try:
                 res = requests.get(url, timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)))
                 data = res.json()
             except Exception:  # pragma: no cover
                 return None, None
-            with open(json_file_path, "wb") as metafile:
+
+            with json_file_path.open("wb") as metafile:
                 jsondata = json.dumps(data)
                 metafile.write(bytes(jsondata, "utf-8"))
 
@@ -986,9 +998,13 @@ class Zappa:
 
         for f in data["releases"][package_version]:
             if re.match(self.manylinux_wheel_file_match, f["filename"]):
-                return f["url"], f["filename"]
+                # Since we have already lowered package names in get_installed_packages
+                # manylinux caching is not working for packages with capital case in names like MarkupSafe
+                return f["url"], f["filename"].lower()
             elif re.match(self.manylinux_wheel_abi3_file_match, f["filename"]):
-                return f["url"], f["filename"]
+                for manylinux_suffix in self.manylinux_suffixes:
+                    if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
+                        return f["url"], f["filename"].lower()
         return None, None
 
     ##
