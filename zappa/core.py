@@ -1568,7 +1568,7 @@ class Zappa:
                         },
                     )
                 else:
-                    response = self.lambda_client.create_function_url_config(
+                    response = self.lambda_client.update_function_url_config(
                         FunctionName=function_name,
                         AuthType=function_url_config["authorizer"]
                     )
