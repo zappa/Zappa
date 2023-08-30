@@ -1528,18 +1528,24 @@ class Zappa:
 
     def deploy_lambda_function_url(self, function_name, function_url_config):
 
-        response = self.lambda_client.create_function_url_config(
-            FunctionName=function_name,
-            AuthType=function_url_config["authorizer"],
-            Cors={
-                "AllowCredentials": function_url_config["cors"]["allowCredentials"],
-                "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
-                "AllowMethods": function_url_config["cors"]["allowedMethods"],
-                "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
-                "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
-                "MaxAge": function_url_config["cors"]["maxAge"],
-            },
-        )
+        if function_url_config["cors"]:
+            response = self.lambda_client.create_function_url_config(
+                FunctionName=function_name,
+                AuthType=function_url_config["authorizer"],
+                Cors={
+                    "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                    "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                    "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                    "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                    "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                    "MaxAge": function_url_config["cors"]["maxAge"],
+                },
+            )
+        else:
+            response = self.lambda_client.create_function_url_config(
+                FunctionName=function_name,
+                AuthType=function_url_config["authorizer"]
+            )
         print("function URL address: {}".format(response["FunctionUrl"]))
         self.update_function_url_policy(function_name, function_url_config)
         return response

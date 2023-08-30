@@ -890,7 +890,7 @@ to change Zappa's behavior. Use these at your own risk!
         "function_url_enabled": false, // optional, set to true if you want to enable function URL. Default false.
         "function_url_config": {
             "authorizer": "NONE", // required if function url is enabled. default None. https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
-            "cors": {
+            "cors": { // set to false if disable cors.
               "allowedOrigins": [], // The origins that can access your function URL. default [*]
               "allowedHeaders": [], // The HTTP headers that origins can include in requests to your function URL.
               "allowedMethods": [], // The HTTP methods that are allowed when calling your function URL. For example: GET , POST , DELETE , or the wildcard character (* ). default [*]
