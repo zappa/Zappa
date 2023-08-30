@@ -108,6 +108,7 @@ class ZappaCLI:
     handler_path = None
     vpc_config = None
     memory_size = None
+    ephemeral_storage = None
     use_apigateway = None
     lambda_handler = None
     django_settings = None
@@ -810,6 +811,7 @@ class ZappaCLI:
                 dead_letter_config=self.dead_letter_config,
                 timeout=self.timeout_seconds,
                 memory_size=self.memory_size,
+                ephemeral_storage=self.ephemeral_storage,
                 runtime=self.runtime,
                 aws_environment_variables=self.aws_environment_variables,
                 aws_kms_key_arn=self.aws_kms_key_arn,
@@ -1057,6 +1059,7 @@ class ZappaCLI:
             vpc_config=self.vpc_config,
             timeout=self.timeout_seconds,
             memory_size=self.memory_size,
+            ephemeral_storage=self.ephemeral_storage,
             runtime=self.runtime,
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
@@ -2244,6 +2247,14 @@ class ZappaCLI:
         )
         self.vpc_config = self.stage_config.get("vpc_config", {})
         self.memory_size = self.stage_config.get("memory_size", 512)
+        self.ephemeral_storage = self.stage_config.get("ephemeral_storage", {"Size": 512})
+
+        # Validate ephemeral storage structure and size
+        if "Size" not in self.ephemeral_storage:
+            raise ClickException("Please provide a valid Size for ephemeral_storage in your Zappa settings.")
+        elif not 512 <= self.ephemeral_storage["Size"] <= 10240:
+            raise ClickException("Please provide a valid ephemeral_storage size between 512 - 10240 in your Zappa settings.")
+
         self.app_function = self.stage_config.get("app_function", None)
         self.exception_handler = self.stage_config.get("exception_handler", None)
         self.aws_region = self.stage_config.get("aws_region", None)

@@ -10,6 +10,9 @@
            "zip": "test_settings.callback"
        },
        "delete_local_zip": true,
+       "ephemeral_storage": {
+           "Size": 1024
+       },
        "debug": true,
        "parameter_depth": 2,
        "prebuild_script": "tests.test_app.prebuild_me",
@@ -106,6 +109,18 @@
        "environment_variables": {
           "EXTENDO": "You bet"
        }
+    },
+    "invalid_ephemeral_storage_out_of_range": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "Size": 99999
+        }
+    },
+    "invalid_ephemeral_storage_missing_key": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "BadKey": 1024
+        }
     },
     "build_package_only_delete_local_zip_false": {
       "delete_local_zip": false,
