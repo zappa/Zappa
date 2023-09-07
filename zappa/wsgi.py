@@ -2,6 +2,7 @@ import base64
 import logging
 import sys
 from io import BytesIO
+from typing import Optional
 from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
@@ -159,11 +160,12 @@ def create_wsgi_request(
     return environ
 
 
-def common_log(environ, response, response_time=None):
+def common_log(environ, response, response_time: Optional[int] = None):
     """
     Given the WSGI environ and the response,
     log this event in Common Log Format.
 
+    response_time: response time in micro-seconds
     """
 
     logger = logging.getLogger()
