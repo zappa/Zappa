@@ -2768,7 +2768,37 @@ class TestZappa(unittest.TestCase):
             "requestContext": {},
         }
         request = create_wsgi_request(event)
-        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
+        expected = "a=A%2CB&b=C%23D"  # unencoded result: "a=A,B&b=C#D"
+        self.assertEqual(request["QUERY_STRING"], expected)
+
+    def test_wsgi_query_string_ampersand_unencoded(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {
+                "test": "M&M",
+            },
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M")
+
+    def test_wsgi_query_string_with_encodechars(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
+        self.assertEqual(request["QUERY_STRING"], expected)
 
 
 if __name__ == "__main__":

@@ -36,13 +36,16 @@ def create_wsgi_request(
     # we have to check for the existence of one and then fall back to the
     # other.
 
+    # Assumes that the lambda event provides the unencoded string as
+    # the value in "queryStringParameters"/"multiValueQueryStringParameters"
+    # The QUERY_STRING value provided to WSGI expects the query string to be properly urlencoded.
+    # See https://github.com/zappa/Zappa/issues/1227 for discussion of this behavior.
     if "multiValueQueryStringParameters" in event_info:
         query = event_info["multiValueQueryStringParameters"]
         query_string = urlencode(query, doseq=True) if query else ""
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = unquote(query_string)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
