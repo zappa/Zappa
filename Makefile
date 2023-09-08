@@ -27,6 +27,7 @@ clean:
 	coverage erase
 
 requirements:
+	pip install pip --upgrade
 	pip install pipenv>2021.11.15
 	pipenv lock
 	pipenv sync --dev
