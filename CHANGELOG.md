@@ -2,6 +2,7 @@
 
 ## 0.58.0
 
+* Add Python 3.11 support (#1262)
 * support new ephemeral storage feature in zappa_settings.json (#1120)
 * Update permissions (PR #1119)
 * Outdated manylinux wheels download logic (#1249)
