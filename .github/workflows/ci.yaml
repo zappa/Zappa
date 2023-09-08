@@ -22,10 +22,12 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}v2
+          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
       - name: make sure we have version tags
         run: git fetch --unshallow --tags
+      - name: Update pip/pipenv
+        run: python -m pip install --upgrade pip pipenv
       - name: Setup Virtualenv
         run: python -m venv .venv
       - name: Install
