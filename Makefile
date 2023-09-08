@@ -28,7 +28,8 @@ clean:
 
 requirements:
 	pip install pip --upgrade
-	pip install pipenv>2021.11.15
+	pip install "pipenv>2021.11.15,<2023.8.19"
+
 	pipenv lock
 	pipenv sync --dev
 
