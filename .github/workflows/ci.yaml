@@ -22,7 +22,7 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
+          key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}v2
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
       - name: make sure we have version tags
         run: git fetch --unshallow --tags
