@@ -1,5 +1,14 @@
 # Zappa Changelog
 
+## 0.58.0
+
+* support new ephemeral storage feature in zappa_settings.json (#1120)
+* Update permissions (PR #1119)
+* Outdated manylinux wheels download logic (#1249)
+* cryptography>=35.0, plus pip>=20.3 - downloads wrong cryptography anywheel package (GLIBC_2.18 error) (#1063)
+* fix response time improperly configured for micro-seconds. (#1265)
+* fix unquote issue with querystring handling. (#1264)
+
 ## 0.57.0
 
 * Python 3.10 support (#1124, #1160)
