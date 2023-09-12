@@ -1,4 +1,3 @@
-# -*- coding: utf8 -*-
 import base64
 import collections
 import hashlib
@@ -23,6 +22,7 @@ import botocore
 import botocore.stub
 import flask
 import mock
+import pytest
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
@@ -2339,21 +2339,25 @@ class TestZappa(unittest.TestCase):
         finally:
             sys.stderr = old_stderr
 
+    @pytest.mark.skipif(sys.version_info >= (3, 11), reason="Only support released python runtimes")
     def test_slim_handler(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "slim_handler"
         zappa_cli.load_settings("test_settings.json")
+        zappa_cli.stage_config["exclude"] = ["placebo"]
 
         # create_package builds the package from the latest zappa pypi release
         # If the *current* minor release is not available on pypi create_package() will fail
         # assumes that the latest pypi release has a tag matching "v?[0-9]+.[0-9]+.[0-9]+" defined in git.
         command = "git tag"
-        command_output = check_output(command, shell=True).decode("utf8")
+        git_tag_command_output = check_output(command, shell=True).decode("utf8")
 
         # get valid versions from tags
         version_match_string = "v?[0-9]+.[0-9]+.[0-9]+"
         tags = [
-            tag.strip() for tag in command_output.split("\n") if tag.strip() and re.match(version_match_string, tag.strip())
+            tag.strip()
+            for tag in git_tag_command_output.split("\n")
+            if tag.strip() and re.match(version_match_string, tag.strip())
         ]
 
         latest_release_tag = sorted(tags, key=version.parse)[-1]
