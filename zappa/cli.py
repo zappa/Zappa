@@ -108,6 +108,7 @@ class ZappaCLI:
     handler_path = None
     vpc_config = None
     memory_size = None
+    ephemeral_storage = None
     use_apigateway = None
     lambda_handler = None
     django_settings = None
@@ -577,7 +578,6 @@ class ZappaCLI:
         elif command == "rollback":  # pragma: no cover
             self.rollback(self.vargs["num_rollback"])
         elif command == "invoke":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the function to invoke.")
                 return
@@ -588,7 +588,6 @@ class ZappaCLI:
                 no_color=self.vargs["no_color"],
             )
         elif command == "manage":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the management command to invoke.")
                 return
@@ -812,6 +811,7 @@ class ZappaCLI:
                 dead_letter_config=self.dead_letter_config,
                 timeout=self.timeout_seconds,
                 memory_size=self.memory_size,
+                ephemeral_storage=self.ephemeral_storage,
                 runtime=self.runtime,
                 aws_environment_variables=self.aws_environment_variables,
                 aws_kms_key_arn=self.aws_kms_key_arn,
@@ -852,7 +852,6 @@ class ZappaCLI:
             self.zappa.deploy_lambda_alb(**kwargs)
 
         if self.use_apigateway:
-
             # Create and configure the API Gateway
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
@@ -1053,6 +1052,7 @@ class ZappaCLI:
             vpc_config=self.vpc_config,
             timeout=self.timeout_seconds,
             memory_size=self.memory_size,
+            ephemeral_storage=self.ephemeral_storage,
             runtime=self.runtime,
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
@@ -1066,7 +1066,6 @@ class ZappaCLI:
                 self.remove_local_zip()
 
         if self.use_apigateway:
-
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
                 lambda_name=self.lambda_name,
@@ -1433,7 +1432,6 @@ class ZappaCLI:
         final_string = string
 
         try:
-
             # Line headers
             try:
                 for token in ["START", "END", "REPORT", "[DEBUG]"]:
@@ -1632,7 +1630,7 @@ class ZappaCLI:
         """
 
         non_strings = []
-        for (k, v) in environment.items():
+        for k, v in environment.items():
             if not isinstance(v, str):
                 non_strings.append(k)
         if non_strings:
@@ -2144,7 +2142,6 @@ class ZappaCLI:
                 module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
 
             except (ImportError, AttributeError):
-
                 try:  # Callback func might be in virtualenv
                     module_ = importlib.import_module(mod_path)
                 except ImportError:  # pragma: no cover
@@ -2234,6 +2231,14 @@ class ZappaCLI:
         )
         self.vpc_config = self.stage_config.get("vpc_config", {})
         self.memory_size = self.stage_config.get("memory_size", 512)
+        self.ephemeral_storage = self.stage_config.get("ephemeral_storage", {"Size": 512})
+
+        # Validate ephemeral storage structure and size
+        if "Size" not in self.ephemeral_storage:
+            raise ClickException("Please provide a valid Size for ephemeral_storage in your Zappa settings.")
+        elif not 512 <= self.ephemeral_storage["Size"] <= 10240:
+            raise ClickException("Please provide a valid ephemeral_storage size between 512 - 10240 in your Zappa settings.")
+
         self.app_function = self.stage_config.get("app_function", None)
         self.exception_handler = self.stage_config.get("exception_handler", None)
         self.aws_region = self.stage_config.get("aws_region", None)
@@ -2468,7 +2473,6 @@ class ZappaCLI:
             handler_zip = self.zip_path
 
         with zipfile.ZipFile(handler_zip, "a") as lambda_zip:
-
             settings_s = self.get_zappa_settings_string()
 
             # Copy our Django app into root of our package.
@@ -2754,7 +2758,6 @@ class ZappaCLI:
 
         final_string = string
         try:
-
             # First, do stuff in square brackets
             inside_squares = re.findall(r"\[([^]]*)\]", string)
             for token in inside_squares:
@@ -2842,7 +2845,6 @@ class ZappaCLI:
             module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
 
         except (ImportError, AttributeError):
-
             try:  # Prebuild func might be in virtualenv
                 module_ = importlib.import_module(pb_mod_path)
             except ImportError:  # pragma: no cover

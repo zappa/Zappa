@@ -2,9 +2,8 @@ import base64
 import logging
 import sys
 from io import BytesIO
-from urllib.parse import urlencode
-
-from werkzeug import urls
+from typing import Optional
+from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 
@@ -37,13 +36,16 @@ def create_wsgi_request(
     # we have to check for the existence of one and then fall back to the
     # other.
 
+    # Assumes that the lambda event provides the unencoded string as
+    # the value in "queryStringParameters"/"multiValueQueryStringParameters"
+    # The QUERY_STRING value provided to WSGI expects the query string to be properly urlencoded.
+    # See https://github.com/zappa/Zappa/issues/1227 for discussion of this behavior.
     if "multiValueQueryStringParameters" in event_info:
         query = event_info["multiValueQueryStringParameters"]
         query_string = urlencode(query, doseq=True) if query else ""
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = urls.url_unquote(query_string)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
@@ -81,7 +83,7 @@ def create_wsgi_request(
     # https://github.com/Miserlou/Zappa/issues/1188
     headers = titlecase_keys(headers)
 
-    path = urls.url_unquote(event_info["path"])
+    path = unquote(event_info["path"])
     if base_path:
         script_name = "/" + base_path
 
@@ -108,7 +110,12 @@ def create_wsgi_request(
         "SERVER_PROTOCOL": str("HTTP/1.1"),
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": headers.get("X-Forwarded-Proto", "http"),
-        "wsgi.input": body,
+        # This must be Bytes or None
+        # - https://docs.djangoproject.com/en/4.2/releases/4.2/#miscellaneous
+        # - https://wsgi.readthedocs.io/en/latest/definitions.html#envvar-wsgi.input
+        # > Manually instantiated WSGIRequest objects must be provided
+        # > a file-like object for wsgi.input.
+        "wsgi.input": BytesIO(body),
         "wsgi.errors": sys.stderr,
         "wsgi.multiprocess": False,
         "wsgi.multithread": False,
@@ -131,8 +138,6 @@ def create_wsgi_request(
         if "Content-Type" in headers:
             environ["CONTENT_TYPE"] = headers["Content-Type"]
 
-        # This must be Bytes or None
-        environ["wsgi.input"] = BytesIO(body)
         if body:
             environ["CONTENT_LENGTH"] = str(len(body))
         else:
@@ -155,11 +160,12 @@ def create_wsgi_request(
     return environ
 
 
-def common_log(environ, response, response_time=None):
+def common_log(environ, response, response_time: Optional[int] = None):
     """
     Given the WSGI environ and the response,
     log this event in Common Log Format.
 
+    response_time: response time in micro-seconds
     """
 
     logger = logging.getLogger()
