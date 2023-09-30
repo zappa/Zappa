@@ -507,6 +507,7 @@ class TestZappa(unittest.TestCase):
 
         # Authorizer and IAM
         authorizer = {
+            "type": "TOKEN",
             "function": "runapi.authorization.gateway_authorizer.evaluate_token",
             "result_ttl": 300,
             "token_header": "Authorization",
@@ -584,6 +585,60 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(
             "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:my-function/invocations",
             parsable_template["Resources"]["Authorizer"]["Properties"]["AuthorizerUri"],
+        )
+
+        # Authorizer of type request with identity sources
+        authorizer = {
+            "type": "REQUEST",
+            "function": "runapi.authorization.gateway_authorizer.evaluate_token",
+            "result_ttl": 300,
+            "identity_sources": {
+                "headers": ["Authorization"],
+                "query_strings": ["token"],
+                "stage_variables": ["test"],
+                "contexts": ["principalId"],
+            }
+        }
+        z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)
+        parsable_template = json.loads(z.cf_template.to_json())
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET0"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET1"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "REQUEST", parsable_template["Resources"]["Authorizer"]["Properties"]["Type"]
+        )
+        self.assertEqual(
+            "method.request.header.Authorization,method.request.querystring.token,method.stageVariables.test,method.context.principalId",
+            parsable_template["Resources"]["Authorizer"]["Properties"]["IdentitySource"]
+        )
+
+        # Authorizer of type request without identity sources
+        authorizer = {
+            "type": "REQUEST",
+            "function": "runapi.authorization.gateway_authorizer.evaluate_token",
+            "result_ttl": 300,
+        }
+        z.create_stack_template(lambda_arn, "helloworld", False, False, authorizer)
+        parsable_template = json.loads(z.cf_template.to_json())
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET0"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "CUSTOM",
+            parsable_template["Resources"]["GET1"]["Properties"]["AuthorizationType"],
+        )
+        self.assertEqual(
+            "REQUEST", parsable_template["Resources"]["Authorizer"]["Properties"]["Type"]
+        )
+        self.assertEqual(
+            "",
+            parsable_template["Resources"]["Authorizer"]["Properties"]["IdentitySource"]
         )
 
     def test_policy_json(self):

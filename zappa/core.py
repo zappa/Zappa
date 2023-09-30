@@ -1810,10 +1810,39 @@ class Zappa:
         if authorizer_type == "TOKEN":
             if not self.credentials_arn:
                 self.get_credentials_arn()
-            authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get("result_ttl", 300)
+            authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
+                "result_ttl", 300
+            )
+            authorizer_resource.IdentitySource = (
+                "method.request.header.%s" % authorizer.get("token_header", "Authorization")
+            )
             authorizer_resource.AuthorizerCredentials = self.credentials_arn
         if authorizer_type == "COGNITO_USER_POOLS":
             authorizer_resource.ProviderARNs = authorizer.get("provider_arns")
+        if authorizer_type == "REQUEST":
+            if not self.credentials_arn:
+                self.get_credentials_arn()
+            authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
+                "result_ttl", 300
+            )
+            authorizer_resource.IdentitySource = ""
+            identity_sources = authorizer.get("identity_sources", {})
+            for source_key in identity_sources:
+                if source_key == "headers":
+                    for header in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.request.header.%s," % header
+                elif source_key == "query_strings":
+                    for query_string in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.request.querystring.%s," % query_string
+                elif source_key == "stage_variables":
+                    for stage_variable in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.stageVariables.%s," % stage_variable
+                elif source_key == "contexts":
+                    for context in identity_sources[source_key]:
+                        authorizer_resource.IdentitySource += "method.context.%s," % context
+
+            if len(authorizer_resource.IdentitySource) > 1 and authorizer_resource.IdentitySource[-1] == ',':
+                authorizer_resource.IdentitySource = authorizer_resource.IdentitySource[:-1]
 
         self.cf_api_resources.append(authorizer_resource.title)
         self.cf_template.add_resource(authorizer_resource)
@@ -2281,7 +2310,9 @@ class Zappa:
         elif iam_authorization:
             auth_type = "AWS_IAM"
         elif authorizer:
-            auth_type = authorizer.get("type", "CUSTOM")
+            auth_type = authorizer.get("type", "TOKEN").upper()
+            if auth_type in ["TOKEN", "REQUEST"]:
+                auth_type = "CUSTOM"
 
         # build a fresh template
         self.cf_template = troposphere.Template()
