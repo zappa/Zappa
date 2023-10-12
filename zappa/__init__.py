@@ -30,4 +30,4 @@ elif running_in_docker() and sys.version_info.minor < MINIMUM_SUPPORTED_MINOR_VE
     )
     raise RuntimeError(err_msg)
 
-__version__ = "0.57.0"
+__version__ = "0.58.0"
