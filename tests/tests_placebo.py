@@ -3,6 +3,7 @@ import os
 import random
 import string
 import unittest
+from io import BytesIO
 
 import mock
 
@@ -219,7 +220,7 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(os.environ["hello"], "world")
 
         event = {
-            "body": {},
+            "body": None,
             "headers": {},
             "params": {
                 "parameter_1": "asdf1",
@@ -416,7 +417,7 @@ class TestZappa(unittest.TestCase):
                 {
                     "messageId": "c80e8021-a70a-42c7-a470-796e1186f753",
                     "receiptHandle": "AQEBJQ+/u6NsnT5t8Q/VbVxgdUl4TMKZ5FqhksRdIQvLBhwNvADoBxYSOVeCBXdnS9P+erlTtwEALHsnBXynkfPLH3BOUqmgzP25U8kl8eHzq6RAlzrSOfTO8ox9dcp6GLmW33YjO3zkq5VRYyQlJgLCiAZUpY2D4UQcE5D1Vm8RoKfbE+xtVaOctYeINjaQJ1u3mWx9T7tork3uAlOe1uyFjCWU5aPX/1OHhWCGi2EPPZj6vchNqDOJC/Y2k1gkivqCjz1CZl6FlZ7UVPOx3AMoszPuOYZ+Nuqpx2uCE2MHTtMHD8PVjlsWirt56oUr6JPp9aRGo6bitPIOmi4dX0FmuMKD6u/JnuZCp+AXtJVTmSHS8IXt/twsKU7A+fiMK01NtD5msNgVPoe9JbFtlGwvTQ==",
-                    "body": '{"foo":"bar"}',
+                    "body": BytesIO('{"foo":"bar"}'.encode()),
                     "attributes": {
                         "ApproximateReceiveCount": "3",
                         "SentTimestamp": "1529104986221",
@@ -443,7 +444,7 @@ class TestZappa(unittest.TestCase):
 
         # Ensure Zappa does return 401 if no function was defined.
         lh.settings.AUTHORIZER_FUNCTION = None
-        with self.assertRaisesRegexp(Exception, "Unauthorized"):
+        with self.assertRaisesRegex(Exception, "Unauthorized"):
             lh.handler(event, None)
 
         # Unhandled event
@@ -508,7 +509,6 @@ class TestZappa(unittest.TestCase):
 
     @placebo_session
     def test_add_event_source(self, session):
-
         event_source = {"arn": "blah:blah:blah:blah", "events": ["s3:ObjectCreated:*"]}
         # Sanity. This should fail.
         try:

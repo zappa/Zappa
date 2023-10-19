@@ -14,10 +14,9 @@ Flask = "*"
 isort = "*"
 mock = "*"
 mypy = "*"
-nose = "*"
-nose-timer = "*"
-pipenv = ">2021.11.15"
 packaging = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [packages]
 argcomplete = "*"
