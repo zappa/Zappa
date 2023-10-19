@@ -474,7 +474,7 @@ class ZappaCLI:
         else:
             self.stage_env = self.vargs.get("stage_env")
 
-        if args.command in ["package", "save-python-settings-file"]:
+        if args.command in ("package", "save-python-settings-file"):
             self.load_credentials = False
 
         self.command = args.command
