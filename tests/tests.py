@@ -197,6 +197,67 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_verify_python37_does_not_download_2_24_manylinux_wheel(self):
+        z = Zappa(runtime="python3.7")
+        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        expected_wheel_path = os.path.join(
+            cached_wheels_dir, "cryptography-35.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.whl"
+        )
+
+        # Check with known manylinux wheel package
+        actual_wheel_path = z.get_cached_manylinux_wheel("cryptography", "35.0.0")
+        self.assertEqual(actual_wheel_path, expected_wheel_path)
+        os.remove(actual_wheel_path)
+
+    def test_verify_downloaded_manylinux_wheel(self):
+        z = Zappa(runtime="python3.10")
+        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        expected_wheel_path = os.path.join(
+            cached_wheels_dir,
+            "pycryptodome-3.16.0-cp35-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        )
+
+        # check with a known manylinux wheel package
+        actual_wheel_path = z.get_cached_manylinux_wheel("pycryptodome", "3.16.0")
+        self.assertEqual(actual_wheel_path, expected_wheel_path)
+        os.remove(actual_wheel_path)
+
+    def test_verify_manylinux_filename_is_lowered(self):
+        z = Zappa(runtime="python3.10")
+        expected_filename = "markupsafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+
+        mock_package_data = {
+            "releases": {
+                "2.1.3": [
+                    {
+                        "url": "https://files.pythonhosted.org/packages/a6/56/f1d4ee39e898a9e63470cbb7fae1c58cce6874f25f54220b89213a47f273/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+                    },
+                    {
+                        "url": "https://files.pythonhosted.org/packages/12/b3/d9ed2c0971e1435b8a62354b18d3060b66c8cb1d368399ec0b9baa7c0ee5/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+                    },
+                    {
+                        "url": "https://files.pythonhosted.org/packages/bf/b7/c5ba9b7ad9ad21fc4a60df226615cf43ead185d328b77b0327d603d00cc5/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
+                        "filename": "MarkupSafe-2.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
+                    },
+                ]
+            }
+        }
+
+        with mock.patch("zappa.core.requests.get") as mock_get:
+            mock_get.return_value.json.return_value = mock_package_data
+            wheel_url, file_name = z.get_manylinux_wheel_url("markupsafe", "2.1.3", ignore_cache=True)
+
+            self.assertEqual(file_name, expected_filename)
+            mock_get.assert_called_once_with(
+                "https://pypi.python.org/pypi/markupsafe/json", timeout=float(os.environ.get("PIP_TIMEOUT", 1.5))
+            )
+
+        # Clean the generated files
+        cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
+        os.remove(os.path.join(cached_pypi_info_dir, "markupsafe-2.1.3.json"))
+
     def test_get_manylinux_python311(self):
         z = Zappa(runtime="python3.11")
         self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
@@ -1158,6 +1219,24 @@ class TestZappa(unittest.TestCase):
         zappa_cli.api_stage = "ttt888"
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(False, zappa_cli.stage_config["touch"])
+
+    def test_load_settings_ephemeral_storage_overwrite(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(zappa_cli.stage_config["ephemeral_storage"]["Size"], 1024)
+
+    def test_load_settings_ephemeral_storage_out_of_range(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "invalid_ephemeral_storage_out_of_range"
+        with self.assertRaises(ClickException) as err:
+            zappa_cli.load_settings("test_settings.json")
+
+    def test_load_settings_ephemeral_storage_missing_key(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "invalid_ephemeral_storage_missing_key"
+        with self.assertRaises(ClickException) as err:
+            zappa_cli.load_settings("test_settings.json")
 
     def test_load_extended_settings(self):
         zappa_cli = ZappaCLI()
@@ -2689,7 +2768,37 @@ class TestZappa(unittest.TestCase):
             "requestContext": {},
         }
         request = create_wsgi_request(event)
-        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
+        expected = "a=A%2CB&b=C%23D"  # unencoded result: "a=A,B&b=C#D"
+        self.assertEqual(request["QUERY_STRING"], expected)
+
+    def test_wsgi_query_string_ampersand_unencoded(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {
+                "test": "M&M",
+            },
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M")
+
+    def test_wsgi_query_string_with_encodechars(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
+        self.assertEqual(request["QUERY_STRING"], expected)
 
 
 if __name__ == "__main__":
