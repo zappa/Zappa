@@ -2005,6 +2005,52 @@ class TestZappa(unittest.TestCase):
             f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
 
+    def test_get_scheduled_event_name__using_invalid_character(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo$"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__using_hyphen(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo-2"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__max_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 63
+        lambda_name = "bar"
+
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"-{function}",
+        )
+
+    def test_get_scheduled_event_name__over_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 64
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__over_name_with_index(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 62
+        index = 1
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name, index)
+
     def test_shameless(self):
         shamelessly_promote()
 
@@ -2535,7 +2581,37 @@ class TestZappa(unittest.TestCase):
             "requestContext": {},
         }
         request = create_wsgi_request(event)
-        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
+        expected = "a=A%2CB&b=C%23D"  # unencoded result: "a=A,B&b=C#D"
+        self.assertEqual(request["QUERY_STRING"], expected)
+
+    def test_wsgi_query_string_ampersand_unencoded(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {
+                "test": "M&M",
+            },
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M")
+
+    def test_wsgi_query_string_with_encodechars(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
+        self.assertEqual(request["QUERY_STRING"], expected)
 
 
 if __name__ == "__main__":
