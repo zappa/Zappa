@@ -2238,6 +2238,52 @@ class TestZappa(unittest.TestCase):
             f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
 
+    def test_get_scheduled_event_name__using_invalid_character(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo$"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__using_hyphen(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo-2"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__max_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 63
+        lambda_name = "bar"
+
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"-{function}",
+        )
+
+    def test_get_scheduled_event_name__over_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 64
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__over_name_with_index(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 62
+        index = 1
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name, index)
+
     def test_shameless(self):
         shamelessly_promote()
 

@@ -932,11 +932,11 @@ to change Zappa's behavior. Use these at your own risk!
         "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. See also "remote_env" and "aws_environment_variables". Default {}.
         "events": [
             {   // Recurring events
-                "function": "your_module.your_recurring_function", // The function to execute
+                "function": "your_module.your_recurring_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
                 "expression": "rate(1 minute)" // When to execute it (in cron or rate format)
             },
             {   // AWS Reactive events
-                "function": "your_module.your_reactive_function", // The function to execute
+                "function": "your_module.your_reactive_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
                 "event_source": {
                     "arn":  "arn:aws:s3:::my-bucket", // The ARN of this event source
                     "events": [
