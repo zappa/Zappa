@@ -2752,7 +2752,7 @@ class Zappa:
                 for s in statement:
                     sid = s['Sid']
                     if self.keep_policies:
-                        if not (self.keep_policies == '*' or (isinstance(self.keep_policies, list) and sid in self.keep_policies) or (isinstance(self.keep_policies, str) and self.keep_policies in sid)):
+                        if self.keep_policies == '*' or (isinstance(self.keep_policies, list) and sid in self.keep_policies) or (isinstance(self.keep_policies, str) and self.keep_policies in sid):
                             # * = keep all
                             # string = keep sids that contain the value
                             # list = keep sids that are in the list (no wildcards)
