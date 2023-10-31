@@ -286,6 +286,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
+        keep_policies=None
     ):
         """
         Instantiate this new Zappa instance, loading any custom credentials if necessary.
@@ -335,6 +336,7 @@ class Zappa:
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
+        self.keep_policies = keep_policies
 
         # Some common invocations, such as DB migrations,
         # can take longer than the default.
@@ -2748,7 +2750,15 @@ class Zappa:
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=s["Sid"])
+                    sid = s['Sid']
+                    if self.keep_policies:
+                        if not (self.keep_policies == '*' or (isinstance(self.keep_policies, list) and sid in self.keep_policies) or (isinstance(self.keep_policies, str) and self.keep_policies in sid)):
+                            # * = keep all
+                            # string = keep sids that contain the value
+                            # list = keep sids that are in the list (no wildcards)
+                            continue
+
+                    delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=sid)
                     if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
                         logger.error("Failed to delete an obsolete policy statement: {}".format(policy_response))
             else:

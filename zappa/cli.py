@@ -117,6 +117,7 @@ class ZappaCLI:
     environment_variables = None
     authorizer = None
     xray_tracing = False
+    keep_policies = None
     aws_kms_key_arn = ""
     context_header_mappings = None
     additional_text_mimetypes = None
@@ -2295,6 +2296,7 @@ class ZappaCLI:
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
+        self.keep_policies = self.stage_config.get('keep_policies', None)
         self.desired_role_arn = self.stage_config.get("role_arn")
         self.layers = self.stage_config.get("layers", None)
         self.additional_text_mimetypes = self.stage_config.get("additional_text_mimetypes", None)
@@ -2322,6 +2324,7 @@ class ZappaCLI:
             tags=self.tags,
             endpoint_urls=self.stage_config.get("aws_endpoint_urls", {}),
             xray_tracing=self.xray_tracing,
+            keep_policies=self.keep_policies
         )
 
         for setting in CUSTOM_SETTINGS:
