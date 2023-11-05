@@ -1196,14 +1196,14 @@ If you want to use native AWS Lambda environment variables you can use the `aws_
 During development, you can add your Zappa defined variables to your locally running app by, for example, using the below (for Django, to manage.py).
 
 ```python
-if 'SERVERTYPE' in os.environ and os.environ['SERVERTYPE'] == 'AWS Lambda':
-    import json
-    import os
+import json
+import os
+
+# Check to ensure app is NOT running on AWS Lambda
+if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is None:
     json_data = open('zappa_settings.json')
     env_vars = json.load(json_data)['dev']['environment_variables']
-    for key, val in env_vars.items():
-        os.environ[key] = val
-
+    os.environ.update(env_vars)
 ```
 
 #### Remote Environment Variables
