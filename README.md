@@ -12,6 +12,7 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
+
 - [About](#about)
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
@@ -1198,8 +1199,7 @@ During development, you can add your Zappa defined variables to your locally run
 import json
 import os
 
-# Check to ensure app is NOT running on AWS Lambda
-if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is None:
+if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is None: # Ensures app is NOT running on Lambda
     json_data = open('zappa_settings.json')
     env_vars = json.load(json_data)['dev']['environment_variables']
     os.environ.update(env_vars)
