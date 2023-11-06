@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 
 # Set up logging
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -613,9 +613,9 @@ class LambdaHandler:
                     # and log it in the Common Log format.
                     time_end = datetime.datetime.now()
                     delta = time_end - time_start
-                    response_time_ms = delta.total_seconds() * 1000
+                    response_time_us = delta.total_seconds() * 1_000_000  # convert to microseconds
                     response.content = response.data
-                    common_log(environ, response, response_time=response_time_ms)
+                    common_log(environ, response, response_time=response_time_us)
 
                     return zappa_returndict
         except Exception as e:  # pragma: no cover

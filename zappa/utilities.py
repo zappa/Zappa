@@ -214,8 +214,10 @@ def get_runtime_from_python_version():
             return "python3.8"
         elif sys.version_info[1] <= 9:
             return "python3.9"
-        else:
+        elif sys.version_info[1] <= 10:
             return "python3.10"
+        else:
+            return "python3.11"
 
 
 ##
@@ -702,4 +704,4 @@ def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
     try:
         json.dumps((args, kwargs))
     except (TypeError, OverflowError):
-        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
+        raise UnserializableJsonError("Arguments to asynchronous.task must be JSON serializable!")
