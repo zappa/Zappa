@@ -15,6 +15,7 @@ isort = "*"
 mock = "*"
 mypy = "*"
 packaging = "*"
+pre-commit = "*"
 pytest = "*"
 pytest-cov = "*"
 
