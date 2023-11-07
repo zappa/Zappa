@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python: [3.7, 3.8, 3.9, "3.10"]
+        python: [3.7, 3.8, 3.9, "3.10", "3.11"]
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip${{ matrix.python }}-${{ hashFiles('Pipfile') }}
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
       - name: Finalise Coverage
         run: pip3 install --upgrade coveralls && coveralls --service=github --finish
         env:
