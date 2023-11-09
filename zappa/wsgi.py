@@ -171,7 +171,7 @@ def common_log(environ, response, response_time: Optional[int] = None):
     response_time: response time in micro-seconds
     """
 
-    logger = logging.getLogger()
+    logger = logging.getLogger(__name__)
 
     if response_time:
         formatter = ApacheNCSAFormatter(with_response_time=True)
