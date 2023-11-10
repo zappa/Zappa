@@ -2,9 +2,6 @@
 Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
-##
-# Imports
-##
 import getpass
 import glob
 import hashlib
@@ -504,10 +501,15 @@ class Zappa:
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
         pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
-        pip_process.communicate()
+        stdout_result, stderror_result = pip_process.communicate()
         pip_return_code = pip_process.returncode
 
         if pip_return_code:
+            logger.info("command: %s", " ".join(command))
+            if stdout_result.strip():
+                logger.info("stdout: %s", stdout_result.strip())
+            if stderror_result.strip():
+                logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
         return ve_path
