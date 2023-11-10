@@ -10,6 +10,9 @@ from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_wsgi_request(
     event_info,
     server_name="zappa",
