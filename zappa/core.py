@@ -639,7 +639,8 @@ class Zappa:
             for glob_path in exclude_glob:
                 for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                     try:
-                        os.remove(path)
+                        if str(path).startswith(temp_project_path):
+                            os.remove(path)
                     except OSError:  # is a directory
                         shutil.rmtree(path)
 
@@ -655,39 +656,6 @@ class Zappa:
         package_info["build_time"] = build_time
         package_info["build_platform"] = os.sys.platform
         package_info["build_user"] = getpass.getuser()
-        # TODO: Add git head and info?
-
-        # Ex, from @scoates:
-        # def _get_git_branch():
-        #     chdir(DIR)
-        #     out = check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
-        #     lambci_branch = environ.get('LAMBCI_BRANCH', None)
-        #     if out == "HEAD" and lambci_branch:
-        #         out += " lambci:{}".format(lambci_branch)
-        #     return out
-
-        # def _get_git_hash():
-        #     chdir(DIR)
-        #     return check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        # def _get_uname():
-        #     return check_output(['uname', '-a']).strip()
-
-        # def _get_user():
-        #     return check_output(['whoami']).strip()
-
-        # def set_id_info(zappa_cli):
-        #     build_info = {
-        #         'branch': _get_git_branch(),
-        #         'hash': _get_git_hash(),
-        #         'build_uname': _get_uname(),
-        #         'build_user': _get_user(),
-        #         'build_time': datetime.datetime.utcnow().isoformat(),
-        #     }
-        #     with open(path.join(DIR, 'id_info.json'), 'w') as f:
-        #         json.dump(build_info, f)
-        #     return True
-
         package_id_file = open(os.path.join(temp_project_path, "package_info.json"), "w")
         dumped = json.dumps(package_info, indent=4)
         try:
@@ -771,7 +739,8 @@ class Zappa:
         for glob_path in exclude_glob:
             for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                 try:
-                    os.remove(path)
+                    if str(path).startswith(temp_project_path):
+                        os.remove(path)
                 except OSError:  # is a directory
                     shutil.rmtree(path)
 
@@ -1365,7 +1334,7 @@ class Zappa:
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
         }
 
-        if lambda_aws_config["PackageType"] != "Image":
+        if lambda_aws_config.get("PackageType", None) != "Image":
             kwargs.update(
                 {
                     "Handler": handler,
@@ -1411,7 +1380,11 @@ class Zappa:
         response = self.lambda_client.list_versions_by_function(FunctionName=function_name)
 
         # https://github.com/Miserlou/Zappa/pull/2192
-        if len(response.get("Versions", [])) > 1 and response["Versions"][-1]["PackageType"] == "Image":
+        if (
+            len(response.get("Versions", [])) > 1
+            and "PackageType" in response["Versions"][-1]
+            and response["Versions"][-1]["PackageType"] == "Image"
+        ):
             raise NotImplementedError("Zappa's rollback functionality is not available for Docker based deployments")
 
         # Take into account $LATEST
@@ -2941,7 +2914,17 @@ class Zappa:
         """
         Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
         This allows support for rule names that may be longer than the 64 char limit.
+
+        function pattern: '^[._A-Za-z0-9]{0,63}$'
         """
+        max_event_rule_name_length = 64
+        max_name_length = max_event_rule_name_length - 1  # Because it must contain the delimiter "-".
+        function_regex = re.compile(f"^[._A-Za-z0-9]{{0,{max_name_length}}}$")
+        if not re.fullmatch(function_regex, function):
+            # Validation Rule: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Rule.html
+            # '-' cannot be used because it is a delimiter
+            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{0,63}$'.")
+
         name = event.get("name", function)
         if name != function:
             # a custom event name has been provided, make sure function name is included as postfix,
@@ -2952,11 +2935,16 @@ class Zappa:
             # prefix all entries bar the first with the index
             # Related: https://github.com/Miserlou/Zappa/pull/1051
             name = "{}-{}".format(index, name)
+
+        # https://github.com/zappa/Zappa/issues/1036
+        # Error because the name cannot be obtained if the function name is longer than 64 characters
+        if len(name) > max_name_length:
+            raise EnvironmentError(f"Generated scheduled event name is too long, shorten the function name!: '{name}'")
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
         event_name = self.get_event_name(lambda_name, name)
         # if it's possible that we truncated name, generate a unique, shortened name
         # https://github.com/Miserlou/Zappa/issues/970
-        if len(event_name) >= 64:
+        if len(event_name) >= max_event_rule_name_length:
             lambda_name = self.get_hashed_lambda_name(lambda_name)
             event_name = self.get_event_name(lambda_name, name)
 

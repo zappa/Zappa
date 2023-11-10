@@ -120,7 +120,7 @@ class ZappaCLI:
     aws_kms_key_arn = ""
     context_header_mappings = None
     additional_text_mimetypes = None
-    tags = []
+    tags = []  # type: ignore[var-annotated]
     layers = None
 
     stage_name_env_pattern = re.compile("^[a-zA-Z0-9_]+$")
@@ -475,7 +475,7 @@ class ZappaCLI:
         else:
             self.stage_env = self.vargs.get("stage_env")
 
-        if args.command == "package":
+        if args.command in ("package", "save-python-settings-file"):
             self.load_credentials = False
 
         self.command = args.command
@@ -1874,6 +1874,7 @@ class ZappaCLI:
                 "s3_bucket": bucket,
                 "runtime": get_venv_from_python_version(),
                 "project_name": self.get_project_name(),
+                "exclude": ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"],
             }
         }
 
@@ -2414,14 +2415,14 @@ class ZappaCLI:
         # Create the Lambda zip package (includes project and virtualenvironment)
         # Also define the path the handler file so it can be copied to the zip
         # root for Lambda.
-        current_file = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+        current_file = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))  # type: ignore[arg-type]
         handler_file = os.sep.join(current_file.split(os.sep)[0:]) + os.sep + "handler.py"
 
         # Create the zip file(s)
         if self.stage_config.get("slim_handler", False):
             # Create two zips. One with the application and the other with just the handler.
             # https://github.com/Miserlou/Zappa/issues/510
-            self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix=self.lambda_name,
                 use_precompiled_packages=self.stage_config.get("use_precompiled_packages", True),
                 exclude=self.stage_config.get("exclude", []),
@@ -2432,11 +2433,11 @@ class ZappaCLI:
 
             # Make sure the normal venv is not included in the handler's zip
             exclude = self.stage_config.get("exclude", [])
-            cur_venv = self.zappa.get_current_venv()
+            cur_venv = self.zappa.get_current_venv()  # type: ignore[attr-defined]
             exclude.append(cur_venv.split("/")[-1])
-            self.handler_path = self.zappa.create_lambda_zip(
+            self.handler_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix="handler_{0!s}".format(self.lambda_name),
-                venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),
+                venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),  # type: ignore[attr-defined]
                 handler_file=handler_file,
                 slim_handler=True,
                 exclude=exclude,
@@ -2445,10 +2446,10 @@ class ZappaCLI:
                 disable_progress=self.disable_progress,
             )
         else:
-            exclude = self.stage_config.get("exclude", ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+            exclude = self.stage_config.get("exclude", [])
 
             # Create a single zip that has the handler and application
-            self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix=self.lambda_name,
                 handler_file=handler_file,
                 use_precompiled_packages=self.stage_config.get("use_precompiled_packages", True),
@@ -2472,7 +2473,7 @@ class ZappaCLI:
         else:
             handler_zip = self.zip_path
 
-        with zipfile.ZipFile(handler_zip, "a") as lambda_zip:
+        with zipfile.ZipFile(handler_zip, "a") as lambda_zip:  # type: ignore[call-overload]
             settings_s = self.get_zappa_settings_string()
 
             # Copy our Django app into root of our package.
