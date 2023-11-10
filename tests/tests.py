@@ -9,6 +9,7 @@ import random
 import re
 import shutil
 import string
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1209,6 +1210,27 @@ class TestZappa(unittest.TestCase):
     ##
     # CLI
     ##
+
+    def test_zappa_init(self):
+        # delete if file exists
+        if os.path.exists("zappa_settings.json"):
+            os.remove("zappa_settings.json")
+
+        process = subprocess.Popen(
+            ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+        )
+        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
+        self.assertTrue(os.path.exists("zappa_settings.json"))
+
+        with open("zappa_settings.json", "r") as f:
+            zappa_settings = json.load(f)
+            self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
+            self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+
+        # delete the file
+        if os.path.exists("zappa_settings.json"):
+            os.remove("zappa_settings.json")
 
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()
