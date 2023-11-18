@@ -4,12 +4,10 @@
 
 ## Zappa - Serverless Python
 
-[![Build Status](https://travis-ci.org/zappa/Zappa.svg)](https://travis-ci.org/zappa/Zappa)
+[![CI](https://github.com/zappa/Zappa/actions/workflows/ci.yaml/badge.svg?branch=master&event=push)](https://github.com/zappa/Zappa/actions/workflows/ci.yaml)
 [![Coverage](https://img.shields.io/coveralls/zappa/Zappa.svg)](https://coveralls.io/github/zappa/Zappa)
 [![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa)
 [![Slack](https://img.shields.io/badge/chat-slack-ff69b4.svg)](https://zappateam.slack.com/)
-[![Gun.io](https://img.shields.io/badge/made%20by-gun.io-blue.svg)](https://gun.io/)
-[![Patreon](https://img.shields.io/badge/support-patreon-brightgreen.svg)](https://patreon.com/zappa)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -25,6 +23,8 @@
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
+      - [Multiple Expressions](#multiple-expressions)
+      - [Disabled Event](#disabled-event)
   - [Undeploy](#undeploy)
   - [Package](#package)
     - [How Zappa Makes Packages](#how-zappa-makes-packages)
@@ -79,6 +79,7 @@
   - [Application Load Balancer Event Source](#application-load-balancer-event-source)
   - [Endpoint Configuration](#endpoint-configuration)
     - [Example Private API Gateway configuration](#example-private-api-gateway-configuration)
+  - [Cold Starts (Experimental)](#cold-starts-experimental)
 - [Zappa Guides](#zappa-guides)
 - [Zappa in the Press](#zappa-in-the-press)
 - [Sites Using Zappa](#sites-using-zappa)
@@ -86,8 +87,6 @@
 - [Hacks](#hacks)
 - [Contributing](#contributing)
     - [Using a Local Repo](#using-a-local-repo)
-- [Patrons](#patrons)
-- [Support / Development / Training / Consulting](#support--development--training--consulting)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -134,7 +133,7 @@ __Awesome!__
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.6/3.7/3.8 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.7/3.8/3.9/3.10/3.11 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -219,7 +218,30 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+
+You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
+Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+
+Deploy Example:
+
+    $ zappa deploy --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Update Example:
+
+    $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
+
+Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+
+If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
+
+    $ export ZAPPA_RUNNING_IN_DOCKER=True
+
+You can also add this to your Dockerfile like this:
+
+```
+ENV ZAPPA_RUNNING_IN_DOCKER=True
+```
 
 ### Rollback
 
@@ -262,6 +284,8 @@ See the [example](example/) for more details.
 
 #### Advanced Scheduling
 
+##### Multiple Expressions
+
 Sometimes a function needs multiple expressions to describe its schedule. To set multiple expressions, simply list your functions, and the list of expressions to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your *zappa_settings.json* file:
 
 ```javascript
@@ -280,6 +304,28 @@ Sometimes a function needs multiple expressions to describe its schedule. To set
 This can be used to deal with issues arising from the UTC timezone crossing midnight during business hours in your local timezone.
 
 It should be noted that overlapping expressions will not throw a warning, and should be checked for, to prevent duplicate triggering of functions.
+
+##### Disabled Event
+
+Sometimes an event should be scheduled, yet disabled.
+For example, perhaps an event should only run in your production environment, but not sandbox.
+You may still want to deploy it to sandbox to ensure there is no issue with your expression(s) before deploying to production.
+
+In this case, you can disable it from running by setting `enabled` to `false` in the event definition:
+
+```javascript
+{
+    "sandbox": {
+       ...
+       "events": [{
+           "function": "your_module.your_function", // The function to execute
+           "expression": "rate(1 minute)", // When to execute it (in cron or rate format)
+           "enabled": false
+       }],
+       ...
+    }
+}
+```
 
 ### Undeploy
 
@@ -334,7 +380,7 @@ In addition, Zappa will also automatically set the correct execution permissions
 To further reduce the final package file size, you can:
 
 * Set `slim_handler` to `True` to upload a small handler to Lambda and the rest of the package to S3. For more details, see the [merged pull request](https://github.com/Miserlou/Zappa/pull/548) and the [discussion in the original issue](https://github.com/Miserlou/Zappa/issues/510). See also: [Large Projects](#large-projects).
-* Use the `exclude` setting and provide a list of regex patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
+* Use the `exclude` or `exclude_glob` setting and provide a list of patterns to exclude from the archive. By default, Zappa will exclude Boto, because [it's already available in the Lambda execution environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html).
 
 ### Template
 
@@ -393,11 +439,11 @@ You can execute any function in your application directly at any time by using t
 
 For instance, suppose you have a basic application in a file called "my_app.py", and you want to invoke a function in it called "my_function". Once your application is deployed, you can invoke that function at any time by calling:
 
-    $ zappa invoke production 'my_app.my_function'
+    $ zappa invoke production my_app.my_function
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.6/3.7/3.8 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.7/3.8/3.9/3.10/3.11 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -419,8 +465,6 @@ For commands which have their own arguments, you can also pass the command in as
 Commands which require direct user input, such as `createsuperuser`, should be [replaced by commands](http://stackoverflow.com/a/26091252) which use `zappa invoke <env> --raw`.
 
 For more Django integration, take a look at the [zappa-django-utils](https://github.com/Miserlou/zappa-django-utils) project.
-
-_(Please note that commands which take over 30 seconds to execute may time-out preventing output from being returned - but the command may continue to run. See [this related issue](https://github.com/Miserlou/Zappa/issues/205#issuecomment-236391248) for a work-around.)_
 
 ### SSL Certification
 
@@ -483,7 +527,15 @@ In your *zappa_settings.json* file, define your [event sources](http://docs.aws.
                   "arn":  "arn:aws:s3:::my-bucket",
                   "events": [
                     "s3:ObjectCreated:*" // Supported event types: http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#supported-notification-event-types
-                  ]
+                  ],
+                  "key_filters": [{ // optional
+                    "type": "suffix",
+                    "value": "yourfile.json"
+                  },
+                  {
+                    "type": "prefix",
+                    "value": "prefix/for/your/object"
+                  }]
                }
             }],
        ...
@@ -821,6 +873,7 @@ to change Zappa's behavior. Use these at your own risk!
 ```javascript
  {
     "dev": {
+        "additional_text_mimetypes": [], // allows you to provide additional mimetypes to be handled as text when binary_support is true.
         "alb_enabled": false, // enable provisioning of application load balancing resources. If set to true, you _must_ fill out the alb_vpc_config option as well.
         "alb_vpc_config": {
             "CertificateArn": "your_acm_certificate_arn", // ACM certificate ARN for ALB
@@ -879,11 +932,11 @@ to change Zappa's behavior. Use these at your own risk!
         "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. See also "remote_env" and "aws_environment_variables". Default {}.
         "events": [
             {   // Recurring events
-                "function": "your_module.your_recurring_function", // The function to execute
+                "function": "your_module.your_recurring_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
                 "expression": "rate(1 minute)" // When to execute it (in cron or rate format)
             },
             {   // AWS Reactive events
-                "function": "your_module.your_reactive_function", // The function to execute
+                "function": "your_module.your_reactive_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
                 "event_source": {
                     "arn":  "arn:aws:s3:::my-bucket", // The ARN of this event source
                     "events": [
@@ -897,7 +950,8 @@ to change Zappa's behavior. Use these at your own risk!
             "VpcEndpointIds": [ "vpce-12345678" ] // VPC endpoint IDs for which to create public Route53 aliases (Supported for `PRIVATE` endpoint type only)
         }
         "exception_handler": "your_module.report_exception", // function that will be invoked in case Zappa sees an unhandled exception raised from your code
-        "exclude": ["*.gz", "*.rar"], // A list of regex patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
+        "exclude": ["file.gz", "tests"], // A list of filename patterns to exclude from the archive (see `fnmatch` module for patterns).
+        "exclude_glob": ["*.gz", "*.rar", "tests/**/*"], // A list of glob patterns to exclude from the archive. To exclude boto3 and botocore (available in an older version on Lambda), add "boto3*" and "botocore*".
         "extends": "stage_name", // Duplicate and extend another stage's settings. For example, `dev-asia` could extend from `dev-common` with a different `s3_bucket` value.
         "extra_permissions": [{ // Attach any extra permissions to this policy. Default None
             "Effect": "Allow",
@@ -923,6 +977,7 @@ to change Zappa's behavior. Use these at your own risk!
         "log_level": "DEBUG", // Set the Zappa log level. Can be one of CRITICAL, ERROR, WARNING, INFO and DEBUG. Default: DEBUG
         "manage_roles": true, // Have Zappa automatically create and define IAM execution roles and policies. Default true. If false, you must define your own IAM Role and role_name setting.
         "memory_size": 512, // Lambda function memory in MB. Default 512.
+        "ephemeral_storage": { "Size": 512 }, // Lambda function ephemeral_storage size in MB, Default 512, Max 10240
         "num_retained_versions":null, // Indicates the number of old versions to retain for the lambda. If absent, keeps all the versions of the function.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
@@ -933,7 +988,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.6", // Python runtime to use on Lambda. Can be one of "python3.6", "python3.7" or "python3.8". Defaults to whatever the current Python being used is.
+        "runtime": "python3.11", // Python runtime to use on Lambda. Can be one of "python3.7", "python3.8", "python3.9", or "python3.10", or "python3.11". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
@@ -1009,7 +1064,7 @@ You can also simply handle CORS directly in your application. Your web framework
 
 ### Large Projects
 
-AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS currently [limits](https://docs.aws.amazon.com/lambda/latest/dg/limits.html) the `/tmp` directory storage to 512 MB, so your project must still be smaller than that.
+AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS [supports](https://aws.amazon.com/blogs/compute/using-larger-ephemeral-storage-for-aws-lambda/) custom `/tmp` directory storage size in a range of 512 - 10240 MB. Use `ephemeral_storage` in `zappa_settings.json` to adjust to your needs if your project is larger than default 512 MB.
 
 ### Enabling Bash Completion
 
@@ -1144,14 +1199,13 @@ If you want to use native AWS Lambda environment variables you can use the `aws_
 During development, you can add your Zappa defined variables to your locally running app by, for example, using the below (for Django, to manage.py).
 
 ```python
-if 'SERVERTYPE' in os.environ and os.environ['SERVERTYPE'] == 'AWS Lambda':
-    import json
-    import os
+import json
+import os
+
+if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is None: # Ensures app is NOT running on Lambda
     json_data = open('zappa_settings.json')
     env_vars = json.load(json_data)['dev']['environment_variables']
-    for key, val in env_vars.items():
-        os.environ[key] = val
-
+    os.environ.update(env_vars)
 ```
 
 #### Remote Environment Variables
@@ -1448,6 +1502,10 @@ apigateway_resource_policy.json:
 }
 ```
 
+### Cold Starts (Experimental)
+
+Lambda may provide additional resources than provisioned during cold start initialization. Set `INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True` to instantiate the lambda handler on import. This is an experimental feature - if startup time is critical, look into using Provisioned Concurrency.
+
 ## Zappa Guides
 
 * [Django-Zappa tutorial (screencast)](https://www.youtube.com/watch?v=plUrbPN0xc8&feature=youtu.be).
@@ -1529,7 +1587,7 @@ Zappa goes quite far beyond what Lambda and API Gateway were ever intended to ha
 
 ## Contributing
 
-This project is still young, so there is still plenty to be done. Contributions are more than welcome!
+Contributions are very welcome!
 
 Please file tickets for discussion before submitting patches. Pull requests should target `master` and should leave Zappa in a "shippable" state if merged.
 
@@ -1538,61 +1596,10 @@ If you are adding a non-trivial amount of new code, please include a functioning
 Please include the GitHub issue or pull request URL that has discussion related to your changes as a comment in the code ([example](https://github.com/zappa/Zappa/blob/fae2925431b820eaedf088a632022e4120a29f89/zappa/zappa.py#L241-L243)). This greatly helps for project maintainability, as it allows us to trace back use cases and explain decision making. Similarly, please make sure that you meet all of the requirements listed in the [pull request template](https://raw.githubusercontent.com/zappa/Zappa/master/.github/PULL_REQUEST_TEMPLATE.md).
 
 Please feel free to work on any open ticket, especially any ticket marked with the "help-wanted" label. If you get stuck or want to discuss an issue further, please join [our Slack channel](https://zappateam.slack.com/), where you'll find a community of smart and interesting people working dilligently on hard problems.
+[Zappa Slack Auto Invite](https://slackautoinviter.herokuapp.com)
 
 Zappa does not intend to conform to PEP8, isolate your commits so that changes to functionality with changes made by your linter.
 
 #### Using a Local Repo
 
 To use the git HEAD, you *probably can't* use `pip install -e `. Instead, you should clone the repo to your machine and then `pip install /path/to/zappa/repo` or `ln -s /path/to/zappa/repo/zappa zappa` in your local project.
-
-## Patrons
-
-If you or your company uses **Zappa**, please consider giving what you can to support the ongoing development of the project!
-
-You can become a patron by **[visiting our Patreon page](https://patreon.com/zappa)**.
-
-Zappa is currently supported by these awesome individuals and companies:
-
-  * Nathan Lawrence
-  * LaunchLab
-  * Sean Paley
-  * Theo Chitayat
-  * George Sibble
-  * Joe Weiss
-  * Nik Bora
-  * Zerong Toby Wang
-  * Gareth E
-  * Matt Jackson
-  * Sean Coates
-  * Alexander Loschilov
-  * Korey Peters
-  * Joe Weiss
-  * Kimmo Parvianen-Jalanko
-  * Patrick Agin
-  * Roberto Martinez
-  * Charles Dimino
-  * Doug Beney
-  * Dan "The Man" Gayle
-  * Juancito
-  * Will Childs-Klein
-  * Efi Merdler Kravitz
-  * **Philippe Trounev**
-
-Thank you very, very much!
-
-## Support / Development / Training / Consulting
-
-Do you need help with..
-
-  * Porting existing Flask and Django applications to Zappa?
-  * Building new applications and services that scale infinitely?
-  * Reducing your operations and hosting costs?
-  * Adding new custom features into Zappa?
-  * Training your team to use AWS and other server-less paradigms?
-
-Good news! We're currently available for remote and on-site consulting for small, large and enterprise teams. Please contact <miserlou@gmail.com> with your needs and let's work together!
-
-<br />
-<p align="center">
-  <a href="https://gun.io"><img src="http://i.imgur.com/M7wJipR.png" alt="Made by Gun.io"/></a>
-</p>

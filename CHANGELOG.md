@@ -1,13 +1,81 @@
 # Zappa Changelog
 
-## 0.53.0
+## 0.58.0
 
+* Add Python 3.11 support (#1262)
+* support new ephemeral storage feature in zappa_settings.json (#1120)
+* Update permissions (PR #1119)
+* Outdated manylinux wheels download logic (#1249)
+* cryptography>=35.0, plus pip>=20.3 - downloads wrong cryptography anywheel package (GLIBC_2.18 error) (#1063)
+* fix response time improperly configured for micro-seconds. (#1265)
+* fix unquote issue with querystring handling. (#1264)
+
+## 0.57.0
+
+* Python 3.10 support (#1124, #1160)
+* Remove patron link from README (#1200)
+* migrate test framework from nose to pytest (#1146)
+* Upgrading Django to 4.2 crashes the zappa based deployment with Error 500 (#1230)
+
+## 0.56.1
+
+* Fix FileNotFoundError in running_in_docker (#1201)
+* Use ZAPPA_RUNNING_IN_DOCKER environment variable to use any Python version inside Docker container (#1140)
+
+## 0.56.0
+* Not recognizing virtaulenv created with pyenv (#1132)
+* Remove six from zappa dependencies (#1164)
+* Handle optional space in x-forwarded-for header (#1127)
+* [Migrated] #2077 Fix url decoding for query string (#879)
+* [Migrated] [async] Check if args/kwargs are JSON Serializable while running locally (#704)
+* [Migrated] Add on Docs: event_source from S3 with key_filters (#446)
+* [Migrated] Logs are missing query strings (#410)
+* [Migrated] Update BINARY_SUPPORT to use Content-Encoding to identify if data is binary (#908)
+* Remove obsolete check for Django version < 1.7 (#1158)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Add exclude_glob documentation (#1052)
+* Unable to schedule SQS Batch Size of greater than 10 (#1117)
+* [Migrated] s3 zip includes files that should be matched by the exclude setting (#422)
+* Allow any Python version if using Docker image for Lambda (#1140)
+* Incorrect hosted zone match (#1190)
+* Issue while trying to install or download zappa without binary file (#1199)
+
+## 0.55.0
+* Fix "cd workflow fired event outside of the create tags event" (#1152)
+* Remove 'futures' package requirement (#826,#808)
+* Remove function invoke command does not need quotes around function (#900)
+* Add python_requires to setup.py (#1111)
+* Remove python 3.6 support (#1151)
+* Update handler to be global if INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True (#1096)
+* Fix async invocation in Python 3 (#1006)
+* Drastically reduce cold start times by calling LambdaHandler externally (#982)
+* Support Newest Manylinux Version for dependencies (#1083)
+* Decode zappa invoke output regardless of --no-color option (#1069)
+* Convert project to using 'pipenv' to manage dependencies (#1077)
+* Ensure unique scheduled event names (#1080)
+* Check isort in CI (#1078)
+* Use 'black' everywhere (#1076)
+* Update setup.py (#1050)
+
+## 0.54.2
+* Update documentation to reflect python 3.9 support (#1137)
+
+## 0.54.1
+* Increase Lambda client read timeout to 15m (#1065)
+* Unpin `Werkzeug` from `v0.x` (#1067)
+
+## 0.54.0
+* Pin troposphere version and update to 3.x (#1029)
+* Relax stage name restrictions when not using apigateway (#993)
+* Wait for lambda to become active during deploy/update (#992)
+* add support for Python 3.9 (#1026)
+
+## 0.53.0
 * Deprecated ACME v1 for Lets Encrypt
 * Global black formatting
 * Update & deploy using a docker container
   * See [blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details on the current functionality and how it works
   * See [PR](https://github.com/zappa/Zappa/pull/967) or [original issue](https://github.com/Miserlou/Zappa/issues/2188) for discussion around what is currently supported & next steps
-
 
 ## 0.52.0
 * Remove dateutil version restriction

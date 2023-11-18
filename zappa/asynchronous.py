@@ -96,7 +96,7 @@ from functools import update_wrapper, wraps
 import boto3
 import botocore
 
-from .utilities import get_topic_name
+from .utilities import get_topic_name, validate_json_serializable
 
 try:
     from zappa_settings import ASYNC_RESPONSE_TABLE
@@ -110,7 +110,7 @@ try:
     SNS_CLIENT = aws_session.client("sns")
     STS_CLIENT = aws_session.client("sts")
     DYNAMODB_CLIENT = aws_session.client("dynamodb")
-except botocore.exceptions.NoRegionError as e:  # pragma: no cover
+except botocore.exceptions.NoRegionError:  # pragma: no cover
     # This can happen while testing on Travis, but it's taken care  of
     # during class initialization.
     pass
@@ -136,13 +136,7 @@ class LambdaAsyncResponse:
     Can be used directly or subclassed if the method to send the message is changed.
     """
 
-    def __init__(
-        self,
-        lambda_function_name=None,
-        aws_region=None,
-        capture_response=False,
-        **kwargs
-    ):
+    def __init__(self, lambda_function_name=None, aws_region=None, capture_response=False, **kwargs):
         """ """
         if kwargs.get("boto_session"):
             self.client = kwargs.get("boto_session").client("lambda")
@@ -187,7 +181,7 @@ class LambdaAsyncResponse:
         Given a message, directly invoke the lamdba function for this task.
         """
         message["command"] = "zappa.asynchronous.route_lambda_task"
-        payload = json.dumps(message).encode("utf-8")
+        payload = json.dumps(message)
         if len(payload) > LAMBDA_ASYNC_PAYLOAD_LIMIT:  # pragma: no cover
             raise AsyncException("Payload too large for async Lambda call")
         self.response = self.client.invoke(
@@ -204,14 +198,7 @@ class SnsAsyncResponse(LambdaAsyncResponse):
     Serialise the func path and arguments
     """
 
-    def __init__(
-        self,
-        lambda_function_name=None,
-        aws_region=None,
-        capture_response=False,
-        **kwargs
-    ):
-
+    def __init__(self, lambda_function_name=None, aws_region=None, capture_response=False, **kwargs):
         self.lambda_function_name = lambda_function_name
         self.aws_region = aws_region
 
@@ -259,7 +246,7 @@ class SnsAsyncResponse(LambdaAsyncResponse):
         Given a message, publish to this topic.
         """
         message["command"] = "zappa.asynchronous.route_sns_task"
-        payload = json.dumps(message).encode("utf-8")
+        payload = json.dumps(message)
         if len(payload) > LAMBDA_ASYNC_PAYLOAD_LIMIT:  # pragma: no cover
             raise AsyncException("Payload too large for SNS")
         self.response = self.client.publish(TargetArn=self.arn, Message=payload)
@@ -360,17 +347,12 @@ def run(
 
     and other arguments are similar to @task
     """
-    lambda_function_name = remote_aws_lambda_function_name or os.environ.get(
-        "AWS_LAMBDA_FUNCTION_NAME"
-    )
+    lambda_function_name = remote_aws_lambda_function_name or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
     aws_region = remote_aws_region or os.environ.get("AWS_REGION")
 
     task_path = get_func_task_path(func)
     return ASYNC_CLASSES[service](
-        lambda_function_name=lambda_function_name,
-        aws_region=aws_region,
-        capture_response=capture_response,
-        **task_kwargs
+        lambda_function_name=lambda_function_name, aws_region=aws_region, capture_response=capture_response, **task_kwargs
     ).send(task_path, args, kwargs)
 
 
@@ -413,7 +395,6 @@ def task(*args, **kwargs):
     capture_response = kwargs.get("capture_response", False)
 
     def func_wrapper(func):
-
         task_path = get_func_task_path(func)
 
         @wraps(func)
@@ -436,9 +417,7 @@ def task(*args, **kwargs):
                 When outside of Lambda, the func passed to @task is run and we
                 return the actual value.
             """
-            lambda_function_name = lambda_function_name_arg or os.environ.get(
-                "AWS_LAMBDA_FUNCTION_NAME"
-            )
+            lambda_function_name = lambda_function_name_arg or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
             aws_region = aws_region_arg or os.environ.get("AWS_REGION")
 
             if (service in ASYNC_CLASSES) and (lambda_function_name):
@@ -449,6 +428,7 @@ def task(*args, **kwargs):
                 ).send(task_path, args, kwargs)
                 return send_result
             else:
+                validate_json_serializable(*args, **kwargs)
                 return func(*args, **kwargs)
 
         update_wrapper(_run_async, func)
@@ -489,9 +469,7 @@ def get_func_task_path(func):
     Format the modular task path for a function via inspection.
     """
     module_path = inspect.getmodule(func).__name__
-    task_path = "{module_path}.{func_name}".format(
-        module_path=module_path, func_name=func.__name__
-    )
+    task_path = "{module_path}.{func_name}".format(module_path=module_path, func_name=func.__name__)
     return task_path
 
 
@@ -499,9 +477,7 @@ def get_async_response(response_id):
     """
     Get the response from the async table
     """
-    response = DYNAMODB_CLIENT.get_item(
-        TableName=ASYNC_RESPONSE_TABLE, Key={"id": {"S": str(response_id)}}
-    )
+    response = DYNAMODB_CLIENT.get_item(TableName=ASYNC_RESPONSE_TABLE, Key={"id": {"S": str(response_id)}})
     if "Item" not in response:
         return None
 

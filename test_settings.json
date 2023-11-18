@@ -10,6 +10,9 @@
            "zip": "test_settings.callback"
        },
        "delete_local_zip": true,
+       "ephemeral_storage": {
+           "Size": 1024
+       },
        "debug": true,
        "parameter_depth": 2,
        "prebuild_script": "tests.test_app.prebuild_me",
@@ -107,6 +110,18 @@
           "EXTENDO": "You bet"
        }
     },
+    "invalid_ephemeral_storage_out_of_range": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "Size": 99999
+        }
+    },
+    "invalid_ephemeral_storage_missing_key": {
+        "extends": "ttt888",
+        "ephemeral_storage": {
+            "BadKey": 1024
+        }
+    },
     "build_package_only_delete_local_zip_false": {
       "delete_local_zip": false,
       "use_precompiled_packages": false,
@@ -120,5 +135,12 @@
     "lambda_concurrency_enabled": {
         "extends": "ttt888",
         "lambda_concurrency": 6
-     }
+     },
+    "addtextmimetypes": {
+       "s3_bucket": "lmbda",
+       "app_function": "tests.test_app.hello_world",
+       "delete_local_zip": true,
+       "binary_support": true,
+       "additional_text_mimetypes": ["application/custommimetype"]
+    }
 }

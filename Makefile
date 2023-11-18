@@ -24,14 +24,16 @@ clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	find . -name '*.pyo' -exec rm -f {} +
 	rm -rf .mypy_cache dist build *.egg-info
-	rm -f .coverage
+	coverage erase
 
 requirements:
-	./requirements.sh
-	pip install -r requirements.txt
-	pip install -r test_requirements.txt
+	pip install pip --upgrade
+	pip install "pipenv>2021.11.15"
 
-build: clean requirements-install
+	pipenv lock
+	pipenv sync --dev
+
+build: clean requirements
 	python setup.py sdist
 	python setup.py bdist_wheel 
 
@@ -39,35 +41,56 @@ mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict zappa tests
 
 black:
-	black zappa tests
+	black --line-length 127 .
 
 black-check:
-	black zappa tests --check
+	black --line-length 127 . --check
 	@echo "If this fails, simply run: make black"
 
 isort:
-	isort --recursive . 
+	isort . --profile=black
+
+isort-check:
+	isort --check . --profile=black
 
 flake:
 	flake8 zappa --count --select=E9,F63,F7,F82 --show-source --statistics
-	flake8 zappa --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+	flake8 zappa --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 test-docs:
-	nosetests tests/tests_docs.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/tests_docs.py --cov=zappa --durations=0
 
 test-handler:
-	nosetests tests/test_handler.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/test_handler.py --cov=zappa --durations=0
 
 test-middleware:
-	nosetests tests/tests_middleware.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/tests_middleware.py --cov=zappa --durations=0
 
 test-placebo:
-	nosetests tests/tests_placebo.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/tests_placebo.py --cov=zappa --durations=0
 
 test-async:
-	nosetests tests/tests_async.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/tests_async.py --cov=zappa --durations=0
 
 test-general:
-	nosetests tests/tests.py --with-coverage --cover-package=zappa --with-timer
+	pytest tests/tests.py --cov=zappa --durations=0
 
-tests: clean test-docs test-handler test-middleware test-placebo test-async test-general
+test-utilities:
+	pytest tests/tests_utilities.py --cov=zappa --durations=0
+
+coverage-report:
+	coverage report --include="*/zappa*"
+
+tests:
+	make clean
+	pytest \
+		tests/tests_docs.py \
+		tests/test_handler.py \
+		tests/tests_middleware.py \
+		tests/tests_placebo.py \
+		tests/tests_async.py \
+		tests/tests.py \
+		tests/tests_utilities.py \
+		--cov=zappa
+		--durations=0
+

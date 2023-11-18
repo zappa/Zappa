@@ -1,9 +1,10 @@
 # -*- coding: utf8 -*-
 import sys
 import unittest
+from io import BytesIO
 
-from zappa.wsgi import create_wsgi_request
 from zappa.middleware import ZappaWSGIMiddleware, all_casings
+from zappa.wsgi import create_wsgi_request
 
 
 class TestWSGIMockMiddleWare(unittest.TestCase):
@@ -24,7 +25,6 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         self.headers[:] = headers
 
     def test_all_casings(self):
-
         # 2^9
         input_string = "Set-Cookie"
         x = 0
@@ -61,9 +61,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         def simple_app(environ, start_response):
             # String of weird characters
             status = "301 Moved Permanently"
-            response_headers = [
-                ("Location", f"http://zappa.com/elsewhere{ugly_string}")
-            ]
+            response_headers = [("Location", f"http://zappa.com/elsewhere{ugly_string}")]
             start_response(status, response_headers)
             return [ugly_string]
 
@@ -81,16 +79,14 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {"principalId": "user1"}},
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["REMOTE_USER"], "user1")
 
         # With empty authorizer, should not include REMOTE_USER
@@ -99,16 +95,14 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {"principalId": ""}},
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
@@ -118,16 +112,14 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {},
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
@@ -137,28 +129,25 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {"authorizer": {}},
             "query": {},
         }
 
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         user = environ.get("REMOTE_USER", "no_user")
         self.assertEqual(user, "no_user")
 
     def test_wsgi_map_context_headers_handling(self):
-
         # Validate a single context value mapping is translated into a HTTP header
         event = {
             "httpMethod": "GET",
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -182,7 +171,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "queryStringParameters": None,
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -219,6 +208,16 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
         self.assertNotIn("HTTP_INVALIDVALUE", environ)
         self.assertNotIn("HTTP_OTHERINVALID", environ)
 
+    def test_wsgi_input_as_file_like_object(self):
+        event = {
+            "httpMethod": "GET",
+            "path": "/v1/runs",
+            "body": None,
+        }
+
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
+        self.assertEqual(type(environ["wsgi.input"]), BytesIO)
+
     def test_should_allow_empty_query_params(self):
         event = {
             "httpMethod": "GET",
@@ -226,7 +225,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "multiValueQueryStringParameters": {},
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -246,9 +245,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             },
             "query": {},
         }
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["QUERY_STRING"], "")
 
     def test_should_handle_multi_value_query_string_params(self):
@@ -258,7 +255,7 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             "multiValueQueryStringParameters": {"foo": [1, 2]},
             "path": "/v1/runs",
             "params": {},
-            "body": {},
+            "body": None,
             "headers": {"Content-Type": "application/json"},
             "pathParameters": {"proxy": "v1/runs"},
             "requestContext": {
@@ -278,7 +275,5 @@ class TestWSGIMockMiddleWare(unittest.TestCase):
             },
             "query": {},
         }
-        environ = create_wsgi_request(
-            event, script_name="http://zappa.com/", trailing_slash=False
-        )
+        environ = create_wsgi_request(event, script_name="http://zappa.com/", trailing_slash=False)
         self.assertEqual(environ["QUERY_STRING"], "foo=1&foo=2")

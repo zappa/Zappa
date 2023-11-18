@@ -1,5 +1,6 @@
 *~
 *.zip
+Pipfile.lock
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -45,7 +46,6 @@ htmlcov/
 .coveragerc
 .coverage.*
 .cache
-nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
