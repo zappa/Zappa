@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 
 # Set up logging
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
