@@ -9,6 +9,7 @@ import random
 import re
 import shutil
 import string
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ import zipfile
 from contextlib import redirect_stdout
 from functools import partial
 from io import BytesIO
+from pathlib import Path
 from subprocess import check_output
 
 import botocore
@@ -284,6 +286,27 @@ class TestZappa(unittest.TestCase):
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
+
+    def test_get_exclude_glob__file_not_deleted(self):
+        z = Zappa(runtime="python3.11")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_to_not_delete = Path(tmpdir) / "invalid"
+            file_to_not_delete.touch()
+            assert file_to_not_delete.exists()
+            mock_installed_packages = {"psycopg2-binary": "2.9.7"}
+            with mock.patch(
+                "zappa.core.Zappa.get_installed_packages",
+                return_value=mock_installed_packages,
+            ):
+                z = Zappa(runtime="python3.11")
+                path = z.create_lambda_zip(handler_file=os.path.realpath(__file__), exclude_glob=[str(file_to_not_delete)])
+                self.assertTrue(os.path.isfile(path))
+                self.assertTrue(file_to_not_delete.exists())
+                os.remove(file_to_not_delete)
+                os.remove(path)
 
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.7")
@@ -670,54 +693,6 @@ class TestZappa(unittest.TestCase):
                 mock_client.update_function_configuration.call_args[1]["Environment"],
                 {"Variables": end_result_should_be},
             )
-
-    ##
-    # Logging
-    ##
-
-    def test_logging(self):
-        """
-        TODO
-        """
-        Zappa()
-
-    ##
-    # Mapping and pattern tests
-    # Deprecated
-    ##
-
-    # def test_redirect_pattern(self):
-    #     test_urls = [
-    #         # a regular endpoint url
-    #         'https://asdf1234.execute-api.us-east-1.amazonaws.com/env/path/to/thing',
-    #         # an external url (outside AWS)
-    #         'https://github.com/Miserlou/zappa/issues?q=is%3Aissue+is%3Aclosed',
-    #         # a local url
-    #         '/env/path/to/thing'
-    #     ]
-
-    #     for code in ['301', '302']:
-    #         pattern = Zappa.selection_pattern(code)
-
-    #         for url in test_urls:
-    #             self.assertRegex(url, pattern)
-
-    # def test_b64_pattern(self):
-    #     head = '\{"http_status": '
-
-    #     for code in ['400', '401', '402', '403', '404', '500']:
-    #         pattern = Zappa.selection_pattern(code)
-
-    #         document = head + code + random_string(50)
-    #         self.assertRegex(document, pattern)
-
-    #         for bad_code in ['200', '301', '302']:
-    #             document = base64.b64encode(head + bad_code + random_string(50))
-    #             self.assertNotRegexpMatches(document, pattern)
-
-    # def test_200_pattern(self):
-    #     pattern = Zappa.selection_pattern('200')
-    #     self.assertEqual(pattern, '')
 
     ##
     # WSGI
@@ -1210,6 +1185,27 @@ class TestZappa(unittest.TestCase):
     # CLI
     ##
 
+    def test_zappa_init(self):
+        # delete if file exists
+        if os.path.exists("zappa_settings.json"):
+            os.remove("zappa_settings.json")
+
+        process = subprocess.Popen(
+            ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+        )
+        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
+        self.assertTrue(os.path.exists("zappa_settings.json"))
+
+        with open("zappa_settings.json", "r") as f:
+            zappa_settings = json.load(f)
+            self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
+            self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+
+        # delete the file
+        if os.path.exists("zappa_settings.json"):
+            os.remove("zappa_settings.json")
+
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()
         return
@@ -1499,149 +1495,6 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(ValueError):
             zappa_cli.save_python_settings_file(bad_output_path)
 
-    # def test_cli_args(self):
-    #     zappa_cli = ZappaCLI()
-    #     # Sanity
-    #     argv = '-s test_settings.json derp ttt888'.split()
-    #     with self.assertRaises(SystemExit) as system_exit:
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 2)
-
-    # def test_cli_error_exit_code(self):
-    #     # Discussion: https://github.com/Miserlou/Zappa/issues/407
-    #     zappa_cli = ZappaCLI()
-    #     # Sanity
-    #     argv = '-s test_settings.json status devor'.split()
-    #     with self.assertRaises(SystemExit) as system_exit:
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 1)
-
-    # def test_cli_default(self):
-    #     # Discussion: https://github.com/Miserlou/Zappa/issues/422
-    #     zappa_cli = ZappaCLI()
-    #     argv = '-s tests/test_one_env.json status'.split()
-    #     # It'll fail, but at least it'll cover it.
-    #     with self.assertRaises(SystemExit) as system_exit:
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 1)
-
-    #     zappa_cli = ZappaCLI()
-    #     argv = '-s tests/test_one_env.json status --all'.split()
-    #     # It'll fail, but at least it'll cover it.
-    #     with self.assertRaises(SystemExit) as system_exit:
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 1)
-
-    #     zappa_cli = ZappaCLI()
-    #     argv = '-s test_settings.json status'.split()
-    #     with self.assertRaises(SystemExit) as system_exit:
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 2)
-
-    # def test_cli_negative_rollback(self):
-    #     zappa_cli = ZappaCLI()
-    #     argv = '-s test_settings.json rollback -n -1 dev'.split()
-    #     output = StringIO()
-    #     old_stderr, sys.stderr = sys.stderr, output
-    #     with self.assertRaises(SystemExit) as system_exit:
-
-    #         print argv
-
-    #         zappa_cli.handle(argv)
-    #     self.assertEqual(system_exit.exception.code, 2)
-
-    #     error_msg = output.getvalue().strip()
-    #     expected = r".*This argument must be positive \(got -1\)$"
-    #     self.assertRegex(error_msg, expected)
-    #     sys.stderr = old_stderr
-
-    # @mock.patch('zappa.cli.ZappaCLI.dispatch_command')
-    # def test_cli_invoke(self, _):
-    #     zappa_cli = ZappaCLI()
-    #     argv = '-s test_settings.json invoke '.split()
-    #     raw_tests = (
-    #         ['--raw', 'devor', '"print 1+2"'],
-    #         ['devor', '"print 1+2"', '--raw']
-    #     )
-
-    #     for cmd in raw_tests:
-    #         zappa_cli.handle(argv + cmd)
-    #         args = zappa_cli.vargs
-
-    #         self.assertFalse(args['all'])
-    #         self.assertTrue(args['raw'])
-    #         self.assertEquals(args['command_rest'], '"print 1+2"')
-    #         self.assertEquals(args['command_env'], 'devor')
-
-    #     all_raw_tests = (
-    #         ['--all', '--raw', '"print 1+2"'],
-    #         ['"print 1+2"', '--all', '--raw'],
-    #         ['--raw', '"print 1+2"', '--all'],
-    #         ['--all', '"print 1+2"', '--raw']
-    #     )
-    #     for cmd in all_raw_tests:
-    #         zappa_cli.handle(argv + cmd)
-    #         args = zappa_cli.vargs
-
-    #         self.assertTrue(args['all'])
-    #         self.assertTrue(args['raw'])
-    #         self.assertEquals(args['command_rest'], '"print 1+2"')
-    #         self.assertEquals(args['command_env'], None)
-
-    #     zappa_cli.handle(argv + ['devor', 'myapp.my_func'])
-    #     args = zappa_cli.vargs
-    #     self.assertEquals(args['command_rest'], 'myapp.my_func')
-
-    #     all_func_tests = (
-    #         ['--all', 'myapp.my_func'],
-    #         ['myapp.my_func', '--all']
-    #     )
-    #     for cmd in all_func_tests:
-    #         zappa_cli.handle(argv + cmd)
-    #         args = zappa_cli.vargs
-
-    #         self.assertTrue(args['all'])
-    #         self.assertEquals(args['command_rest'], 'myapp.my_func')
-
-    # @mock.patch('zappa.cli.ZappaCLI.dispatch_command')
-    # def test_cli_manage(self, _):
-    #     zappa_cli = ZappaCLI()
-    #     argv = '--settings test_settings.json manage'.split()
-    #     all_tests = (
-    #         ['--all', 'showmigrations', 'admin'],
-    #         ['showmigrations', 'admin', '--all']
-    #     )
-
-    #     for cmd in all_tests:
-
-    #         print argv
-    #         print cmd
-    #         print(argv + cmd)
-
-    #         zappa_cli.handle(argv + cmd)
-    #         args = zappa_cli.vargs
-
-    #         self.assertTrue(args['all'])
-    #         self.assertTrue(
-    #             args['command_rest'] == ['showmigrations', 'admin']
-    #         )
-
-    #     cmd = ['devor', 'showmigrations', 'admin']
-    #     zappa_cli.handle(argv + cmd)
-    #     args = zappa_cli.vargs
-
-    #     self.assertFalse(args['all'])
-    #     self.assertTrue(
-    #         args['command_rest'] == ['showmigrations', 'admin']
-    #     )
-
-    #     cmd = ['devor', '"shell --version"']
-    #     zappa_cli.handle(argv + cmd)
-    #     args = zappa_cli.vargs
-
-    #     self.assertFalse(args['all'])
-    #     self.assertTrue(args['command_rest'] == ['"shell --version"'])
-
     def test_bad_json_catch(self):
         zappa_cli = ZappaCLI()
         self.assertRaises(ValueError, zappa_cli.load_settings_file, "tests/test_bad_settings.json")
@@ -1656,70 +1509,6 @@ class TestZappa(unittest.TestCase):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
         self.assertRaises(ValueError, zappa_cli.load_settings, "tests/test_bad_environment_vars.json")
-
-    # @mock.patch('botocore.session.Session.full_config', new_callable=mock.PropertyMock)
-    # def test_cli_init(self, mock_config):
-
-    #     # Coverage for all profile detection paths
-    #     mock_config.side_effect = [
-    #         { 'profiles' : { 'default' : { 'region' : 'us-east-1'} } },
-    #         { 'profiles' : { 'default' : { 'region' : 'us-east-1'} } },
-    #         { 'profiles' : {
-    #             'default' : {
-    #                 'region' : 'us-east-1'
-    #             },
-    #             'another' : {
-    #                 'region' : 'us-east-1'
-    #             }
-    #         } },
-    #         { 'profiles' : {
-    #             'radical' : {
-    #                 'region' : 'us-east-1'
-    #             },
-    #             'another' : {
-    #                 'region' : 'us-east-1'
-    #             }
-    #         } },
-    #         { 'profiles': {} },
-    #         { 'profiles': {} },
-    #         { 'profiles' : { 'default' : { 'region' : 'us-east-1'} } },
-    #     ]
-
-    #     if os.path.isfile('zappa_settings.json'):
-    #         os.remove('zappa_settings.json')
-
-    #     # Test directly
-    #     zappa_cli = ZappaCLI()
-    #     # Via http://stackoverflow.com/questions/2617057/how-to-supply-stdin-files-and-environment-variable-inputs-to-python-unit-tests
-    #     inputs = ['dev', 'lmbda', 'test_settings', 'y', '']
-
-    #     def test_for(inputs):
-    #         input_generator = (i for i in inputs)
-    #         bi = 'builtins.input'
-
-    #         with mock.patch(bi, lambda prompt: next(input_generator)):
-    #             zappa_cli.init()
-
-    #         if os.path.isfile('zappa_settings.json'):
-    #             os.remove('zappa_settings.json')
-
-    #     test_for(inputs)
-    #     test_for(['dev', 'lmbda', 'test_settings', 'n', ''])
-    #     test_for(['dev', 'default', 'lmbda', 'test_settings', '', ''])
-    #     test_for(['dev', 'radical', 'lmbda', 'test_settings', 'p', ''])
-    #     test_for(['dev', 'lmbda', 'test_settings', 'y', ''])
-    #     test_for(['dev', 'lmbda', 'test_settings', 'p', 'n'])
-
-    #     # Test via handle()
-    #     input_generator = (i for i in inputs)
-    #     bi = 'builtins.input'
-    #     with mock.patch(bi, lambda prompt: next(input_generator)):
-    #         zappa_cli = ZappaCLI()
-    #         argv = ['init']
-    #         zappa_cli.handle(argv)
-
-    #     if os.path.isfile('zappa_settings.json'):
-    #         os.remove('zappa_settings.json')
 
     def test_domain_name_match(self):
         # Simple sanity check
@@ -2243,6 +2032,52 @@ class TestZappa(unittest.TestCase):
             zappa.get_scheduled_event_name(event, function, lambda_name, index),
             f"{hashed_lambda_name}-{index}-{event['name']}-{function}",
         )
+
+    def test_get_scheduled_event_name__using_invalid_character(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo$"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__using_hyphen(self):
+        zappa = Zappa()
+        event = {}
+        function = "foo-2"
+        lambda_name = "bar"
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__max_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 63
+        lambda_name = "bar"
+
+        self.assertEqual(
+            zappa.get_scheduled_event_name(event, function, lambda_name),
+            f"-{function}",
+        )
+
+    def test_get_scheduled_event_name__over_function_name(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 64
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name)
+
+    def test_get_scheduled_event_name__over_name_with_index(self):
+        zappa = Zappa()
+        event = {}
+        function = "a" * 62
+        index = 1
+        lambda_name = "bar"
+
+        with self.assertRaises(EnvironmentError):
+            zappa.get_scheduled_event_name(event, function, lambda_name, index)
 
     def test_shameless(self):
         shamelessly_promote()
@@ -3029,7 +2864,37 @@ class TestZappa(unittest.TestCase):
             "requestContext": {},
         }
         request = create_wsgi_request(event)
-        self.assertEqual(request["QUERY_STRING"], "a=A,B&b=C#D")
+        expected = "a=A%2CB&b=C%23D"  # unencoded result: "a=A,B&b=C#D"
+        self.assertEqual(request["QUERY_STRING"], expected)
+
+    def test_wsgi_query_string_ampersand_unencoded(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {
+                "test": "M&M",
+            },
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M")
+
+    def test_wsgi_query_string_with_encodechars(self):
+        event = {
+            "body": None,
+            "headers": {},
+            "pathParameters": {},
+            "path": "/path/path1",
+            "httpMethod": "GET",
+            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
+            "requestContext": {},
+        }
+        request = create_wsgi_request(event)
+        expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
+        self.assertEqual(request["QUERY_STRING"], expected)
 
 
 if __name__ == "__main__":
