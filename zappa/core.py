@@ -1458,6 +1458,214 @@ class Zappa:
         )
 
     ##
+    # Function URL
+    ##
+    def list_function_url_policy(self, function_name):
+        results = []
+        try:
+            policy_response = self.lambda_client.get_policy(FunctionName=function_name)
+            if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                statement = json.loads(policy_response["Policy"])["Statement"]
+                for s in statement:
+                    if s["Sid"] in ["FunctionURLAllowPublicAccess"]:
+                        results.append(s)
+            else:
+                logger.debug("Failed to load Lambda function policy: {}".format(policy_response))
+        except ClientError as e:
+            if e.args[0].find("ResourceNotFoundException") > -1:
+                logger.debug("No policy found, must be first run.")
+            else:
+                logger.error("Unexpected client error {}".format(e.args[0]))
+        return results
+
+    def delete_function_url_policy(self, function_name):
+        statements = self.list_function_url_policy(function_name)
+        for s in statements:
+            delete_response = self.lambda_client.remove_permission(FunctionName=function_name, StatementId=s["Sid"])
+            if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
+                logger.error("Failed to delete an obsolete policy statement: {}".format(delete_response))
+
+    def update_function_url_policy(self, function_name, function_url_config):
+        statements = self.list_function_url_policy(function_name)
+
+        if function_url_config["authorizer"] == "NONE":
+            if not statements:
+                self.lambda_client.add_permission(
+                    FunctionName=function_name,
+                    StatementId="FunctionURLAllowPublicAccess",
+                    Action="lambda:InvokeFunctionUrl",
+                    Principal="*",
+                    FunctionUrlAuthType=function_url_config["authorizer"],
+                )
+        elif function_url_config["authorizer"] == "AWS_IAM":
+            if statements:
+                self.delete_function_url_policy(function_name)
+
+    def deploy_lambda_function_url(self, function_name, function_url_config):
+        if function_url_config["cors"]:
+            response = self.lambda_client.create_function_url_config(
+                FunctionName=function_name,
+                AuthType=function_url_config["authorizer"],
+                Cors={
+                    "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                    "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                    "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                    "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                    "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                    "MaxAge": function_url_config["cors"]["maxAge"],
+                },
+            )
+        else:
+            response = self.lambda_client.create_function_url_config(
+                FunctionName=function_name, AuthType=function_url_config["authorizer"]
+            )
+        print("function URL address: {}".format(response["FunctionUrl"]))
+        self.update_function_url_policy(function_name, function_url_config)
+        return response
+
+    def update_lambda_function_url(self, function_name, function_url_config):
+        response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
+        if response.get("FunctionUrlConfigs", []):
+            for config in response["FunctionUrlConfigs"]:
+                if function_url_config["cors"]:
+                    response = self.lambda_client.update_function_url_config(
+                        FunctionName=config["FunctionArn"],
+                        AuthType=function_url_config["authorizer"],
+                        Cors={
+                            "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                            "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                            "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                            "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                            "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                            "MaxAge": function_url_config["cors"]["maxAge"],
+                        },
+                    )
+                else:
+                    response = self.lambda_client.update_function_url_config(
+                        FunctionName=function_name, AuthType=function_url_config["authorizer"]
+                    )
+                print("function URL address: {}".format(response["FunctionUrl"]))
+                self.update_function_url_policy(config["FunctionArn"], function_url_config)
+        else:
+            self.deploy_lambda_function_url(function_name, function_url_config)
+
+    def delete_lambda_function_url(self, function_name):
+        response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
+        for config in response.get("FunctionUrlConfigs", []):
+            resp = self.lambda_client.delete_function_url_config(FunctionName=config["FunctionArn"])
+            if resp["ResponseMetadata"]["HTTPStatusCode"] == 204:
+                print("function URL deleted: {}".format(config["FunctionUrl"]))
+            self.delete_function_url_policy(config["FunctionArn"])
+
+    ##
+    # Cloudfront distribution
+    ##
+    def update_lambda_function_url_domains(self, function_name, function_url_domains, certificate_arn, cloudfront_config):
+        response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
+        if not response.get("FunctionUrlConfigs", []):
+            print("no function url configured on lambda, skip setting custom domains")
+        url = response["FunctionUrlConfigs"][0]["FunctionUrl"]
+        import urllib
+
+        url = urllib.parse.urlparse(url)
+
+        NULL_CONFIG = {"Quantity": 0, "Items": []}
+
+        config = {
+            "CallerReference": "zappa-create-function-url-custom-domain-" + function_name.split(":")[-1],
+            "Aliases": {"Quantity": len(function_url_domains), "Items": function_url_domains},
+            "DefaultRootObject": "",
+            "Enabled": True,
+            "PriceClass": "PriceClass_100",
+            "HttpVersion": "http2",
+            "Comment": "Lambda FunctionURL {}".format(function_name.split(":")[-1]),
+            "Origins": {
+                "Quantity": 1,
+                "Items": [
+                    {
+                        "Id": "LambdaFunctionURL",
+                        "DomainName": url.hostname,
+                        "OriginPath": "",
+                        "CustomHeaders": {
+                            "Quantity": 1,
+                            "Items": [
+                                {"HeaderName": "CloudFront", "HeaderValue": "CloudFront"},
+                            ],
+                        },
+                        "CustomOriginConfig": {
+                            "HTTPPort": 80,
+                            "HTTPSPort": 443,
+                            "OriginProtocolPolicy": "https-only",
+                            "OriginSslProtocols": {"Quantity": 1, "Items": ["TLSv1"]},
+                            "OriginReadTimeout": 60,
+                            "OriginKeepaliveTimeout": 60,
+                        },
+                    }
+                ],
+            },
+            "CacheBehaviors": NULL_CONFIG,
+            "CustomErrorResponses": NULL_CONFIG,
+            "DefaultCacheBehavior": {
+                "TargetOriginId": "LambdaFunctionURL",
+                "ViewerProtocolPolicy": "redirect-to-https",
+                "Compress": True,
+                "SmoothStreaming": True,
+                "LambdaFunctionAssociations": NULL_CONFIG,
+                "FieldLevelEncryptionId": "",
+                "AllowedMethods": {
+                    "Quantity": 7,
+                    "Items": ["HEAD", "DELETE", "POST", "GET", "OPTIONS", "PUT", "PATCH"],
+                    "CachedMethods": {"Quantity": 3, "Items": ["HEAD", "GET", "OPTIONS"]},
+                },
+                "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",  # noqa: E501 https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+                "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",  # noqa: E501 https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html#managed-origin-request-policy-all-viewer-except-host-header
+            },
+            "Logging": {"Enabled": False, "IncludeCookies": False, "Bucket": "", "Prefix": ""},
+            "Restrictions": {"GeoRestriction": {"RestrictionType": "none", **NULL_CONFIG}},
+            "WebACLId": "",
+        }
+        if certificate_arn:
+            config["ViewerCertificate"] = {
+                "ACMCertificateArn": certificate_arn,
+                "SSLSupportMethod": "sni-only",
+                "MinimumProtocolVersion": "TLSv1.2_2021",
+            }
+
+        config.update(cloudfront_config)
+        distributions = self.cloudfront_client.list_distributions()
+        distributions = [
+            item
+            for item in distributions["DistributionList"]["Items"]
+            if url.hostname in [origin["DomainName"] for origin in item["Origins"]["Items"]]
+        ]
+
+        if not distributions:
+            response = self.cloudfront_client.create_distribution(DistributionConfig=config)
+            if response["ResponseMetadata"]["HTTPStatusCode"] == 201:
+                print(
+                    "created cloudfront distribution for {}. It will take a while for the change to be deployed.".format(
+                        function_url_domains
+                    )
+                )
+                return response["Distribution"]["DomainName"]
+        else:
+            id = distributions[0]["Id"]
+            distribution = self.cloudfront_client.get_distribution(Id=id)
+            new_config = distribution["Distribution"]["DistributionConfig"]
+            new_config.update(config)
+
+            response = self.cloudfront_client.update_distribution(
+                DistributionConfig=new_config, Id=id, IfMatch=distribution["ETag"]
+            )
+            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                print(
+                    "update cloudfront distribution for {}. It will take a while for the change to be deployed.".format(
+                        function_url_domains
+                    )
+                )
+                return response["Distribution"]["DomainName"]
+
+    ##
     # Application load balancer
     ##
 
