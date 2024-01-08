@@ -92,28 +92,12 @@ class TestZappa(unittest.TestCase):
     def test_create_lambda_package(self):
         # mock the pkg_resources.WorkingSet() to include a known package in lambda_packages so that the code
         # for zipping pre-compiled packages gets called
-        mock_installed_packages = {"psycopg2": "2.6.1"}
+        mock_installed_packages = {"psycopg": "3.1.17"}
         with mock.patch(
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
         ):
-            z = Zappa(runtime="python3.7")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-    def test_get_manylinux_python37(self):
-        z = Zappa(runtime="python3.7")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2", "2.7.6"))
-        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
-
-        # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg2": "2.7.6"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.7")
+            z = Zappa(runtime="python3.8")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -199,17 +183,59 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
-    def test_verify_python37_does_not_download_2_24_manylinux_wheel(self):
-        z = Zappa(runtime="python3.7")
-        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
-        expected_wheel_path = os.path.join(
-            cached_wheels_dir, "cryptography-35.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.whl"
-        )
+    def test_get_manylinux_python311(self):
+        z = Zappa(runtime="python3.11")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
 
-        # Check with known manylinux wheel package
-        actual_wheel_path = z.get_cached_manylinux_wheel("cryptography", "35.0.0")
-        self.assertEqual(actual_wheel_path, expected_wheel_path)
-        os.remove(actual_wheel_path)
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg2-binary": "2.9.7"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.11")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "2.8"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.11")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+    def test_get_manylinux_python312(self):
+        z = Zappa(runtime="python3.12")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.1.17"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg-binary": "3.1.17"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.12")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "41.0.7"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.12")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
 
     def test_verify_downloaded_manylinux_wheel(self):
         z = Zappa(runtime="python3.10")
@@ -260,33 +286,6 @@ class TestZappa(unittest.TestCase):
         cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
         os.remove(os.path.join(cached_pypi_info_dir, "markupsafe-2.1.3.json"))
 
-    def test_get_manylinux_python311(self):
-        z = Zappa(runtime="python3.11")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
-        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
-
-        # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg2-binary": "2.9.7"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.11")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-        # same, but with an ABI3 package
-        mock_installed_packages = {"cryptography": "2.8"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.11")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
     def test_get_exclude_glob__file_not_deleted(self):
         z = Zappa(runtime="python3.11")
         self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
@@ -309,7 +308,7 @@ class TestZappa(unittest.TestCase):
                 os.remove(path)
 
     def test_getting_installed_packages(self, *args):
-        z = Zappa(runtime="python3.7")
+        z = Zappa(runtime="python3.8")
 
         # mock pkg_resources call to be same as what our mocked site packages dir has
         mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
@@ -344,7 +343,7 @@ class TestZappa(unittest.TestCase):
                 self.assertEqual(current_venv, None)
 
     def test_getting_installed_packages_mixed_case_location(self, *args):
-        z = Zappa(runtime="python3.7")
+        z = Zappa(runtime="python3.8")
 
         # mock pip packages call to be same as what our mocked site packages dir has
         mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
@@ -367,7 +366,7 @@ class TestZappa(unittest.TestCase):
                     )
 
     def test_getting_installed_packages_mixed_case(self, *args):
-        z = Zappa(runtime="python3.7")
+        z = Zappa(runtime="python3.8")
 
         # mock pkg_resources call to be same as what our mocked site packages dir has
         mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
@@ -2581,7 +2580,7 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
 
     @mock.patch("os.getenv", return_value="True")
-    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 7))
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 8))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
 
