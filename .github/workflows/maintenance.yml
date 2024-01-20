@@ -22,7 +22,7 @@ jobs:
         uses: actions/stale@v9
         with:
           days-before-stale: ${{ env.inactive_days }}
-          days-before-close: ${{ env.close_days }}
+          days-before-close: ${{ env.closing_days }}
           stale-issue-label: ${{ env.inactive_label }}
           close-issue-label: ${{ env.closed_label }}
           exempt-issue-labels: "needs-review,planned,in-progress"
