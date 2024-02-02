@@ -2,8 +2,10 @@ name: Perform automated repository maintenance
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */2 * * *"
+# Out of an abundance of caution, disabling automatic execution for now
+# TODO: Reschedule job once expected behavior is consistently observed
+#  schedule:
+#    - cron: "0 */2 * * *"
 
 jobs:
   cleanup-inactive:
@@ -36,6 +38,3 @@ jobs:
           labels-to-add-when-unstale: "needs-review"
           ascending: true
           enable-statistics: true
-          # DEBUG OPTIONS
-          debug-only: true
-          operations-per-run: 1000
