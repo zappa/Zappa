@@ -4,6 +4,7 @@ Zappa CLI
 Deploy arbitrary Python programs as serverless Zappa applications.
 
 """
+
 import argparse
 import base64
 import collections
