@@ -218,10 +218,10 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker.
 
 You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
-Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+Zappa expects that the image is built and pushed to a Amazon ECR repository.
 
 Deploy Example:
 
@@ -491,6 +491,8 @@ Amazon provides their own free alternative to Let's Encrypt called [AWS Certific
 3. Copy the entire ARN of that certificate and place it in the Zappa setting `certificate_arn`.
 4. Set your desired domain in the `domain` setting.
 5. Call `$ zappa certify` to create and associate the API Gateway distribution using that certificate.
+
+(Note: No matter which region you are using, your certificate must be placed in us-east-1, which is the region in which AWS places many resources that are used globally.)
 
 #### Deploying to a Domain With a Let's Encrypt Certificate (DNS Auth)
 
