@@ -279,7 +279,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.7",  # Detected at runtime in CLI
+        runtime="python3.8",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -304,27 +304,10 @@ class Zappa:
 
         self.runtime = runtime
 
-        if self.runtime == "python3.7":
-            self.manylinux_suffix_start = "cp37m"
-        elif self.runtime == "python3.8":
-            # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
-            # See https://github.com/pypa/manylinux for a more detailed explanation
-            self.manylinux_suffix_start = "cp38"
-        elif self.runtime == "python3.9":
-            self.manylinux_suffix_start = "cp39"
-        elif self.runtime == "python3.10":
-            self.manylinux_suffix_start = "cp310"
-        else:
-            self.manylinux_suffix_start = "cp311"
-
-        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        # Currently python3.7 lambda runtime does not support manylinux_2_24
-        # See https://github.com/zappa/Zappa/issues/1249 for more details
-        if self.runtime == "python3.7":
-            self.manylinux_suffixes = ("2014", "2010", "1")
-        else:
-            self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
-
+        # TODO: Support PEP600 properly (https://peps.python.org/pep-0600/)
+        self.manylinux_suffix_start = f"cp{self.runtime[6:].replace('.', '')}"
+        self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # TODO: Support aarch64 architecture
         self.manylinux_wheel_file_match = re.compile(
             rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
@@ -1100,7 +1083,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         xray_tracing=False,
@@ -1285,7 +1268,7 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
