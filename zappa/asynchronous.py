@@ -162,21 +162,21 @@ class LambdaAsyncResponse:
 
         self.capture_response = capture_response
 
-    def send(self, task_path, args, kwargs):
+    def send(self, task_path, args, kwargs, qualifier):
         """
         Create the message object and pass it to the actual sender.
         """
         message = {
-            "task_path": task_path,
-            "capture_response": self.capture_response,
-            "response_id": self.response_id,
-            "args": args,
-            "kwargs": kwargs,
+            'task_path': task_path,
+            'capture_response': self.capture_response,
+            'response_id': self.response_id,
+            'args': args,
+            'kwargs': kwargs
         }
-        self._send(message)
+        self._send(message, qualifier)
         return self
 
-    def _send(self, message):
+    def _send(self, message, qualifier):
         """
         Given a message, directly invoke the lamdba function for this task.
         """
@@ -186,10 +186,11 @@ class LambdaAsyncResponse:
             raise AsyncException("Payload too large for async Lambda call")
         self.response = self.client.invoke(
             FunctionName=self.lambda_function_name,
-            InvocationType="Event",  # makes the call async
+            InvocationType='Event', #makes the call async
             Payload=payload,
+            Qualifier=qualifier if qualifier else os.environ.get('AWS_LAMBDA_FUNCTION_VERSION')
         )
-        self.sent = self.response.get("StatusCode", 0) == 202
+        self.sent = (self.response.get('StatusCode', 0) == 202)
 
 
 class SnsAsyncResponse(LambdaAsyncResponse):
@@ -332,6 +333,7 @@ def run(
     capture_response=False,
     remote_aws_lambda_function_name=None,
     remote_aws_region=None,
+    alias_or_version=None,
     **task_kwargs
 ):
     """
@@ -353,7 +355,7 @@ def run(
     task_path = get_func_task_path(func)
     return ASYNC_CLASSES[service](
         lambda_function_name=lambda_function_name, aws_region=aws_region, capture_response=capture_response, **task_kwargs
-    ).send(task_path, args, kwargs)
+    ).send(task_path, args, kwargs, alias_or_version)
 
 
 # Handy:
@@ -372,6 +374,7 @@ def task(*args, **kwargs):
         service (str): either 'lambda' or 'sns'
         remote_aws_lambda_function_name (str): the name of a remote lambda function to call with this task
         remote_aws_region (str): the name of a remote region to make lambda/sns calls against
+        alias_or_version (str): the alias or version to call if the service is 'lambda'
 
     Returns:
         A replacement function that dispatches func() to
@@ -386,11 +389,13 @@ def task(*args, **kwargs):
         service = "lambda"
         lambda_function_name_arg = None
         aws_region_arg = None
+        alias_or_version = None
 
     else:  # Arguments were passed
-        service = kwargs.get("service", "lambda")
-        lambda_function_name_arg = kwargs.get("remote_aws_lambda_function_name")
-        aws_region_arg = kwargs.get("remote_aws_region")
+        service = kwargs.get('service', 'lambda')
+        lambda_function_name_arg = kwargs.get('remote_aws_lambda_function_name')
+        aws_region_arg = kwargs.get('remote_aws_region')
+        alias_or_version = kwargs.get('alias_or_version')
 
     capture_response = kwargs.get("capture_response", False)
 
@@ -425,7 +430,7 @@ def task(*args, **kwargs):
                     lambda_function_name=lambda_function_name,
                     aws_region=aws_region,
                     capture_response=capture_response,
-                ).send(task_path, args, kwargs)
+                ).send(task_path, args, kwargs, alias_or_version)
                 return send_result
             else:
                 validate_json_serializable(*args, **kwargs)
