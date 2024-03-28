@@ -2,6 +2,13 @@ name: Perform automated repository maintenance
 
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry-run"
+        type: boolean
+      operations:
+        description: "Max number of operations per run"
+        type: number
 # Out of an abundance of caution, disabling automatic execution for now
 # TODO: Reschedule job once expected behavior is consistently observed
 #  schedule:
@@ -19,6 +26,7 @@ jobs:
       total_days: 100
       inactive_label: "no-activity"
       closed_label: "auto-closed"
+      default_operations: ${{ inputs.dry-run && 1000 || 30 }}
     steps:
       - name: Cleanup inactive issues/PRs
         uses: actions/stale@v9
@@ -38,3 +46,6 @@ jobs:
           labels-to-add-when-unstale: "needs-review"
           ascending: true
           enable-statistics: true
+          # CONFIG OPTIONS
+          debug-only: ${{ inputs.dry-run }}
+          operations-per-run: ${{ inputs.operations || env.default_operations }}
