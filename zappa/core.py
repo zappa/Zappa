@@ -973,6 +973,10 @@ class Zappa:
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
         except botocore.exceptions.ClientError:
+            # https://github.com/zappa/Zappa/issues/1315
+            # 403 means bucket exists but the user does not have access
+            if e.response['Error']['Code'] == '403':
+                raise Exception(f'AWS Error: {e}. On bucket: {bucket_name}. This is likely an AWS permission issue, try adding s3:ListBucket to the deploying user or role.')
             # This is really stupid S3 quirk. Technically, us-east-1 one has no S3,
             # it's actually "US Standard", or something.
             # More here: https://github.com/boto/boto3/issues/125
