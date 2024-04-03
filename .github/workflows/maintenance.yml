@@ -10,7 +10,7 @@ on:
         description: "Max number of operations per run"
         type: number
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: "*/30 * * * *"
 
 jobs:
   cleanup-inactive:
