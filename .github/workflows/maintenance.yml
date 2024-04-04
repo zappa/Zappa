@@ -9,10 +9,8 @@ on:
       operations:
         description: "Max number of operations per run"
         type: number
-# Out of an abundance of caution, disabling automatic execution for now
-# TODO: Reschedule job once expected behavior is consistently observed
-#  schedule:
-#    - cron: "0 */2 * * *"
+  schedule:
+    - cron: "*/30 * * * *"
 
 jobs:
   cleanup-inactive:
@@ -27,7 +25,7 @@ jobs:
       total_days: 100
       inactive_label: "no-activity"
       closed_label: "auto-closed"
-      default_operations: ${{ inputs.dry-run && 1000 || 30 }}
+      default_operations: ${{ inputs.dry-run && 1000 || 200 }}
     steps:
       - name: Cleanup inactive issues/PRs
         uses: actions/stale@v9
@@ -36,6 +34,7 @@ jobs:
           days-before-close: ${{ env.closing_days }}
           stale-issue-label: ${{ env.inactive_label }}
           close-issue-label: ${{ env.closed_label }}
+          exempt-all-milestones: true
           exempt-issue-labels: "needs-review,planned,in-progress"
           stale-issue-message: "Hi there! Unfortunately, this Issue has not seen any activity for at least ${{ env.inactive_days }} days. If the Issue is still relevant to the [latest version of Zappa](https://github.com/zappa/Zappa/releases/latest), please comment within the next ${{ env.closing_days }} days if you wish to keep it open. Otherwise, it will be automatically closed."
           close-issue-message: "Hi there! Unfortunately, this Issue was automatically closed as it had not seen any activity in at least ${{ env.total_days }} days. If the Issue is still relevant to the [latest version of Zappa](https://github.com/zappa/Zappa/releases/latest), please [open a new Issue](https://github.com/zappa/Zappa/issues/new)."
