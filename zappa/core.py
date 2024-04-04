@@ -2,9 +2,6 @@
 Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
-##
-# Imports
-##
 import getpass
 import glob
 import hashlib
@@ -282,7 +279,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.7",  # Detected at runtime in CLI
+        runtime="python3.8",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -307,27 +304,10 @@ class Zappa:
 
         self.runtime = runtime
 
-        if self.runtime == "python3.7":
-            self.manylinux_suffix_start = "cp37m"
-        elif self.runtime == "python3.8":
-            # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
-            # See https://github.com/pypa/manylinux for a more detailed explanation
-            self.manylinux_suffix_start = "cp38"
-        elif self.runtime == "python3.9":
-            self.manylinux_suffix_start = "cp39"
-        elif self.runtime == "python3.10":
-            self.manylinux_suffix_start = "cp310"
-        else:
-            self.manylinux_suffix_start = "cp311"
-
-        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        # Currently python3.7 lambda runtime does not support manylinux_2_24
-        # See https://github.com/zappa/Zappa/issues/1249 for more details
-        if self.runtime == "python3.7":
-            self.manylinux_suffixes = ("2014", "2010", "1")
-        else:
-            self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
-
+        # TODO: Support PEP600 properly (https://peps.python.org/pep-0600/)
+        self.manylinux_suffix_start = f"cp{self.runtime[6:].replace('.', '')}"
+        self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # TODO: Support aarch64 architecture
         self.manylinux_wheel_file_match = re.compile(
             rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
@@ -504,10 +484,15 @@ class Zappa:
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
         pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
-        pip_process.communicate()
+        stdout_result, stderror_result = pip_process.communicate()
         pip_return_code = pip_process.returncode
 
         if pip_return_code:
+            logger.info("command: %s", " ".join(command))
+            if stdout_result.strip():
+                logger.info("stdout: %s", stdout_result.strip())
+            if stderror_result.strip():
+                logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
         return ve_path
@@ -637,7 +622,8 @@ class Zappa:
             for glob_path in exclude_glob:
                 for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                     try:
-                        os.remove(path)
+                        if str(path).startswith(temp_project_path):
+                            os.remove(path)
                     except OSError:  # is a directory
                         shutil.rmtree(path)
 
@@ -653,39 +639,6 @@ class Zappa:
         package_info["build_time"] = build_time
         package_info["build_platform"] = os.sys.platform
         package_info["build_user"] = getpass.getuser()
-        # TODO: Add git head and info?
-
-        # Ex, from @scoates:
-        # def _get_git_branch():
-        #     chdir(DIR)
-        #     out = check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
-        #     lambci_branch = environ.get('LAMBCI_BRANCH', None)
-        #     if out == "HEAD" and lambci_branch:
-        #         out += " lambci:{}".format(lambci_branch)
-        #     return out
-
-        # def _get_git_hash():
-        #     chdir(DIR)
-        #     return check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        # def _get_uname():
-        #     return check_output(['uname', '-a']).strip()
-
-        # def _get_user():
-        #     return check_output(['whoami']).strip()
-
-        # def set_id_info(zappa_cli):
-        #     build_info = {
-        #         'branch': _get_git_branch(),
-        #         'hash': _get_git_hash(),
-        #         'build_uname': _get_uname(),
-        #         'build_user': _get_user(),
-        #         'build_time': datetime.datetime.utcnow().isoformat(),
-        #     }
-        #     with open(path.join(DIR, 'id_info.json'), 'w') as f:
-        #         json.dump(build_info, f)
-        #     return True
-
         package_id_file = open(os.path.join(temp_project_path, "package_info.json"), "w")
         dumped = json.dumps(package_info, indent=4)
         try:
@@ -769,7 +722,8 @@ class Zappa:
         for glob_path in exclude_glob:
             for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                 try:
-                    os.remove(path)
+                    if str(path).startswith(temp_project_path):
+                        os.remove(path)
                 except OSError:  # is a directory
                     shutil.rmtree(path)
 
@@ -1129,7 +1083,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         xray_tracing=False,
@@ -1314,7 +1268,7 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
@@ -1363,7 +1317,7 @@ class Zappa:
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
         }
 
-        if lambda_aws_config["PackageType"] != "Image":
+        if lambda_aws_config.get("PackageType", None) != "Image":
             kwargs.update(
                 {
                     "Handler": handler,
@@ -1409,7 +1363,11 @@ class Zappa:
         response = self.lambda_client.list_versions_by_function(FunctionName=function_name)
 
         # https://github.com/Miserlou/Zappa/pull/2192
-        if len(response.get("Versions", [])) > 1 and response["Versions"][-1]["PackageType"] == "Image":
+        if (
+            len(response.get("Versions", [])) > 1
+            and "PackageType" in response["Versions"][-1]
+            and response["Versions"][-1]["PackageType"] == "Image"
+        ):
             raise NotImplementedError("Zappa's rollback functionality is not available for Docker based deployments")
 
         # Take into account $LATEST

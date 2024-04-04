@@ -133,7 +133,7 @@ __Awesome!__
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.7/3.8/3.9/3.10/3.11 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.8/3.9/3.10/3.11/3.12 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -445,11 +445,12 @@ For instance, suppose you have a basic application in a file called "my_app.py",
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.7/3.8/3.9/3.10/3.11 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.8/3.9/3.10/3.11/3.12 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
 For instance, it can come in handy if you want to create your first `superuser` on a RDS database running in a VPC (like Serverless Aurora):
+
     $ zappa invoke staging "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('username', 'email', 'password')" --raw
 
 ### Django Management Commands
@@ -987,7 +988,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.11", // Python runtime to use on Lambda. Can be one of "python3.7", "python3.8", "python3.9", or "python3.10", or "python3.11". Defaults to whatever the current Python being used is.
+        "runtime": "python3.12", // Python runtime to use on Lambda. Can be one of: "python3.8", "python3.9", "python3.10", "python3.11", or "python3.12". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
@@ -1198,14 +1199,13 @@ If you want to use native AWS Lambda environment variables you can use the `aws_
 During development, you can add your Zappa defined variables to your locally running app by, for example, using the below (for Django, to manage.py).
 
 ```python
-if 'SERVERTYPE' in os.environ and os.environ['SERVERTYPE'] == 'AWS Lambda':
-    import json
-    import os
+import json
+import os
+
+if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is None: # Ensures app is NOT running on Lambda
     json_data = open('zappa_settings.json')
     env_vars = json.load(json_data)['dev']['environment_variables']
-    for key, val in env_vars.items():
-        os.environ[key] = val
-
+    os.environ.update(env_vars)
 ```
 
 #### Remote Environment Variables
