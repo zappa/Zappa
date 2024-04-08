@@ -277,6 +277,19 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
         def batch_window(self):
             return self._config.get("batch_window", 1 if self.batch_size > 10 else 0)
 
+        @property
+        def function_response_types(self):
+            return ["ReportBatchItemFailures"] if self._config.get("report_batch_item_failures", False) else []
+
+        @property
+        def scaling_config(self):
+            maximum_concurrency = self._config.get("maximum_concurrency", None)
+
+            if maximum_concurrency is None:
+                return {}
+
+            return {"MaximumConcurrency": maximum_concurrency}
+
         def _get_uuid(self, function):
             uuid = None
             response = self._lambda.call(
@@ -297,6 +310,8 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     EventSourceArn=self.arn,
                     BatchSize=self.batch_size,
                     MaximumBatchingWindowInSeconds=self.batch_window,
+                    FunctionResponseTypes=self.function_response_types,
+                    ScalingConfig=self.scaling_config,
                     Enabled=self.enabled,
                 )
                 LOG.debug(response)
