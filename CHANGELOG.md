@@ -1,5 +1,9 @@
 # Zappa Changelog
 
+## 0.59.0
+
+See [release notes](https://github.com/zappa/Zappa/releases/tag/0.59.0)
+
 ## 0.58.0
 
 * Add Python 3.11 support (#1262)
