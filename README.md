@@ -426,7 +426,11 @@ You can filter out the contents of the logs with `--filter`, like so:
 
     $ zappa tail production --http --filter "POST" # Only show POST HTTP requests
 
-Note that this uses the [CloudWatch Logs filter syntax](http://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
+Please note:
+
+   1. This uses the [CloudWatch Logs filter syntax](http://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
+
+   2. Cloudwatch logs are kept forever unless you specify a retention time. You can do this by setting the configuration variable `cloudwatch_retention_days` to something reasonable, like 7.
 
 To tail logs without following (to exit immediately after displaying the end of the requested logs), pass `--disable-keep-open`:
 
@@ -916,6 +920,7 @@ to change Zappa's behavior. Use these at your own risk!
         "cloudwatch_log_level": "OFF", // Enables/configures a level of logging for the given staging. Available options: "OFF", "INFO", "ERROR", default "OFF".
         "cloudwatch_data_trace": false, // Logs all data about received events. Default false.
         "cloudwatch_metrics_enabled": false, // Additional metrics for the API Gateway. Default false.
+        "cloudwatch_retention_days": false, // Specify a positive number to limit cloudwatch logs to this many days.
         "cognito": { // for Cognito event triggers
             "user_pool": "user-pool-id", // User pool ID from AWS Cognito
             "triggers": [{
