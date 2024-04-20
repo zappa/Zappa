@@ -30,9 +30,11 @@ setup(
     description="Server-less Python Web Services for AWS Lambda and API Gateway",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/zappa/Zappa",
+    url="https://zappa.ws/zappa",
     author="Rich Jones",
     author_email="rich@openwatch.net",
+    maintainer="Alex DelVecchio",
+    maintainer_email="alex@zappa.ws",
     entry_points={
         "console_scripts": [
             "zappa=zappa.cli:handle",
