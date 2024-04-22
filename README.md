@@ -4,7 +4,7 @@
 
 ## Zappa - Serverless Python
 
-[![CI](https://github.com/zappa/Zappa/actions/workflows/ci.yaml/badge.svg?branch=master&event=push)](https://github.com/zappa/Zappa/actions/workflows/ci.yaml)
+[![CI](https://github.com/zappa/Zappa/actions/workflows/ci.yml/badge.svg?branch=master&event=push)](https://github.com/zappa/Zappa/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/coveralls/zappa/Zappa.svg)](https://coveralls.io/github/zappa/Zappa)
 [![PyPI](https://img.shields.io/pypi/v/Zappa.svg)](https://pypi.python.org/pypi/zappa)
 [![Slack](https://img.shields.io/badge/chat-slack-ff69b4.svg)](https://zappateam.slack.com/)
@@ -452,6 +452,7 @@ You can also invoke interpretable Python 3.8/3.9/3.10/3.11/3.12 strings directly
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
 For instance, it can come in handy if you want to create your first `superuser` on a RDS database running in a VPC (like Serverless Aurora):
+
     $ zappa invoke staging "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('username', 'email', 'password')" --raw
 
 ### Django Management Commands

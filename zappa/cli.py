@@ -2148,7 +2148,7 @@ class ZappaCLI:
                     working_dir = os.getcwd()
 
                 working_dir_importer = pkgutil.get_importer(working_dir)
-                module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+                module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
             except (ImportError, AttributeError):
                 try:  # Callback func might be in virtualenv
@@ -2851,7 +2851,7 @@ class ZappaCLI:
                 working_dir = os.getcwd()
 
             working_dir_importer = pkgutil.get_importer(working_dir)
-            module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+            module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
         except (ImportError, AttributeError):
             try:  # Prebuild func might be in virtualenv
