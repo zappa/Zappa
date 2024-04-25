@@ -620,7 +620,7 @@ Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/late
        ]
 ```
 
-[SQS](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html) is also pulling messages from a stream.  At this time, [only "Standard" queues can trigger lambda events, not "FIFO" queues](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html).  Read the AWS Documentation carefully since Lambda calls the SQS DeleteMessage API on your behalf once your function completes successfully.
+[SQS](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html) is also pulling messages from a stream. Read the AWS Documentation carefully since Lambda calls the SQS DeleteMessage API on your behalf once your function completes successfully.
 
 ```javascript
        "events": [
@@ -629,6 +629,8 @@ Optionally you can add [SNS message filters](http://docs.aws.amazon.com/sns/late
                "event_source": {
                     "arn":  "arn:aws:sqs:us-east-1:12341234:your-queue-name-arn",
                     "batch_size": 10, // Max: 10. Use 1 to trigger immediate processing
+                    "report_batch_item_failures": false, // whether the handler returns a `batchItemFailures` field
+                    "maximum_concurrency": 0, // maximum number of parallel lambda instances for this event source.
                     "enabled": true // Default is false
                }
            }
