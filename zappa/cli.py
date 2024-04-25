@@ -936,6 +936,10 @@ class ZappaCLI:
             except botocore.exceptions.BotoCoreError as e:
                 click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
                 sys.exit(-1)
+            # https://github.com/zappa/Zappa/issues/1313
+            except botocore.exceptions.ClientError as e:
+                click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
+                sys.exit(-1)
             except Exception:
                 click.echo(
                     click.style("Warning!", fg="red")
