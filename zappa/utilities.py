@@ -360,8 +360,12 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
                     response = self._lambda.call("get_event_source_mapping", UUID=self._get_uuid(function))
                     LOG.debug(response)
                 except botocore.exceptions.ClientError:
-                    LOG.debug("event source %s does not exist", self.arn)
-                    response = None
+                    # https://github.com/zappa/Zappa/issues/1317
+                    if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                        LOG.debug("event source %s does not exist", self.arn)
+                        response = None
+                    else:
+                        raise e
             else:
                 LOG.debug("No UUID for event source %s", self.arn)
             return response
