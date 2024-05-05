@@ -25,7 +25,6 @@ boto3 = ">=1.17.28"
 durationpy = "*"
 hjson = "*"
 jmespath = "*"
-kappa = "==0.6.0"
 pip = ">=9.0.1"
 # Workaround until tests are updated to work with 'placebo' 0.10
 # Move to 'dev-packages' when unpinned
