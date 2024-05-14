@@ -218,10 +218,10 @@ This creates a new archive, uploads it to S3 and updates the Lambda function to 
 
 #### Docker Workflows
 
-In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker. 
+In [version 0.53.0](https://github.com/zappa/Zappa/blob/master/CHANGELOG.md), support was added to deploy & update Lambda functions using Docker.
 
 You can specify an ECR image using the `--docker-image-uri` option to the zappa command on `deploy` and `update`.
-Zappa expects that the image is built and pushed to a Amazon ECR repository. 
+Zappa expects that the image is built and pushed to a Amazon ECR repository.
 
 Deploy Example:
 
@@ -426,7 +426,11 @@ You can filter out the contents of the logs with `--filter`, like so:
 
     $ zappa tail production --http --filter "POST" # Only show POST HTTP requests
 
-Note that this uses the [CloudWatch Logs filter syntax](http://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
+Please note:
+
+   1. This uses the [CloudWatch Logs filter syntax](http://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html).
+
+   2. Cloudwatch logs are kept forever unless you specify a retention time. You can do this by setting the configuration variable `cloudwatch_retention_days` to something reasonable, like 7.
 
 To tail logs without following (to exit immediately after displaying the end of the requested logs), pass `--disable-keep-open`:
 
@@ -487,11 +491,14 @@ to skip the confirmation prompt.
 
 Amazon provides their own free alternative to Let's Encrypt called [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) (ACM). To use this service with Zappa:
 
-1. Verify your domain in the AWS Certificate Manager console.
-2. In the console, select the N. Virginia (us-east-1) region and request a certificate for your domain or subdomain (`sub.yourdomain.tld`), or request a wildcard domain (`*.yourdomain.tld`).
-3. Copy the entire ARN of that certificate and place it in the Zappa setting `certificate_arn`.
-4. Set your desired domain in the `domain` setting.
-5. Call `$ zappa certify` to create and associate the API Gateway distribution using that certificate.
+1. Add `'route53_enabled" : false` to your *zappa_settings.json* file.
+2. Verify your domain in the AWS Certificate Manager console.
+3. In the console, select the N. Virginia (us-east-1) region and request a certificate for your domain or subdomain (`sub.yourdomain.tld`), or request a wildcard domain (`*.yourdomain.tld`).
+4. Copy the entire ARN of that certificate and place it in the Zappa setting `certificate_arn`.
+5. Set your desired domain in the `domain` setting.
+6. Call `$ zappa certify` to create and associate the API Gateway distribution using that certificate.
+
+(Note: No matter which region you are using, your certificate must be placed in us-east-1, which is the region in which AWS places many resources that are used globally.)
 
 #### Deploying to a Domain With a Let's Encrypt Certificate (DNS Auth)
 
@@ -914,6 +921,7 @@ to change Zappa's behavior. Use these at your own risk!
         "cloudwatch_log_level": "OFF", // Enables/configures a level of logging for the given staging. Available options: "OFF", "INFO", "ERROR", default "OFF".
         "cloudwatch_data_trace": false, // Logs all data about received events. Default false.
         "cloudwatch_metrics_enabled": false, // Additional metrics for the API Gateway. Default false.
+        "cloudwatch_retention_days": false, // Specify a positive number to limit cloudwatch logs to this many days.
         "cognito": { // for Cognito event triggers
             "user_pool": "user-pool-id", // User pool ID from AWS Cognito
             "triggers": [{
@@ -1062,7 +1070,7 @@ You can also simply handle CORS directly in your application. Your web framework
 
 ### Large Projects
 
-AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS [supports](https://aws.amazon.com/blogs/compute/using-larger-ephemeral-storage-for-aws-lambda/) custom `/tmp` directory storage size in a range of 512 - 10240 MB. Use `ephemeral_storage` in `zappa_settings.json` to adjust to your needs if your project is larger than default 512 MB.
+AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS [supports](https://aws.amazon.com/blogs/compute/using-larger-ephemeral-storage-for-aws-lambda/) custom `/tmp` directory storage size in a range of 512 - 10240 MB. Use `ephemeral_storage` in `zappa_settings.json` to adjust to your needs if your project is larger than default `{"Size":512}`.
 
 ### Enabling Bash Completion
 

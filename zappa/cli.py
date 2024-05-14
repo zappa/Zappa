@@ -1065,6 +1065,13 @@ class ZappaCLI:
             wait=False,
         )
 
+        # Set the cloudwatch retention days if specified in config.
+        # (default is to never delete cloudwatch logs, which can become expensive over time.)
+        cloudwatch_retention_days = self.stage_config.get("cloudwatch_retention_days",None)
+        if cloudwatch_retention_days is not None:
+            log_group_name = '/aws/lambda/' + self.project_name + self.api_stage
+            self.zappa.set_cloudwatch_retention_days(log_group_name, int(cloudwatch_retention_days))
+
         # Finally, delete the local copy our zip package
         if not source_zip and not no_upload and not docker_image_uri:
             if self.stage_config.get("delete_local_zip", True):

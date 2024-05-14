@@ -3151,6 +3151,20 @@ class Zappa:
 
         return sorted(events, key=lambda k: k["timestamp"])
 
+    def set_cloudwatch_retention_days(self, group_name, retention_days):
+        """
+        Specify the number of days that the logs should be retained.
+        """
+        try:
+            self.logs_client.put_retention_policy(
+                logGroupName=group_name,
+                retentionInDays=retention_days
+            )
+            print(f"Set CloudWatch log retention for {group_name} to {retention_days} days.")
+        except Exception as e:
+            print(f"Failed to set CloudWatch log retention: {str(e)}")
+
+
     def remove_log_group(self, group_name):
         """
         Filter all log groups that match the name given in log_filter.
