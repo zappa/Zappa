@@ -972,7 +972,7 @@ class Zappa:
         """
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
-        except botocore.exceptions.ClientError:
+        except botocore.exceptions.ClientError as e:
             # https://github.com/zappa/Zappa/issues/1315
             # 403 means bucket exists but the user does not have access
             if e.response['Error']['Code'] == '403':
