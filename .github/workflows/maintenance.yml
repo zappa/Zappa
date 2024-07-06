@@ -2,13 +2,21 @@ name: Perform automated repository maintenance
 
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry-run"
+        type: boolean
+      operations:
+        description: "Max number of operations per run"
+        type: number
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: "*/30 * * * *"
 
 jobs:
   cleanup-inactive:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       issues: write
       pull-requests: write
     env:
@@ -17,6 +25,7 @@ jobs:
       total_days: 100
       inactive_label: "no-activity"
       closed_label: "auto-closed"
+      default_operations: ${{ inputs.dry-run && 1000 || 200 }}
     steps:
       - name: Cleanup inactive issues/PRs
         uses: actions/stale@v9
@@ -25,6 +34,7 @@ jobs:
           days-before-close: ${{ env.closing_days }}
           stale-issue-label: ${{ env.inactive_label }}
           close-issue-label: ${{ env.closed_label }}
+          exempt-all-milestones: true
           exempt-issue-labels: "needs-review,planned,in-progress"
           stale-issue-message: "Hi there! Unfortunately, this Issue has not seen any activity for at least ${{ env.inactive_days }} days. If the Issue is still relevant to the [latest version of Zappa](https://github.com/zappa/Zappa/releases/latest), please comment within the next ${{ env.closing_days }} days if you wish to keep it open. Otherwise, it will be automatically closed."
           close-issue-message: "Hi there! Unfortunately, this Issue was automatically closed as it had not seen any activity in at least ${{ env.total_days }} days. If the Issue is still relevant to the [latest version of Zappa](https://github.com/zappa/Zappa/releases/latest), please [open a new Issue](https://github.com/zappa/Zappa/issues/new)."
@@ -36,6 +46,6 @@ jobs:
           labels-to-add-when-unstale: "needs-review"
           ascending: true
           enable-statistics: true
-          # DEBUG OPTIONS
-          debug-only: true
-          operations-per-run: 1000
+          # CONFIG OPTIONS
+          debug-only: ${{ inputs.dry-run }}
+          operations-per-run: ${{ inputs.operations || env.default_operations }}
