@@ -252,12 +252,13 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
     import kappa.event_source.cloudwatch
     import kappa.event_source.dynamodb_stream
     import kappa.event_source.kinesis
-    import kappa.event_source.s3
     import kappa.event_source.sns
     import kappa.function
     import kappa.policy
     import kappa.restapi
     import kappa.role
+
+    from .s3_improved import S3EventSource
 
     class PseudoContext:
         def __init__(self):
@@ -393,7 +394,7 @@ def get_event_source(event_source, lambda_arn, target_function, boto_session, dr
     event_source_map = {
         "dynamodb": kappa.event_source.dynamodb_stream.DynamoDBStreamEventSource,
         "kinesis": kappa.event_source.kinesis.KinesisEventSource,
-        "s3": kappa.event_source.s3.S3EventSource,
+        "s3": S3EventSource,
         "sns": ExtendedSnsEventSource,
         "sqs": SqsEventSource,
         "events": kappa.event_source.cloudwatch.CloudWatchEventSource,
