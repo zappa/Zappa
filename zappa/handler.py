@@ -70,6 +70,11 @@ class LambdaHandler:
             if self.settings.LOG_LEVEL:
                 level = logging.getLevelName(self.settings.LOG_LEVEL)
                 logger.setLevel(level)
+                # https://github.com/zappa/Zappa/issues/1336
+                # @ceturc 2024-08-13
+                # Backwards compatibility to set root logger level after 0.59.0
+                root_logger = logging.getLogger()
+                root_logger.setLevel(level)
 
             remote_env = getattr(self.settings, "REMOTE_ENV", None)
             remote_bucket, remote_file = parse_s3_url(remote_env)
