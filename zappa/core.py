@@ -19,7 +19,6 @@ import time
 import uuid
 import zipfile
 from builtins import bytes, int
-from distutils.dir_util import copy_tree
 from io import open
 from pathlib import Path
 from typing import Optional
@@ -687,7 +686,7 @@ class Zappa:
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
 
-        copy_tree(temp_package_path, temp_project_path, update=True)
+        copytree(temp_package_path, temp_project_path, metadata=False, symlinks=False)
 
         # Then the pre-compiled packages..
         if use_precompiled_packages:
