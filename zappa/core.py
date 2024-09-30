@@ -488,9 +488,9 @@ class Zappa:
 
         if pip_return_code:
             logger.info("command: %s", " ".join(command))
-            if stdout_result.strip():
+            if stdout_result and stdout_result.strip():
                 logger.info("stdout: %s", stdout_result.strip())
-            if stderror_result.strip():
+            if stderror_result and stderror_result.strip():
                 logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
