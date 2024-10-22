@@ -2637,14 +2637,12 @@ class TestZappa(unittest.TestCase):
     @mock.patch()
     @mock.patch(subprocess.Popen)
     def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
-
         class PopenMock:
             return_code = 999
 
             @classmethod
             def communicate(cls):
                 return "valid_stdout", None  # On win32, stderr can be None
-
 
         popen_mock.return_value = PopenMock
 
@@ -2658,7 +2656,6 @@ class TestZappa(unittest.TestCase):
 
         with self.assertRaises(EnvironmentError):
             zappa_core.create_handler_venv()
-
 
 
 if __name__ == "__main__":
