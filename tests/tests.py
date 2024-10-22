@@ -2634,11 +2634,10 @@ class TestZappa(unittest.TestCase):
         expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
         self.assertEqual(request["QUERY_STRING"], expected)
 
-    @mock.patch()
-    @mock.patch(subprocess.Popen)
+    @mock.patch("subprocess.Popen")
     def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
         class PopenMock:
-            return_code = 999
+            returncode = 999
 
             @classmethod
             def communicate(cls):
