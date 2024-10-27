@@ -357,6 +357,24 @@ class Zappa:
         self.cf_api_resources = []
         self.cf_parameters = {}
 
+    def copy_tree_with_update(self, src, dest):
+        src_path = Path(src)
+        dest_path = Path(dest)
+
+        # Ensure destination path exists
+        dest_path.mkdir(parents=True, exist_ok=True)
+
+        for item in src_path.rglob('*'):
+            dest_item = dest_path / item.relative_to(src_path)
+
+            # Check if the item is a directory
+            if item.is_dir():
+                dest_item.mkdir(parents=True, exist_ok=True)
+            else:
+                # Copy file if it does not exist in destination or is newer
+                if not dest_item.exists() or os.path.getmtime(item) > os.path.getmtime(dest_item):
+                    shutil.copy2(item, dest_item)
+
     def configure_boto_session_method_kwargs(self, service, kw):
         """Allow for custom endpoint urls for non-AWS (testing and bootleg cloud) deployments"""
         if service in self.endpoint_urls and "endpoint_url" not in kw:
@@ -686,7 +704,7 @@ class Zappa:
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
 
-        copytree(temp_package_path, temp_project_path, metadata=False, symlinks=False)
+        self.copy_tree_with_update(temp_package_path, temp_project_path)
 
         # Then the pre-compiled packages..
         if use_precompiled_packages:
