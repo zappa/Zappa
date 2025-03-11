@@ -239,11 +239,11 @@ class TestZappa(unittest.TestCase):
             
     def test_get_manylinux_python313(self):
         z = Zappa(runtime="python3.13")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.1.17"))
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.2.5"))
         self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
 
         # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg-binary": "3.1.17"}
+        mock_installed_packages = {"psycopg-binary": "3.2.5"}
         with mock.patch(
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
@@ -254,7 +254,7 @@ class TestZappa(unittest.TestCase):
             os.remove(path)
 
         # same, but with an ABI3 package
-        mock_installed_packages = {"cryptography": "41.0.7"}
+        mock_installed_packages = {"cryptography": "44.0.2"}
         with mock.patch(
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
