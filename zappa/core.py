@@ -481,7 +481,7 @@ class Zappa:
         # This is the recommended method for installing packages if you don't
         # to depend on `setuptools`
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
-        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
         stdout_result, stderror_result = pip_process.communicate()
         pip_return_code = pip_process.returncode
