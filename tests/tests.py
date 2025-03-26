@@ -706,7 +706,7 @@ class TestZappa(unittest.TestCase):
         with mock.patch.object(Zappa, "update_lambda_configuration") as mock_update_lambda:
             zappa_cli = ZappaCLI()
             zappa_cli.api_stage = "snap_start_enabled"
-            zappa_cli.load_settings("test_settings.json")
+            zappa_cli.load_settings("test_settings.yaml")
             zappa_cli.zappa = Zappa()
             zappa_cli.update(None, True, None)
 
