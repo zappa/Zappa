@@ -2301,7 +2301,7 @@ class ZappaCLI:
         self.authorizer = self.stage_config.get("authorizer", {})
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
-        self.snap_start = self.snap_start.get("snap_start", "None")
+        self.snap_start = self.stage_config.get("snap_start", "None")
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
