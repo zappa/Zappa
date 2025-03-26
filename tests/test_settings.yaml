@@ -55,3 +55,4 @@ extendofail:
   environment_variables:
     EXTENDO: You bet
 
+  snap_start: None

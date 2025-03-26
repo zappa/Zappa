@@ -119,6 +119,7 @@ class ZappaCLI:
     authorizer = None
     xray_tracing = False
     aws_kms_key_arn = ""
+    snap_start = None
     context_header_mappings = None
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
@@ -1062,6 +1063,7 @@ class ZappaCLI:
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
+            snap_start=self.snap_start,
             wait=False,
         )
 
@@ -2299,6 +2301,7 @@ class ZappaCLI:
         self.authorizer = self.stage_config.get("authorizer", {})
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
+        self.snap_start = self.snap_start.get("snap_start", "None")
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")

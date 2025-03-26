@@ -674,6 +674,46 @@ class TestZappa(unittest.TestCase):
             z.update_lambda_configuration("test", "test", "test")
             self.assertEqual(mock_client.update_function_configuration.call_args[1]["Layers"], [])
 
+    def test_snap_start_configuration(self):
+        """
+        Test that SnapStart configuration is correctly set in Lambda configuration.
+        """
+        # Test with SnapStart explicitly enabled
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled"
+        zappa_cli.load_settings("test_settings.yaml")
+        self.assertEqual("PublishedVersions", zappa_cli.snap_start)
+
+        # Test with SnapStart explicitly disabled
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_disabled"
+        zappa_cli.load_settings("test_settings.yaml")
+        self.assertEqual("None", zappa_cli.snap_start)
+
+        # Test that SnapStart is properly passed to boto3
+        with mock.patch.object(Zappa, 'create_lambda_function') as mock_create_lambda:
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "snap_start_enabled"
+            zappa_cli.load_settings("test_settings.yaml")
+            zappa_cli.zappa = Zappa()
+            zappa_cli.deploy("test.zip", None)
+
+            # Check that the SnapStart setting was correctly passed
+            create_args = mock_create_lambda.call_args[1]
+            self.assertEqual("PublishedVersions", create_args['snap_start'])
+
+        # Test that SnapStart is properly passed to Lambda update
+        with mock.patch.object(Zappa, 'update_lambda_configuration') as mock_update_lambda:
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "snap_start_enabled"
+            zappa_cli.load_settings("test_settings.json")
+            zappa_cli.zappa = Zappa()
+            zappa_cli.update(None, True, None)
+
+            # Check that the SnapStart setting was correctly passed
+            update_args = mock_update_lambda.call_args[1]
+            self.assertEqual("PublishedVersions", update_args['snap_start'])
+
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
         z.credentials_arn = object()
@@ -2633,6 +2673,8 @@ class TestZappa(unittest.TestCase):
         request = create_wsgi_request(event)
         expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
         self.assertEqual(request["QUERY_STRING"], expected)
+
+
 
 
 if __name__ == "__main__":
