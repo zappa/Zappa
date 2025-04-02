@@ -690,7 +690,6 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.yaml")
         self.assertEqual("None", zappa_cli.snap_start)
 
-
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
         z.credentials_arn = object()
