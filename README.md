@@ -12,6 +12,7 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
+
 - [About](#about)
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
@@ -47,7 +48,7 @@
   - [Running Tasks in a VPC](#running-tasks-in-a-vpc)
   - [Responses](#responses)
 - [Advanced Settings](#advanced-settings)
-  - [YAML Settings](#yaml-settings)
+    - [YAML Settings](#yaml-settings)
 - [Advanced Usage](#advanced-usage)
   - [Keeping The Server Warm](#keeping-the-server-warm)
     - [Serving Static Files / Binary Uploads](#serving-static-files--binary-uploads)
@@ -85,7 +86,7 @@
 - [Related Projects](#related-projects)
 - [Hacks](#hacks)
 - [Contributing](#contributing)
-  - [Using a Local Repo](#using-a-local-repo)
+    - [Using a Local Repo](#using-a-local-repo)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
