@@ -2420,7 +2420,7 @@ class TestZappa(unittest.TestCase):
         loadbalancer_arn = str(uuid.uuid4())
         listener_arn = str(uuid.uuid4())
         function_arn = str(uuid.uuid4())
-        targetgroup_arn = str.uuid.uuid4()
+        targetgroup_arn = str(uuid.uuid4())
 
         lambda_stubber.add_response(
             "remove_permission",
