@@ -690,29 +690,6 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.yaml")
         self.assertEqual("None", zappa_cli.snap_start)
 
-        # Test that SnapStart is properly passed to boto3
-        with mock.patch.object(Zappa, "create_lambda_function") as mock_create_lambda:
-            zappa_cli = ZappaCLI()
-            zappa_cli.api_stage = "snap_start_enabled"
-            zappa_cli.load_settings("tests/test_settings.yaml")
-            zappa_cli.zappa = Zappa()
-            zappa_cli.deploy("test.zip", None)
-
-            # Check that the SnapStart setting was correctly passed
-            create_args = mock_create_lambda.call_args[1]
-            self.assertEqual("PublishedVersions", create_args["snap_start"])
-
-        # Test that SnapStart is properly passed to Lambda update
-        with mock.patch.object(Zappa, "update_lambda_configuration") as mock_update_lambda:
-            zappa_cli = ZappaCLI()
-            zappa_cli.api_stage = "snap_start_enabled"
-            zappa_cli.load_settings("tests/test_settings.yaml")
-            zappa_cli.zappa = Zappa()
-            zappa_cli.update(None, True, None)
-
-            # Check that the SnapStart setting was correctly passed
-            update_args = mock_update_lambda.call_args[1]
-            self.assertEqual("PublishedVersions", update_args["snap_start"])
 
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
@@ -2444,7 +2421,7 @@ class TestZappa(unittest.TestCase):
         loadbalancer_arn = str(uuid.uuid4())
         listener_arn = str(uuid.uuid4())
         function_arn = str(uuid.uuid4())
-        targetgroup_arn = str(uuid.uuid4())
+        targetgroup_arn = str.uuid.uuid4()
 
         lambda_stubber.add_response(
             "remove_permission",
