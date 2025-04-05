@@ -236,7 +236,7 @@ class TestZappa(unittest.TestCase):
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
-            
+
     def test_get_manylinux_python313(self):
         z = Zappa(runtime="python3.13")
         self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.2.5"))
