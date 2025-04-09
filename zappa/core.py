@@ -1400,12 +1400,18 @@ class Zappa:
         Directly invoke a named Lambda function with a payload.
         Returns the response.
         """
-        return self.lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType=invocation_type,
-            LogType=log_type,
-            Payload=payload,
-        )
+        invoke_kwargs = {
+            "FunctionName": function_name,
+            "InvocationType": invocation_type,
+            "LogType": log_type,
+            "Payload": payload,
+        }
+        if client_context:
+            invoke_kwargs["ClientContext"] = client_context
+        if qualifier:
+            invoke_kwargs["Qualifier"] = qualifier
+
+        return self.lambda_client.invoke(**invoke_kwargs)
 
     def rollback_lambda_function_version(self, function_name, versions_back=1, publish=True):
         """

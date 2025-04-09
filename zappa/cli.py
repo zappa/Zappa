@@ -298,6 +298,18 @@ class ZappaCLI:
             help=("When invoking remotely, invoke this python as a string," " not as a modular path."),
         )
         invoke_parser.add_argument("--no-color", action="store_true", help=("Don't color the output"))
+        invoke_parser.add_argument(
+            "--client-context",
+            help=(
+                "The ClientContext to send to the Lambda function. Must be valid JSON."
+            ),
+        )
+        invoke_parser.add_argument(
+            "--qualifier",
+            help=(
+                "The qualifier (version or alias) of the lambda version to invoke. $LATEST if omitted."
+            ),
+        )
         invoke_parser.add_argument("command_rest")
 
         ##
@@ -308,6 +320,19 @@ class ZappaCLI:
         manage_parser.add_argument("--all", action="store_true", help=all_help)
         manage_parser.add_argument("command_rest", nargs="+", help=rest_help)
         manage_parser.add_argument("--no-color", action="store_true", help=("Don't color the output"))
+        manage_parser.add_argument(
+            "--client-context",
+            help=(
+                "The ClientContext to send to the Lambda function. Must be valid JSON."
+            ),
+        )
+        manage_parser.add_argument(
+            "--qualifier",
+            help=(
+                "The qualifier (version or alias) of the lambda version to execute the command on. $LATEST if omitted."
+            ),
+        )
+
         # This is explicitly added here because this is the only subcommand that doesn't inherit from env_parser
         # https://github.com/Miserlou/Zappa/issues/1002
         manage_parser.add_argument("-s", "--settings_file", help="The path to a Zappa settings file.")
@@ -591,6 +616,8 @@ class ZappaCLI:
                 self.vargs["command_rest"],
                 raw_python=self.vargs["raw"],
                 no_color=self.vargs["no_color"],
+                client_context=self.vargs["client_context"],
+                qualifier=self.vargs["qualifier"],
             )
         elif command == "manage":  # pragma: no cover
             if not self.vargs.get("command_rest"):
@@ -612,6 +639,8 @@ class ZappaCLI:
                 command,
                 command="manage",
                 no_color=self.vargs["no_color"],
+                client_context=self.vargs["client_context"],
+                qualifier=self.vargs["qualifier"],
             )
 
         elif command == "tail":  # pragma: no cover
@@ -1382,7 +1411,7 @@ class ZappaCLI:
             removed_arns = self.zappa.remove_async_sns_topic(self.lambda_name)
             click.echo("SNS Topic removed: %s" % ", ".join(removed_arns))
 
-    def invoke(self, function_name, raw_python=False, command=None, no_color=False):
+    def invoke(self, function_name, raw_python=False, command=None, no_color=False, client_context=None, qualifier=None):
         """
         Invoke a remote function.
         """
@@ -1396,6 +1425,11 @@ class ZappaCLI:
             command = {"raw_command": function_name}
         else:
             command = {key: function_name}
+        client_context = (
+            base64.b64encode(client_context.encode("utf-8")).decode("utf-8")
+            if client_context
+            else None
+        )
 
         # Can't use hjson
         import json as json
@@ -1404,6 +1438,8 @@ class ZappaCLI:
             self.lambda_name,
             json.dumps(command),
             invocation_type="RequestResponse",
+            client_context=client_context,
+            qualifier=qualifier,
         )
 
         print(self.format_lambda_response(response, not no_color))
