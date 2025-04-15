@@ -54,4 +54,9 @@ extendofail:
   prebuild_script: test_settings.prebuild_me
   environment_variables:
     EXTENDO: You bet
-
+snap_start_enabled:
+  extends: ttt888
+  snap_start: PublishedVersions
+snap_start_disabled:
+  extends: ttt888
+  snap_start: None
