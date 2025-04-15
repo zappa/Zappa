@@ -1,0 +1,45 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+    -   id: check-yaml
+    -   id: name-tests-test
+        args: [--unittest]
+        exclude: ^tests/utils.py
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+    -   id: isort
+        args: [--profile=black, --gitignore]
+-   repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+    -   id: black
+        args: [--line-length=127]
+-   repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+    -   id: flake8
+        args:
+        -   --count
+        -   --max-complexity=55
+        -   --max-line-length=127
+        -   --statistics
+        -   --extend-ignore=E203,E231,E252,E721,F403,F405,F541,W503
+        files: zappa
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+    -   id: mypy
+        args:
+        -   --show-error-codes
+        -   --pretty
+        -   --ignore-missing-imports
+        -   --no-site-packages
+        files: zappa
+-   repo: https://github.com/thlorenz/doctoc
+    rev: v2.2.0
+    hooks:
+    -   id: doctoc
+        args: [--update-only]
+        files: ./README.md

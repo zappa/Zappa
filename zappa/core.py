@@ -2,9 +2,6 @@
 Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
-##
-# Imports
-##
 import getpass
 import glob
 import hashlib
@@ -22,8 +19,8 @@ import time
 import uuid
 import zipfile
 from builtins import bytes, int
-from distutils.dir_util import copy_tree
 from io import open
+from pathlib import Path
 from typing import Optional
 
 import boto3
@@ -281,7 +278,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.7",  # Detected at runtime in CLI
+        runtime="python3.8",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -306,25 +303,14 @@ class Zappa:
 
         self.runtime = runtime
 
-        if self.runtime == "python3.7":
-            self.manylinux_suffix_start = "cp37m"
-        elif self.runtime == "python3.8":
-            # The 'm' has been dropped in python 3.8+ since builds with and without pymalloc are ABI compatible
-            # See https://github.com/pypa/manylinux for a more detailed explanation
-            self.manylinux_suffix_start = "cp38"
-        elif self.runtime == "python3.9":
-            self.manylinux_suffix_start = "cp39"
-        else:
-            self.manylinux_suffix_start = "cp310"
-
-        # AWS Lambda supports manylinux1/2010, manylinux2014, and manylinux_2_24
-        manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # TODO: Support PEP600 properly (https://peps.python.org/pep-0600/)
+        self.manylinux_suffix_start = f"cp{self.runtime[6:].replace('.', '')}"
+        self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
+        # TODO: Support aarch64 architecture
         self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
+            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
-        self.manylinux_wheel_abi3_file_match = re.compile(
-            rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_x86_64.whl$'
-        )
+        self.manylinux_wheel_abi3_file_match = re.compile(rf"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
@@ -495,12 +481,17 @@ class Zappa:
         # This is the recommended method for installing packages if you don't
         # to depend on `setuptools`
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
-        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
-        pip_process.communicate()
+        stdout_result, stderror_result = pip_process.communicate()
         pip_return_code = pip_process.returncode
 
         if pip_return_code:
+            logger.info("command: %s", " ".join(command))
+            if stdout_result.strip():
+                logger.info("stdout: %s", stdout_result.strip())
+            if stderror_result.strip():
+                logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
         return ve_path
@@ -630,7 +621,8 @@ class Zappa:
             for glob_path in exclude_glob:
                 for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                     try:
-                        os.remove(path)
+                        if str(path).startswith(temp_project_path):
+                            os.remove(path)
                     except OSError:  # is a directory
                         shutil.rmtree(path)
 
@@ -646,39 +638,6 @@ class Zappa:
         package_info["build_time"] = build_time
         package_info["build_platform"] = os.sys.platform
         package_info["build_user"] = getpass.getuser()
-        # TODO: Add git head and info?
-
-        # Ex, from @scoates:
-        # def _get_git_branch():
-        #     chdir(DIR)
-        #     out = check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
-        #     lambci_branch = environ.get('LAMBCI_BRANCH', None)
-        #     if out == "HEAD" and lambci_branch:
-        #         out += " lambci:{}".format(lambci_branch)
-        #     return out
-
-        # def _get_git_hash():
-        #     chdir(DIR)
-        #     return check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        # def _get_uname():
-        #     return check_output(['uname', '-a']).strip()
-
-        # def _get_user():
-        #     return check_output(['whoami']).strip()
-
-        # def set_id_info(zappa_cli):
-        #     build_info = {
-        #         'branch': _get_git_branch(),
-        #         'hash': _get_git_hash(),
-        #         'build_uname': _get_uname(),
-        #         'build_user': _get_user(),
-        #         'build_time': datetime.datetime.utcnow().isoformat(),
-        #     }
-        #     with open(path.join(DIR, 'id_info.json'), 'w') as f:
-        #         json.dump(build_info, f)
-        #     return True
-
         package_id_file = open(os.path.join(temp_project_path, "package_info.json"), "w")
         dumped = json.dumps(package_info, indent=4)
         try:
@@ -727,7 +686,7 @@ class Zappa:
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
 
-        copy_tree(temp_package_path, temp_project_path, update=True)
+        copytree(temp_package_path, temp_project_path, metadata=False, symlinks=False)
 
         # Then the pre-compiled packages..
         if use_precompiled_packages:
@@ -762,7 +721,8 @@ class Zappa:
         for glob_path in exclude_glob:
             for path in glob.glob(os.path.join(temp_project_path, glob_path)):
                 try:
-                    os.remove(path)
+                    if str(path).startswith(temp_project_path):
+                        os.remove(path)
                 except OSError:  # is a directory
                     shutil.rmtree(path)
 
@@ -920,11 +880,14 @@ class Zappa:
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
             for pathname in glob.iglob(wheel_path):
-                if re.match(self.manylinux_wheel_file_match, pathname) or re.match(
-                    self.manylinux_wheel_abi3_file_match, pathname
-                ):
-                    print(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                if re.match(self.manylinux_wheel_file_match, pathname):
+                    logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                     return pathname
+                elif re.match(self.manylinux_wheel_abi3_file_match, pathname):
+                    for manylinux_suffix in self.manylinux_suffixes:
+                        if f"manylinux{manylinux_suffix}_x86_64" in pathname:
+                            logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                            return pathname
 
         # The file is not cached, download it.
         wheel_url, filename = self.get_manylinux_wheel_url(package_name, package_version)
@@ -932,7 +895,7 @@ class Zappa:
             return None
 
         wheel_path = os.path.join(cached_wheels_dir, filename)
-        print(f" - {package_name}=={package_version}: Downloading")
+        logger.info(f" - {package_name}=={package_version}: Downloading")
         with open(wheel_path, "wb") as f:
             self.download_url_with_progress(wheel_url, f, disable_progress)
 
@@ -941,7 +904,7 @@ class Zappa:
 
         return wheel_path
 
-    def get_manylinux_wheel_url(self, package_name, package_version):
+    def get_manylinux_wheel_url(self, package_name, package_version, ignore_cache: bool = False):
         """
         For a given package name, returns a link to the download URL,
         else returns None.
@@ -952,27 +915,31 @@ class Zappa:
         also caches the JSON file so that we don't have to poll Pypi
         every time.
         """
-        cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
-        if not os.path.isdir(cached_pypi_info_dir):
+        cached_pypi_info_dir = Path(tempfile.gettempdir()) / "cached_pypi_info"
+        if not cached_pypi_info_dir.is_dir():
             os.makedirs(cached_pypi_info_dir)
+
         # Even though the metadata is for the package, we save it in a
         # filename that includes the package's version. This helps in
         # invalidating the cached file if the user moves to a different
         # version of the package.
         # Related: https://github.com/Miserlou/Zappa/issues/899
-        json_file = "{0!s}-{1!s}.json".format(package_name, package_version)
-        json_file_path = os.path.join(cached_pypi_info_dir, json_file)
-        if os.path.exists(json_file_path):
-            with open(json_file_path, "rb") as metafile:
+        data = None
+        json_file_name = "{0!s}-{1!s}.json".format(package_name, package_version)
+        json_file_path = cached_pypi_info_dir / json_file_name
+        if json_file_path.exists():
+            with json_file_path.open("rb") as metafile:
                 data = json.load(metafile)
-        else:
+
+        if not data or ignore_cache:
             url = "https://pypi.python.org/pypi/{}/json".format(package_name)
             try:
                 res = requests.get(url, timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)))
                 data = res.json()
             except Exception:  # pragma: no cover
                 return None, None
-            with open(json_file_path, "wb") as metafile:
+
+            with json_file_path.open("wb") as metafile:
                 jsondata = json.dumps(data)
                 metafile.write(bytes(jsondata, "utf-8"))
 
@@ -982,9 +949,13 @@ class Zappa:
 
         for f in data["releases"][package_version]:
             if re.match(self.manylinux_wheel_file_match, f["filename"]):
-                return f["url"], f["filename"]
+                # Since we have already lowered package names in get_installed_packages
+                # manylinux caching is not working for packages with capital case in names like MarkupSafe
+                return f["url"], f["filename"].lower()
             elif re.match(self.manylinux_wheel_abi3_file_match, f["filename"]):
-                return f["url"], f["filename"]
+                for manylinux_suffix in self.manylinux_suffixes:
+                    if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
+                        return f["url"], f["filename"].lower()
         return None, None
 
     ##
@@ -1107,12 +1078,14 @@ class Zappa:
         description="Zappa Deployment",
         timeout=30,
         memory_size=512,
+        ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
+        snap_start=None,
         xray_tracing=False,
         local_zip=None,
         use_alb=False,
@@ -1143,12 +1116,14 @@ class Zappa:
             Description=description,
             Timeout=timeout,
             MemorySize=memory_size,
+            EphemeralStorage=ephemeral_storage,
             Publish=publish,
             VpcConfig=vpc_config,
             DeadLetterConfig=dead_letter_config,
             Environment={"Variables": aws_environment_variables},
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
+            SnapStart={"ApplyOn": snap_start if snap_start else "None"},
             Layers=layers,
         )
         if not docker_image_uri:
@@ -1291,12 +1266,14 @@ class Zappa:
         description="Zappa Deployment",
         timeout=30,
         memory_size=512,
+        ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        runtime="python3.7",
+        runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
+        snap_start=None,
         wait=True,
     ):
         """
@@ -1335,13 +1312,15 @@ class Zappa:
             "Description": description,
             "Timeout": timeout,
             "MemorySize": memory_size,
+            "EphemeralStorage": ephemeral_storage,
             "VpcConfig": vpc_config,
             "Environment": {"Variables": aws_environment_variables},
             "KMSKeyArn": aws_kms_key_arn,
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
+            "SnapStart": {"ApplyOn": snap_start if snap_start else "None"},
         }
 
-        if lambda_aws_config["PackageType"] != "Image":
+        if lambda_aws_config.get("PackageType", None) != "Image":
             kwargs.update(
                 {
                     "Handler": handler,
@@ -1387,7 +1366,11 @@ class Zappa:
         response = self.lambda_client.list_versions_by_function(FunctionName=function_name)
 
         # https://github.com/Miserlou/Zappa/pull/2192
-        if len(response.get("Versions", [])) > 1 and response["Versions"][-1]["PackageType"] == "Image":
+        if (
+            len(response.get("Versions", [])) > 1
+            and "PackageType" in response["Versions"][-1]
+            and response["Versions"][-1]["PackageType"] == "Image"
+        ):
             raise NotImplementedError("Zappa's rollback functionality is not available for Docker based deployments")
 
         # Take into account $LATEST
@@ -2917,7 +2900,17 @@ class Zappa:
         """
         Returns an AWS-valid CloudWatch rule name using a digest of the event name, lambda name, and function.
         This allows support for rule names that may be longer than the 64 char limit.
+
+        function pattern: '^[._A-Za-z0-9]{0,63}$'
         """
+        max_event_rule_name_length = 64
+        max_name_length = max_event_rule_name_length - 1  # Because it must contain the delimiter "-".
+        function_regex = re.compile(f"^[._A-Za-z0-9]{{0,{max_name_length}}}$")
+        if not re.fullmatch(function_regex, function):
+            # Validation Rule: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Rule.html
+            # '-' cannot be used because it is a delimiter
+            raise EnvironmentError("event['function']: Pattern '^[._A-Za-z0-9]{0,63}$'.")
+
         name = event.get("name", function)
         if name != function:
             # a custom event name has been provided, make sure function name is included as postfix,
@@ -2928,11 +2921,16 @@ class Zappa:
             # prefix all entries bar the first with the index
             # Related: https://github.com/Miserlou/Zappa/pull/1051
             name = "{}-{}".format(index, name)
+
+        # https://github.com/zappa/Zappa/issues/1036
+        # Error because the name cannot be obtained if the function name is longer than 64 characters
+        if len(name) > max_name_length:
+            raise EnvironmentError(f"Generated scheduled event name is too long, shorten the function name!: '{name}'")
         # prefix scheduled event names with lambda name. So we can look them up later via the prefix.
         event_name = self.get_event_name(lambda_name, name)
         # if it's possible that we truncated name, generate a unique, shortened name
         # https://github.com/Miserlou/Zappa/issues/970
-        if len(event_name) >= 64:
+        if len(event_name) >= max_event_rule_name_length:
             lambda_name = self.get_hashed_lambda_name(lambda_name)
             event_name = self.get_event_name(lambda_name, name)
 

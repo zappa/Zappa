@@ -1,0 +1,87 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        type: boolean
+        description: "Dry-run"
+        required: true
+        default: true
+      version:
+        description: "SemVer string for new version"
+        required: true
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: protected
+    steps:
+      - name: Checkout code repository
+        uses: actions/checkout@v4
+      - name: Build Python packages
+        uses: hynek/build-and-inspect-python-package@v2
+
+  tag:
+    runs-on: ubuntu-latest
+    environment:
+      name: protected
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
+      changelog: ${{ steps.tag_version.outputs.changelog }}
+    steps:
+      - name: Checkout code repository
+        uses: actions/checkout@v4
+      - name: Tag new version
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ github.token }}
+          default_bump: "false"
+          custom_tag: ${{ inputs.version }}
+          tag_prefix: ""
+          dry_run: ${{ inputs.dry-run }}
+
+  release:
+    needs:
+      - build
+      - tag
+    runs-on: ubuntu-latest
+    environment:
+      name: protected
+    permissions:
+      contents: write
+    steps:
+      - name: Download built Python packages
+        uses: actions/download-artifact@v4
+        with:
+          name: Packages
+          path: dist
+      - name: Create GitHub Release with Python packages
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: dist/*
+          tag: ${{ needs.tag.outputs.new_tag }}
+          generateReleaseNotes: true
+          draft: ${{ inputs.dry-run }}
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ ! inputs.dry-run }}
+    environment:
+      name: publish
+    permissions:
+      id-token: write
+    steps:
+      - name: Download built Python package
+        uses: actions/download-artifact@v4
+        with:
+          name: Packages
+          path: dist
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
