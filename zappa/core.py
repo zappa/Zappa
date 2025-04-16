@@ -481,7 +481,7 @@ class Zappa:
         # This is the recommended method for installing packages if you don't
         # to depend on `setuptools`
         # https://github.com/pypa/pip/issues/5240#issuecomment-381662679
-        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        pip_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Using communicate() to avoid deadlocks
         stdout_result, stderror_result = pip_process.communicate()
         pip_return_code = pip_process.returncode
@@ -1085,6 +1085,7 @@ class Zappa:
         runtime="python3.8",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
+        snap_start=None,
         xray_tracing=False,
         local_zip=None,
         use_alb=False,
@@ -1122,6 +1123,7 @@ class Zappa:
             Environment={"Variables": aws_environment_variables},
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
+            SnapStart={"ApplyOn": snap_start if snap_start else "None"},
             Layers=layers,
         )
         if not docker_image_uri:
@@ -1271,6 +1273,7 @@ class Zappa:
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
+        snap_start=None,
         wait=True,
     ):
         """
@@ -1314,6 +1317,7 @@ class Zappa:
             "Environment": {"Variables": aws_environment_variables},
             "KMSKeyArn": aws_kms_key_arn,
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},
+            "SnapStart": {"ApplyOn": snap_start if snap_start else "None"},
         }
 
         if lambda_aws_config.get("PackageType", None) != "Image":
