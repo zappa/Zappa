@@ -20,7 +20,7 @@ Before you submit this PR, please make sure that you meet these criteria:
 
 * Did you **make sure this code actually works on Lambda**, as well as locally?
 
-* Did you test this code with all of: **Python 3.8**, **Python 3.9**, **Python 3.10**, **Python 3.11**, and **Python 3.12**?
+* Did you test this code with all of: **Python 3.8**, **Python 3.9**, **Python 3.10**, **Python 3.11**, **Python 3.12**, and **Python 3.13**?
 
 * Does this commit ONLY relate to the issue at hand and have your linter shit all over the code?
 
@@ -31,9 +31,10 @@ Thank you for your contribution!
 -->
 
 ## Description
-<!-- Please describe the changes included in this PR --> 
+
+<!-- Please describe the changes included in this PR -->
 
 ## GitHub Issues
+
 <!-- Proposed changes should be discussed in an issue before submitting a PR. -->
 <!-- Link to relevant tickets here. -->
-

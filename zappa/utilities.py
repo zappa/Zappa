@@ -220,6 +220,8 @@ def get_runtime_from_python_version():
             return "python3.11"
         elif sys.version_info[1] == 12:
             return "python3.12"
+        elif sys.version_info[1] == 13:
+            return "python3.13"
         else:
             raise ValueError(f"Python f{'.'.join(str(v) for v in sys.version_info[:2])} is not yet supported.")
 
