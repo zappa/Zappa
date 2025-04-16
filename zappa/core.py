@@ -310,7 +310,7 @@ class Zappa:
         self.manylinux_wheel_file_match = re.compile(
             rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
         )
-        self.manylinux_wheel_abi3_file_match = re.compile(rf"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
+        self.manylinux_wheel_abi3_file_match = re.compile(r"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
@@ -488,9 +488,9 @@ class Zappa:
 
         if pip_return_code:
             logger.info("command: %s", " ".join(command))
-            if stdout_result.strip():
+            if stdout_result and stdout_result.strip():
                 logger.info("stdout: %s", stdout_result.strip())
-            if stderror_result.strip():
+            if stderror_result and stderror_result.strip():
                 logger.error("stderr: %s", stderror_result)
             raise EnvironmentError("Pypi lookup failed")
 
