@@ -2677,6 +2677,28 @@ class TestZappa(unittest.TestCase):
         expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
         self.assertEqual(request["QUERY_STRING"], expected)
 
+    @mock.patch("subprocess.Popen")
+    def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
+        class PopenMock:
+            returncode = 999
+
+            @classmethod
+            def communicate(cls):
+                return "valid_stdout", None  # On win32, stderr can be None
+
+        popen_mock.return_value = PopenMock
+
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+
+        with self.assertRaises(EnvironmentError):
+            zappa_core.create_handler_venv()
+
 
 if __name__ == "__main__":
     unittest.main()
