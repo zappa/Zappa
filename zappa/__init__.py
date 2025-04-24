@@ -15,6 +15,7 @@ def running_in_docker() -> bool:
 SUPPORTED_VERSIONS = [(3, 9), (3, 10), (3, 11), (3, 12), (3, 13)]
 MINIMUM_SUPPORTED_MINOR_VERSION = 9
 
+
 if not running_in_docker() and sys.version_info[:2] not in SUPPORTED_VERSIONS:
     print(running_in_docker())
     formatted_supported_versions = ["{}.{}".format(*version) for version in SUPPORTED_VERSIONS]
