@@ -424,8 +424,8 @@ class Zappa:
         for package in installed_distros:
             if package.name.lower() == pkg_name.lower():
                 deps = [(package.name, package.version)]
-                for req in package.requires:
-                    deps += self.get_deps_list(pkg_name=req.name, installed_distros=installed_distros)
+                for req_name in package.requires:
+                    deps += self.get_deps_list(pkg_name=str(req_name), installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
