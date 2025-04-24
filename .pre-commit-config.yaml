@@ -12,7 +12,7 @@ repos:
     -   id: isort
         args: [--profile=black, --gitignore]
 -   repo: https://github.com/psf/black
-    rev: 24.1.1
+    rev: 25.1.0
     hooks:
     -   id: black
         args: [--line-length=127]

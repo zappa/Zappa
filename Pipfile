@@ -4,10 +4,10 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-black = "==24.1.1"
+black = "==25.1.0"
 boto3-stubs = "*"
 coveralls = "*"
-Django = "<4"
+django = ">4,<6"
 django-stubs = "*"
 flake8 = "==7.0.0"
 Flask = "*"
@@ -18,6 +18,7 @@ packaging = "*"
 pre-commit = "*"
 pytest = "*"
 pytest-cov = "*"
+legacy-cgi = "*"
 
 [packages]
 argcomplete = "*"
@@ -26,20 +27,18 @@ durationpy = "*"
 hjson = "*"
 jmespath = "*"
 kappa = "==0.6.0"
-pip = ">=9.0.1"
-# Workaround until tests are updated to work with 'placebo' 0.10
-# Move to 'dev-packages' when unpinned
+pip = ">=24.0.0"
 placebo = "<0.10"
 python-dateutil = "*"
 python-slugify = "*"
 PyYAML = "*"
-# previous versions don't work with urllib3 1.24
-requests = ">=2.20.0"
+requests = ">=2.32.0"
 toml = "*"
-tqdm = "*"
+tqdm = ">=4.66.3"
 troposphere = ">=3.0"
 Werkzeug = "*"
 wheel = "*"
+setuptools = "*"
 
 [pipenv]
 allow_prereleases = false
