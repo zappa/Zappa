@@ -27,7 +27,6 @@ import argcomplete
 import botocore
 import click
 import hjson as json
-import pkg_resources
 import requests
 import slugify
 import toml
@@ -37,6 +36,7 @@ from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
+from . import __version__
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
     check_new_version_available,
@@ -198,7 +198,7 @@ class ZappaCLI:
             "-v",
             "--version",
             action="version",
-            version=pkg_resources.get_distribution("zappa").version,
+            version=__version__,
             help="Print the zappa version",
         )
         parser.add_argument("--color", default="auto", choices=["auto", "never", "always"])
@@ -2180,7 +2180,7 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            version = pkg_resources.require("zappa")[0].version
+            version = __version__
             updateable = check_new_version_available(version)
             if updateable:
                 click.echo(

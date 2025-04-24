@@ -12,8 +12,8 @@ def running_in_docker() -> bool:
     return running_in_docker_flag
 
 
-SUPPORTED_VERSIONS = [(3, 8), (3, 9), (3, 10), (3, 11), (3, 12), (3, 13)]
-MINIMUM_SUPPORTED_MINOR_VERSION = 8
+SUPPORTED_VERSIONS = [(3, 9), (3, 10), (3, 11), (3, 12), (3, 13)]
+MINIMUM_SUPPORTED_MINOR_VERSION = 9
 
 if not running_in_docker() and sys.version_info[:2] not in SUPPORTED_VERSIONS:
     print(running_in_docker())
@@ -30,4 +30,4 @@ elif running_in_docker() and sys.version_info.minor < MINIMUM_SUPPORTED_MINOR_VE
     )
     raise RuntimeError(err_msg)
 
-__version__ = "0.59.0"
+__version__ = "0.60.0"

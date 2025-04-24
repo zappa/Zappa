@@ -45,7 +45,7 @@ from zappa.letsencrypt import (
 )
 from zappa.wsgi import common_log, create_wsgi_request
 
-from .utils import get_sys_versioninfo
+from .utils import MockPackage, get_sys_versioninfo
 
 
 def random_string(length):
@@ -90,41 +90,14 @@ class TestZappa(unittest.TestCase):
         assert resolve_color_default() is False
 
     def test_create_lambda_package(self):
-        # mock the pkg_resources.WorkingSet() to include a known package in lambda_packages so that the code
+        # mock the get_installed_packages to include a known package in lambda_packages so that the code
         # for zipping pre-compiled packages gets called
         mock_installed_packages = {"psycopg": "3.1.17"}
         with mock.patch(
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
         ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-    def test_get_manylinux_python38(self):
-        z = Zappa(runtime="python3.8")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.8.4"))
-        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
-
-        # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg2-binary": "2.8.4"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-        # same, but with an ABI3 package
-        mock_installed_packages = {"cryptography": "2.8"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
+            z = Zappa(runtime="python3.13")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -337,15 +310,14 @@ class TestZappa(unittest.TestCase):
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("super_package", "0.1", "/venv/site-packages")]
+        # mock `distributions` call to be same as what our mocked site packages dir has
+        mock_pip_installed_packages = [
+            MockPackage("super_package", "0.1", Path("/venv/site-packages/super_package-0.1.dist-info"))
+        ]
 
         with mock.patch("os.path.isdir", return_value=True):
             with mock.patch("os.listdir", return_value=["super_package"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
-
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
+                with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages("", ""), {"super_package": "0.1"})
 
     def test_get_current_venv(self, *args):
@@ -373,17 +345,15 @@ class TestZappa(unittest.TestCase):
         z = Zappa(runtime="python3.8")
 
         # mock pip packages call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
         mock_pip_installed_packages = [
-            mock_package("SuperPackage", "0.1", "/Venv/site-packages"),
-            mock_package("SuperPackage64", "0.1", "/Venv/site-packages64"),
+            MockPackage("SuperPackage", "0.1", Path("/Venv/site-packages/SuperPackage-0.1.dist-info")),
+            MockPackage("SuperPackage64", "0.1", Path("/Venv/site-packages64/SuperPackage64-0.1.dist-info")),
         ]
 
         with mock.patch("os.path.isdir", return_value=True):
             with mock.patch("os.listdir", return_value=[]):
-                import pkg_resources  # this gets called in non-test Zappa mode
 
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
+                with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
                     self.assertDictEqual(
                         z.get_installed_packages("/venv/Site-packages", "/venv/site-packages64"),
                         {
@@ -395,15 +365,14 @@ class TestZappa(unittest.TestCase):
     def test_getting_installed_packages_mixed_case(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("SuperPackage", "0.1", "/venv/site-packages")]
+        # mock `importlib.metadata.distributions` call to be same as what our mocked site packages dir has
+        mock_pip_installed_packages = [
+            MockPackage("SuperPackage", "0.1", Path("/venv/site-packages/SuperPackage-0.1.dist-info"))
+        ]
 
         with mock.patch("os.path.isdir", return_value=True):
             with mock.patch("os.listdir", return_value=["superpackage"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
-
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
+                with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages("", ""), {"superpackage": "0.1"})
 
     def test_load_credentials(self):
@@ -2623,7 +2592,7 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
 
     @mock.patch("os.getenv", return_value="True")
-    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 8))
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 9))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
 
@@ -2678,13 +2647,13 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(request["QUERY_STRING"], expected)
 
     @mock.patch("subprocess.Popen")
-    def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
+    def test_create_handler_venv_windows_none_stderror_result(self, popen_mock):
         class PopenMock:
             returncode = 999
 
             @classmethod
             def communicate(cls):
-                return "valid_stdout", None  # On win32, stderr can be None
+                return "valid_stdout", None  # On windows, stderr can be None
 
         popen_mock.return_value = PopenMock
 

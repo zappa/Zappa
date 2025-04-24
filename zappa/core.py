@@ -13,6 +13,7 @@ import re
 import shutil
 import string
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -278,7 +279,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.8",  # Detected at runtime in CLI
+        runtime="python3.13",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -413,17 +414,18 @@ class Zappa:
         """
         # https://github.com/Miserlou/Zappa/issues/1478.  Using `pkg_resources`
         # instead of `pip` is the recommended approach.  The usage is nearly
-        # identical.
-        import pkg_resources
+        # identical. `pkg_resources` has been deprecated, using `importlib.metadata.distributions` instead.
+        from importlib.metadata import distributions
 
         deps = []
         if not installed_distros:
-            installed_distros = pkg_resources.WorkingSet()
+            installed_distros = distributions()
+
         for package in installed_distros:
-            if package.project_name.lower() == pkg_name.lower():
-                deps = [(package.project_name, package.version)]
-                for req in package.requires():
-                    deps += self.get_deps_list(pkg_name=req.project_name, installed_distros=installed_distros)
+            if package.name.lower() == pkg_name.lower():
+                deps = [(package.name, package.version)]
+                for req in package.requires:
+                    deps += self.get_deps_list(pkg_name=req.name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
@@ -438,7 +440,7 @@ class Zappa:
         # Make a new folder for the handler packages
         ve_path = os.path.join(os.getcwd(), "handler_venv")
 
-        if os.sys.platform == "win32":
+        if sys.platform == "win32":
             current_site_packages_dir = os.path.join(current_venv, "Lib", "site-packages")
             venv_site_packages_dir = os.path.join(ve_path, "Lib", "site-packages")
         else:
@@ -649,7 +651,7 @@ class Zappa:
         # Then, do site site-packages..
         egg_links = []
         temp_package_path = tempfile.mkdtemp(prefix="zappa-packages")
-        if os.sys.platform == "win32":
+        if sys.platform == "win32":
             site_packages = os.path.join(venv, "Lib", "site-packages")
         else:
             site_packages = os.path.join(venv, "lib", get_venv_from_python_version(), "site-packages")
@@ -824,7 +826,7 @@ class Zappa:
         """
         Returns a dict of installed packages that Zappa cares about.
         """
-        import pkg_resources
+        from importlib.metadata import distributions
 
         package_to_keep = []
         if os.path.isdir(site_packages):
@@ -835,12 +837,11 @@ class Zappa:
         package_to_keep = [x.lower() for x in package_to_keep]
 
         installed_packages = {
-            package.project_name.lower(): package.version
-            for package in pkg_resources.WorkingSet()
-            if package.project_name.lower() in package_to_keep
-            or package.location.lower() in [site_packages.lower(), site_packages_64.lower()]
+            package.name.lower(): package.version
+            for package in distributions()
+            if package.name.lower() in package_to_keep
+            or str(package._path.parent).lower() in (site_packages.lower(), site_packages_64.lower())
         }
-
         return installed_packages
 
     @staticmethod
@@ -1082,7 +1083,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.8",
+        runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         snap_start=None,
@@ -1269,7 +1270,7 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        runtime="python3.8",
+        runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,

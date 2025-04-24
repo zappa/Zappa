@@ -4,6 +4,7 @@ import os
 from collections import namedtuple
 from contextlib import contextmanager
 from io import IOBase as file
+from pathlib import Path
 
 import boto3
 import placebo
@@ -84,3 +85,12 @@ def get_sys_versioninfo(minor_version: int = 6) -> tuple:
     """Mock used to test the python version check testcases"""
     invalid_versioninfo = namedtuple("version_info", ["major", "minor", "micro", "releaselevel", "serial"])
     return invalid_versioninfo(3, minor_version, 1, "final", 0)
+
+
+class MockPackage:
+
+    # "name", "version", "_path"
+    def __init__(self, name: str, version: str, path: Path):
+        self.name = name
+        self.version = version
+        self._path = path
