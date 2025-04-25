@@ -36,7 +36,6 @@ from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
-from . import __version__
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
     check_new_version_available,
@@ -193,12 +192,13 @@ class ZappaCLI:
         """
 
         desc = "Zappa - Deploy Python applications to AWS Lambda" " and API Gateway.\n"
+        current_installed_version = importlib.metadata.version("zappa")
         parser = argparse.ArgumentParser(description=desc)
         parser.add_argument(
             "-v",
             "--version",
             action="version",
-            version=__version__,
+            version=current_installed_version,
             help="Print the zappa version",
         )
         parser.add_argument("--color", default="auto", choices=["auto", "never", "always"])
@@ -2180,8 +2180,8 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            version = __version__
-            updateable = check_new_version_available(version)
+            current_installed_version = importlib.metadata.version("zappa")
+            updateable = check_new_version_available(current_installed_version)
             if updateable:
                 click.echo(
                     click.style("Important!", fg="yellow", bold=True)
