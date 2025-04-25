@@ -414,18 +414,17 @@ class Zappa:
         """
         # https://github.com/Miserlou/Zappa/issues/1478.  Using `pkg_resources`
         # instead of `pip` is the recommended approach.  The usage is nearly
-        # identical. `pkg_resources` has been deprecated, using `importlib.metadata.distributions` instead.
-        from importlib.metadata import distributions
+        # identical.
+        import pkg_resources
 
         deps = []
         if not installed_distros:
-            installed_distros = distributions()
-
+            installed_distros = pkg_resources.WorkingSet()
         for package in installed_distros:
-            if package.name.lower() == pkg_name.lower():
-                deps = [(package.name, package.version)]
-                for req_name in package.requires:
-                    deps += self.get_deps_list(pkg_name=str(req_name), installed_distros=installed_distros)
+            if package.project_name.lower() == pkg_name.lower():
+                deps = [(package.project_name, package.version)]
+                for req in package.requires():
+                    deps += self.get_deps_list(pkg_name=req.project_name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
@@ -826,7 +825,7 @@ class Zappa:
         """
         Returns a dict of installed packages that Zappa cares about.
         """
-        from importlib.metadata import distributions
+        import pkg_resources
 
         package_to_keep = []
         if os.path.isdir(site_packages):
@@ -837,11 +836,12 @@ class Zappa:
         package_to_keep = [x.lower() for x in package_to_keep]
 
         installed_packages = {
-            package.name.lower(): package.version
-            for package in distributions()
-            if package.name.lower() in package_to_keep
-            or str(package._path.parent).lower() in (site_packages.lower(), site_packages_64.lower())
+            package.project_name.lower(): package.version
+            for package in pkg_resources.WorkingSet()
+            if package.project_name.lower() in package_to_keep
+            or package.location.lower() in [site_packages.lower(), site_packages_64.lower()]
         }
+
         return installed_packages
 
     @staticmethod

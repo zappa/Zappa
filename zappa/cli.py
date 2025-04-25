@@ -27,6 +27,7 @@ import argcomplete
 import botocore
 import click
 import hjson as json
+import pkg_resources
 import requests
 import slugify
 import toml
@@ -192,13 +193,12 @@ class ZappaCLI:
         """
 
         desc = "Zappa - Deploy Python applications to AWS Lambda" " and API Gateway.\n"
-        current_installed_version = importlib.metadata.version("zappa")
         parser = argparse.ArgumentParser(description=desc)
         parser.add_argument(
             "-v",
             "--version",
             action="version",
-            version=current_installed_version,
+            version=pkg_resources.get_distribution("zappa").version,
             help="Print the zappa version",
         )
         parser.add_argument("--color", default="auto", choices=["auto", "never", "always"])
@@ -2180,8 +2180,8 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            current_installed_version = importlib.metadata.version("zappa")
-            updateable = check_new_version_available(current_installed_version)
+            version = pkg_resources.require("zappa")[0].version
+            updateable = check_new_version_available(version)
             if updateable:
                 click.echo(
                     click.style("Important!", fg="yellow", bold=True)
