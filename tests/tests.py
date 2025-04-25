@@ -2647,13 +2647,13 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(request["QUERY_STRING"], expected)
 
     @mock.patch("subprocess.Popen")
-    def test_create_handler_venv_windows_none_stderror_result(self, popen_mock):
+    def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
         class PopenMock:
             returncode = 999
 
             @classmethod
             def communicate(cls):
-                return "valid_stdout", None  # On windows, stderr can be None
+                return "valid_stdout", None  # On win32, stderr can be None
 
         popen_mock.return_value = PopenMock
 
