@@ -14,9 +14,6 @@ pipfile.read(Path(__file__).parent.resolve() / "Pipfile")
 required = [
     "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["packages"].items()
 ]
-test_required = [
-    "{}{}".format(name, version.strip('"')) if version != '"*"' else name for name, version in pipfile["dev-packages"].items()
-]
 
 setup(
     name="zappa",
@@ -24,7 +21,6 @@ setup(
     packages=["zappa"],
     install_requires=required,
     python_requires=">=3.8",
-    tests_require=test_required,
     include_package_data=True,
     license="MIT License",
     description="Server-less Python Web Services for AWS Lambda and API Gateway",
@@ -37,7 +33,7 @@ setup(
         "console_scripts": [
             "zappa=zappa.cli:handle",
             "z=zappa.cli:handle",
-        ]
+        ],
     },
     classifiers=[
         "Environment :: Console",
