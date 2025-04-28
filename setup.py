@@ -20,7 +20,7 @@ setup(
     version=__version__,
     packages=["zappa"],
     install_requires=required,
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     include_package_data=True,
     license="MIT License",
     description="Server-less Python Web Services for AWS Lambda and API Gateway",
