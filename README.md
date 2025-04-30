@@ -837,7 +837,7 @@ Example:
 
 ```python
 from zappa.asynchronous import task, get_async_response
-from flask import Flask, make_response, abort, url_for, redirect, request, jsonify
+from flask import Flask, abort, url_for, redirect, request, jsonify
 from time import sleep
 
 app = Flask(__name__)
@@ -1519,6 +1519,50 @@ apigateway_resource_policy.json:
 ### Cold Starts (Experimental)
 
 Lambda may provide additional resources than provisioned during cold start initialization. Set `INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True` to instantiate the lambda handler on import. This is an experimental feature - if startup time is critical, look into using Provisioned Concurrency.
+
+### Lambda Test Console Usage
+
+The zappa lambda handler allows zappa commands can be initiated from the Lambda Test Console by providing the associated JSON payload.
+
+#### `raw_command`
+
+`raw_command` allows you to execute arbitrary python code in the context of your Zappa application. 
+This is useful for testing or debugging purposes.
+
+> **Warning**: This is a powerful feature and should be used with caution. 
+> It can execute any code in your application context, including potentially harmful commands.
+
+Example:
+```json
+{
+    "raw_command": "from myapp import my_function;x = my_function();print(x)"
+}
+```
+
+### 
+
+```json
+{
+    "zappa": {
+        "command": "your_command",
+        "args": {
+            "your_arg": "your_value"
+        }
+    }
+}
+```
+
+#### `manage`
+
+Django `manage` commands are also supported. 
+You can run any Django management command using the `manage` key in the payload.
+
+Example:
+```json
+{
+    "manage": "migrate"
+}
+```
 
 ## Zappa Guides
 
