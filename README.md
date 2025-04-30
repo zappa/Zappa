@@ -1539,19 +1539,6 @@ Example:
 }
 ```
 
-### 
-
-```json
-{
-    "zappa": {
-        "command": "your_command",
-        "args": {
-            "your_arg": "your_value"
-        }
-    }
-}
-```
-
 #### `manage`
 
 Django `manage` commands are also supported. 
