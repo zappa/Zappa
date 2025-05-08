@@ -4,7 +4,6 @@ import os
 from collections import namedtuple
 from contextlib import contextmanager
 from io import IOBase as file
-from pathlib import Path
 
 import boto3
 import placebo
