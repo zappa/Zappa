@@ -7,7 +7,7 @@ verify_ssl = true
 black = "==24.8.0"
 boto3-stubs = "*"
 coveralls = "*"
-django = ">4,<6"
+django = ">=4.2,<6"
 django-stubs = "*"
 flake8 = "==7.0.0"
 Flask = "*"
@@ -38,7 +38,7 @@ tqdm = ">=4.66.3"
 troposphere = ">=3.0"
 Werkzeug = "*"
 wheel = "*"
-setuptools = "*"
+setuptools = "<80.0.0"
 
 [pipenv]
 allow_prereleases = false
