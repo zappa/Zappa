@@ -753,12 +753,12 @@ class Zappa:
                 # we can skip the python source code as we'll just
                 # use the compiled bytecode anyway..
                 if filename[-3:] == ".py" and root[-10:] != "migrations":
-                    abs_filname = os.path.join(root, filename)
-                    abs_pyc_filename = abs_filname + "c"
+                    abs_filename = os.path.join(root, filename)
+                    abs_pyc_filename = abs_filename + "c"
                     if os.path.isfile(abs_pyc_filename):
                         # but only if the pyc is older than the py,
                         # otherwise we'll deploy outdated code!
-                        py_time = os.stat(abs_filname).st_mtime
+                        py_time = os.stat(abs_filename).st_mtime
                         pyc_time = os.stat(abs_pyc_filename).st_mtime
 
                         if pyc_time > py_time:
@@ -876,7 +876,7 @@ class Zappa:
             os.makedirs(cached_wheels_dir)
         else:
             # Check if we already have a cached copy
-            wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, re.UNICODE)
+            wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, flags=re.UNICODE)
             wheel_file = f"{wheel_name}-{package_version}-*_x86_64.whl"
             wheel_path = os.path.join(cached_wheels_dir, wheel_file)
 
