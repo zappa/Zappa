@@ -97,34 +97,7 @@ class TestZappa(unittest.TestCase):
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
         ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-    def test_get_manylinux_python38(self):
-        z = Zappa(runtime="python3.8")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.8.4"))
-        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
-
-        # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg2-binary": "2.8.4"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-        # same, but with an ABI3 package
-        mock_installed_packages = {"cryptography": "2.8"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
+            z = Zappa(runtime="python3.13")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -2623,7 +2596,7 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
 
     @mock.patch("os.getenv", return_value="True")
-    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 8))
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 9))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
 

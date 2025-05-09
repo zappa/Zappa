@@ -13,6 +13,7 @@ import re
 import shutil
 import string
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -278,7 +279,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.8",  # Detected at runtime in CLI
+        runtime="python3.13",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -438,7 +439,7 @@ class Zappa:
         # Make a new folder for the handler packages
         ve_path = os.path.join(os.getcwd(), "handler_venv")
 
-        if os.sys.platform == "win32":
+        if sys.platform == "win32":
             current_site_packages_dir = os.path.join(current_venv, "Lib", "site-packages")
             venv_site_packages_dir = os.path.join(ve_path, "Lib", "site-packages")
         else:
@@ -649,7 +650,7 @@ class Zappa:
         # Then, do site site-packages..
         egg_links = []
         temp_package_path = tempfile.mkdtemp(prefix="zappa-packages")
-        if os.sys.platform == "win32":
+        if sys.platform == "win32":
             site_packages = os.path.join(venv, "Lib", "site-packages")
         else:
             site_packages = os.path.join(venv, "lib", get_venv_from_python_version(), "site-packages")
@@ -1082,7 +1083,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
-        runtime="python3.8",
+        runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         snap_start=None,
@@ -1269,7 +1270,7 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        runtime="python3.8",
+        runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         layers=None,
