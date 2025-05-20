@@ -2,6 +2,7 @@
 This test application exists to confirm how Zappa handles WSGI application
 _responses_ when Binary Support is enabled.
 """
+
 import gzip
 import json
 
