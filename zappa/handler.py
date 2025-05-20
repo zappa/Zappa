@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 
 # Set up logging
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -59,7 +59,6 @@ class LambdaHandler:
         return LambdaHandler.__instance
 
     def __init__(self, settings_name="zappa_settings", session=None):
-
         # We haven't cached our settings yet, load the settings and app.
         if not self.settings:
             # Loading settings from a python module
@@ -408,7 +407,6 @@ class LambdaHandler:
         # This is the result of a keep alive, recertify
         # or scheduled event.
         if event.get("detail-type") == "Scheduled Event":
-
             whole_function = event["resources"][0].split("/")[-1].split("-")[-1]
 
             # This is a scheduled function.
@@ -422,7 +420,6 @@ class LambdaHandler:
 
         # This is a direct command invocation.
         elif event.get("command", None):
-
             whole_function = event["command"]
             app_function = self.import_module_and_get_function(whole_function)
             result = self.run_function(app_function, event, context)
@@ -434,14 +431,12 @@ class LambdaHandler:
         # It's _extremely_ important we don't allow this event source
         # to be overridden by unsanitized, non-admin user input.
         elif event.get("raw_command", None):
-
             raw_command = event["raw_command"]
             exec(raw_command)
             return
 
         # This is a Django management command invocation.
         elif event.get("manage", None):
-
             from django.core import management
 
             try:  # Support both for tests
@@ -461,7 +456,6 @@ class LambdaHandler:
 
         # This is an AWS-event triggered invocation.
         elif event.get("Records", None):
-
             records = event.get("Records")
             result = None
             whole_function = self.get_function_for_aws_event(records[0])
@@ -731,9 +725,9 @@ class LambdaHandler:
                     # and log it in the Common Log format.
                     time_end = datetime.datetime.now()
                     delta = time_end - time_start
-                    response_time_ms = delta.total_seconds() * 1000
+                    response_time_us = delta.total_seconds() * 1_000_000  # convert to microseconds
                     response.content = response.data
-                    common_log(environ, response, response_time=response_time_ms)
+                    common_log(environ, response, response_time=response_time_us)
 
                     return zappa_returndict
         except Exception as e:  # pragma: no cover

@@ -2,13 +2,15 @@ import base64
 import logging
 import sys
 from io import BytesIO
-from urllib.parse import urlencode
-
-from werkzeug import urls
+from typing import Optional
+from urllib.parse import unquote, urlencode
 
 from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
 
 BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_wsgi_request(
@@ -91,7 +93,12 @@ def create_wsgi_request(
         "SERVER_PROTOCOL": str("HTTP/1.1"),
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": headers.get("X-Forwarded-Proto", "http"),
-        "wsgi.input": body,
+        # This must be Bytes or None
+        # - https://docs.djangoproject.com/en/4.2/releases/4.2/#miscellaneous
+        # - https://wsgi.readthedocs.io/en/latest/definitions.html#envvar-wsgi.input
+        # > Manually instantiated WSGIRequest objects must be provided
+        # > a file-like object for wsgi.input.
+        "wsgi.input": BytesIO(body),
         "wsgi.errors": sys.stderr,
         "wsgi.multiprocess": False,
         "wsgi.multithread": False,
@@ -106,8 +113,6 @@ def create_wsgi_request(
         if "Content-Type" in headers:
             environ["CONTENT_TYPE"] = headers["Content-Type"]
 
-        # This must be Bytes or None
-        environ["wsgi.input"] = BytesIO(body)
         if body:
             environ["CONTENT_LENGTH"] = str(len(body))
         else:
@@ -133,7 +138,7 @@ def create_wsgi_request(
 def process_lambda_payload_v1(event_info):
     method = event_info.get("httpMethod", None)
     headers = merge_headers(event_info) or {}  # Allow for the AGW console 'Test' button to work (Pull #735)
-    path = urls.url_unquote(event_info["path"])
+    path = unquote(event_info["path"])
     # API Gateway and ALB both started allowing for multi-value querystring
     # params in Nov. 2018. If there aren't multi-value params present, then
     # it acts identically to 'queryStringParameters', so we can use it as a
@@ -149,7 +154,6 @@ def process_lambda_payload_v1(event_info):
     else:
         query = event_info.get("queryStringParameters", {})
         query_string = urlencode(query) if query else ""
-    query_string = urls.url_unquote(query_string)
     # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
     # Extract remote_user, authorizer if Authorizer is enabled
     authorizer, remote_user = None, None
@@ -169,10 +173,9 @@ def process_lambda_payload_v2(event_info):
     headers = event_info["headers"]
     if event_info.get("cookies"):
         headers["cookie"] = "; ".join(event_info["cookies"])
-    path = urls.url_unquote(event_info["requestContext"]["http"]["path"])
+    path = unquote(event_info["requestContext"]["http"]["path"])
     query = event_info.get("queryStringParameters", {})
     query_string = urlencode(query) if query else ""
-    query_string = urls.url_unquote(query_string)
     # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
     # Extract remote_user, authorizer if Authorizer is enabled
     remote_user = None
@@ -186,14 +189,15 @@ def process_lambda_payload_v2(event_info):
     return method, headers, path, query_string, remote_user, authorizer
 
 
-def common_log(environ, response, response_time=None):
+def common_log(environ, response, response_time: Optional[int] = None):
     """
     Given the WSGI environ and the response,
     log this event in Common Log Format.
 
+    response_time: response time in micro-seconds
     """
 
-    logger = logging.getLogger()
+    logger = logging.getLogger(__name__)
 
     if response_time:
         formatter = ApacheNCSAFormatter(with_response_time=True)

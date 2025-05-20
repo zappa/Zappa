@@ -4,6 +4,7 @@ Zappa CLI
 Deploy arbitrary Python programs as serverless Zappa applications.
 
 """
+
 import argparse
 import base64
 import collections
@@ -108,6 +109,7 @@ class ZappaCLI:
     handler_path = None
     vpc_config = None
     memory_size = None
+    ephemeral_storage = None
     use_apigateway = None
     lambda_handler = None
     django_settings = None
@@ -117,9 +119,10 @@ class ZappaCLI:
     authorizer = None
     xray_tracing = False
     aws_kms_key_arn = ""
+    snap_start = None
     context_header_mappings = None
     additional_text_mimetypes = None
-    tags = []
+    tags = []  # type: ignore[var-annotated]
     layers = None
 
     stage_name_env_pattern = re.compile("^[a-zA-Z0-9_]+$")
@@ -474,7 +477,7 @@ class ZappaCLI:
         else:
             self.stage_env = self.vargs.get("stage_env")
 
-        if args.command == "package":
+        if args.command in ("package", "save-python-settings-file"):
             self.load_credentials = False
 
         self.command = args.command
@@ -577,7 +580,6 @@ class ZappaCLI:
         elif command == "rollback":  # pragma: no cover
             self.rollback(self.vargs["num_rollback"])
         elif command == "invoke":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the function to invoke.")
                 return
@@ -588,7 +590,6 @@ class ZappaCLI:
                 no_color=self.vargs["no_color"],
             )
         elif command == "manage":  # pragma: no cover
-
             if not self.vargs.get("command_rest"):
                 print("Please enter the management command to invoke.")
                 return
@@ -812,6 +813,7 @@ class ZappaCLI:
                 dead_letter_config=self.dead_letter_config,
                 timeout=self.timeout_seconds,
                 memory_size=self.memory_size,
+                ephemeral_storage=self.ephemeral_storage,
                 runtime=self.runtime,
                 aws_environment_variables=self.aws_environment_variables,
                 aws_kms_key_arn=self.aws_kms_key_arn,
@@ -852,7 +854,6 @@ class ZappaCLI:
             self.zappa.deploy_lambda_alb(**kwargs)
 
         if self.use_apigateway:
-
             # Create and configure the API Gateway
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
@@ -934,6 +935,10 @@ class ZappaCLI:
                 last_updated = parser.parse(conf["LastModified"])
                 last_updated_unix = time.mktime(last_updated.timetuple())
             except botocore.exceptions.BotoCoreError as e:
+                click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
+                sys.exit(-1)
+            # https://github.com/zappa/Zappa/issues/1313
+            except botocore.exceptions.ClientError as e:
                 click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
                 sys.exit(-1)
             except Exception:
@@ -1053,10 +1058,12 @@ class ZappaCLI:
             vpc_config=self.vpc_config,
             timeout=self.timeout_seconds,
             memory_size=self.memory_size,
+            ephemeral_storage=self.ephemeral_storage,
             runtime=self.runtime,
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
+            snap_start=self.snap_start,
             wait=False,
         )
 
@@ -1066,7 +1073,6 @@ class ZappaCLI:
                 self.remove_local_zip()
 
         if self.use_apigateway:
-
             self.zappa.create_stack_template(
                 lambda_arn=self.lambda_arn,
                 lambda_name=self.lambda_name,
@@ -1433,7 +1439,6 @@ class ZappaCLI:
         final_string = string
 
         try:
-
             # Line headers
             try:
                 for token in ["START", "END", "REPORT", "[DEBUG]"]:
@@ -1632,7 +1637,7 @@ class ZappaCLI:
         """
 
         non_strings = []
-        for (k, v) in environment.items():
+        for k, v in environment.items():
             if not isinstance(v, str):
                 non_strings.append(k)
         if non_strings:
@@ -1876,6 +1881,7 @@ class ZappaCLI:
                 "s3_bucket": bucket,
                 "runtime": get_venv_from_python_version(),
                 "project_name": self.get_project_name(),
+                "exclude": ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"],
             }
         }
 
@@ -2141,10 +2147,9 @@ class ZappaCLI:
                     working_dir = os.getcwd()
 
                 working_dir_importer = pkgutil.get_importer(working_dir)
-                module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+                module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
             except (ImportError, AttributeError):
-
                 try:  # Callback func might be in virtualenv
                     module_ = importlib.import_module(mod_path)
                 except ImportError:  # pragma: no cover
@@ -2234,6 +2239,14 @@ class ZappaCLI:
         )
         self.vpc_config = self.stage_config.get("vpc_config", {})
         self.memory_size = self.stage_config.get("memory_size", 512)
+        self.ephemeral_storage = self.stage_config.get("ephemeral_storage", {"Size": 512})
+
+        # Validate ephemeral storage structure and size
+        if "Size" not in self.ephemeral_storage:
+            raise ClickException("Please provide a valid Size for ephemeral_storage in your Zappa settings.")
+        elif not 512 <= self.ephemeral_storage["Size"] <= 10240:
+            raise ClickException("Please provide a valid ephemeral_storage size between 512 - 10240 in your Zappa settings.")
+
         self.app_function = self.stage_config.get("app_function", None)
         self.exception_handler = self.stage_config.get("exception_handler", None)
         self.aws_region = self.stage_config.get("aws_region", None)
@@ -2288,6 +2301,7 @@ class ZappaCLI:
         self.authorizer = self.stage_config.get("authorizer", {})
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
+        self.snap_start = self.stage_config.get("snap_start", "None")
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
@@ -2409,14 +2423,14 @@ class ZappaCLI:
         # Create the Lambda zip package (includes project and virtualenvironment)
         # Also define the path the handler file so it can be copied to the zip
         # root for Lambda.
-        current_file = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+        current_file = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))  # type: ignore[arg-type]
         handler_file = os.sep.join(current_file.split(os.sep)[0:]) + os.sep + "handler.py"
 
         # Create the zip file(s)
         if self.stage_config.get("slim_handler", False):
             # Create two zips. One with the application and the other with just the handler.
             # https://github.com/Miserlou/Zappa/issues/510
-            self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix=self.lambda_name,
                 use_precompiled_packages=self.stage_config.get("use_precompiled_packages", True),
                 exclude=self.stage_config.get("exclude", []),
@@ -2427,11 +2441,11 @@ class ZappaCLI:
 
             # Make sure the normal venv is not included in the handler's zip
             exclude = self.stage_config.get("exclude", [])
-            cur_venv = self.zappa.get_current_venv()
+            cur_venv = self.zappa.get_current_venv()  # type: ignore[attr-defined]
             exclude.append(cur_venv.split("/")[-1])
-            self.handler_path = self.zappa.create_lambda_zip(
+            self.handler_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix="handler_{0!s}".format(self.lambda_name),
-                venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),
+                venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),  # type: ignore[attr-defined]
                 handler_file=handler_file,
                 slim_handler=True,
                 exclude=exclude,
@@ -2440,10 +2454,10 @@ class ZappaCLI:
                 disable_progress=self.disable_progress,
             )
         else:
-            exclude = self.stage_config.get("exclude", ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+            exclude = self.stage_config.get("exclude", [])
 
             # Create a single zip that has the handler and application
-            self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix=self.lambda_name,
                 handler_file=handler_file,
                 use_precompiled_packages=self.stage_config.get("use_precompiled_packages", True),
@@ -2467,8 +2481,7 @@ class ZappaCLI:
         else:
             handler_zip = self.zip_path
 
-        with zipfile.ZipFile(handler_zip, "a") as lambda_zip:
-
+        with zipfile.ZipFile(handler_zip, "a") as lambda_zip:  # type: ignore[call-overload]
             settings_s = self.get_zappa_settings_string()
 
             # Copy our Django app into root of our package.
@@ -2754,7 +2767,6 @@ class ZappaCLI:
 
         final_string = string
         try:
-
             # First, do stuff in square brackets
             inside_squares = re.findall(r"\[([^]]*)\]", string)
             for token in inside_squares:
@@ -2839,10 +2851,9 @@ class ZappaCLI:
                 working_dir = os.getcwd()
 
             working_dir_importer = pkgutil.get_importer(working_dir)
-            module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+            module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
         except (ImportError, AttributeError):
-
             try:  # Prebuild func might be in virtualenv
                 module_ = importlib.import_module(pb_mod_path)
             except ImportError:  # pragma: no cover
