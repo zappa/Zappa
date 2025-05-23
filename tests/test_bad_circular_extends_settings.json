@@ -27,7 +27,7 @@
                    ]
                }
            }
-       ]
+       ],
     },
     "devor": {
        "s3_bucket": "lmbda",
