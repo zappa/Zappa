@@ -585,7 +585,7 @@ class TestZappa(unittest.TestCase):
         event = {
             "version": "2.0",
             "routeKey": "$default",
-            "rawPath": "/",
+            "rawPath": "/return/request/url",
             "rawQueryString": "",
             "headers": {
                 "host": "1234567890.execute-api.us-east-1.amazonaws.com",
