@@ -1196,7 +1196,7 @@ class TestZappa(unittest.TestCase):
         event = {
             "version": "2.0",
             "routeKey": "ANY /{proxy+}",
-            "rawPath": "/",
+            "rawPath": "/api/",
             "rawQueryString": "",
             "headers": {
                 "accept": "*/*",
@@ -1220,7 +1220,7 @@ class TestZappa(unittest.TestCase):
                 "domainPrefix": "qw8klxioji",
                 "http": {
                     "method": "GET",
-                    "path": "/",
+                    "path": "/api",
                     "protocol": "HTTP/1.1",
                     "sourceIp": "50.191.225.98",
                     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
@@ -1236,6 +1236,8 @@ class TestZappa(unittest.TestCase):
         }
         environ = create_wsgi_request(event)
         self.assertTrue(environ)
+        self.assertEqual(environ["PATH_INFO"], "/api/")
+        self.assertEqual(environ["QUERY_STRING"], "")
 
     def test_wsgi_from_v2_event_with_lambda_authorizer(self):
         principal_id = "user|a1b2c3d4"
