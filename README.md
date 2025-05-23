@@ -455,6 +455,12 @@ For instance, it can come in handy if you want to create your first `superuser` 
 
     $ zappa invoke staging "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('username', 'email', 'password')" --raw
 
+If you need to invoke a specific version of your function, you can use the --qualifier option to specify it.
+
+    $ zappa invoke production my_app.my_function --qualifier 123
+
+[Function aliases](https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html) are also supported as qualifiers.
+
 ### Django Management Commands
 
 As a convenience, Zappa can also invoke remote Django 'manage.py' commands with the `manage` command. For instance, to perform the basic Django status check:
@@ -466,6 +472,11 @@ Obviously, this only works for Django projects which have their settings properl
 For commands which have their own arguments, you can also pass the command in as a string, like so:
 
     $ zappa manage production "shell --version"
+
+As with `invoke`, a qualifier can be added to specify the version of your function that's used to execute the command.
+This can be particularly important when running certain commands such as `migrate` directly after a new deployment:
+
+    $ zappa manage production migrate admin --qualifier 123
 
 Commands which require direct user input, such as `createsuperuser`, should be [replaced by commands](http://stackoverflow.com/a/26091252) which use `zappa invoke <env> --raw`.
 
