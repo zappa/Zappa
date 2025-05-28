@@ -1504,8 +1504,7 @@ class Zappa:
             )
         else:
             response = self.lambda_client.create_function_url_config(
-                FunctionName=function_name,
-                AuthType=function_url_config["authorizer"]
+                FunctionName=function_name, AuthType=function_url_config["authorizer"]
             )
         print("function URL address: {}".format(response["FunctionUrl"]))
         self.update_function_url_policy(function_name, function_url_config)
@@ -1530,8 +1529,7 @@ class Zappa:
                     )
                 else:
                     response = self.lambda_client.update_function_url_config(
-                        FunctionName=function_name,
-                        AuthType=function_url_config["authorizer"]
+                        FunctionName=function_name, AuthType=function_url_config["authorizer"]
                     )
                 print("function URL address: {}".format(response["FunctionUrl"]))
                 self.update_function_url_policy(config["FunctionArn"], function_url_config)
