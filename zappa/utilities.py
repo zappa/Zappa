@@ -209,15 +209,21 @@ def get_runtime_from_python_version():
         raise ValueError("Python 2.x is no longer supported.")
     else:
         if sys.version_info[1] <= 7:
-            return "python3.7"
-        elif sys.version_info[1] <= 8:
-            return "python3.8"
-        elif sys.version_info[1] <= 9:
+            raise ValueError("Python 3.7 and below are no longer supported.")
+        elif sys.version_info[1] == 8:
+            raise ValueError("Python 3.8 and below are no longer supported.")
+        elif sys.version_info[1] == 9:
             return "python3.9"
-        elif sys.version_info[1] <= 10:
+        elif sys.version_info[1] == 10:
             return "python3.10"
-        else:
+        elif sys.version_info[1] == 11:
             return "python3.11"
+        elif sys.version_info[1] == 12:
+            return "python3.12"
+        elif sys.version_info[1] == 13:
+            return "python3.13"
+        else:
+            raise ValueError(f"Python f{'.'.join(str(v) for v in sys.version_info[:2])} is not yet supported.")
 
 
 ##
@@ -704,4 +710,4 @@ def validate_json_serializable(*args: Any, **kwargs: Any) -> None:
     try:
         json.dumps((args, kwargs))
     except (TypeError, OverflowError):
-        raise UnserializableJsonError("Arguments to an asynchronous.task must be JSON serializable!")
+        raise UnserializableJsonError("Arguments to asynchronous.task must be JSON serializable!")
