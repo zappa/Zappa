@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 
 # Set up logging
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -517,6 +517,118 @@ class LambdaHandler:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
 
+        # This is an HTTP-protocol API Gateway event or Lambda url event with payload format version 2.0
+        elif "version" in event and event["version"] == "2.0":
+            try:
+                time_start = datetime.datetime.now()
+
+                script_name = ""
+                host = event.get("headers", {}).get("host")
+                if host:
+                    if "amazonaws.com" in host:
+                        logger.debug("amazonaws found in host")
+                        # The path provided in th event doesn't include the
+                        # stage, so we must tell Flask to include the API
+                        # stage in the url it calculates. See https://github.com/Miserlou/Zappa/issues/1014
+                        script_name = f"/{settings.API_STAGE}"
+                else:
+                    # This is a test request sent from the AWS console
+                    if settings.DOMAIN:
+                        # Assume the requests received will be on the specified
+                        # domain. No special handling is required
+                        pass
+                    else:
+                        # Assume the requests received will be to the
+                        # amazonaws.com endpoint, so tell Flask to include the
+                        # API stage
+                        script_name = f"/{settings.API_STAGE}"
+
+                base_path = getattr(settings, "BASE_PATH", None)
+                environ = create_wsgi_request(
+                    event,
+                    script_name=script_name,
+                    base_path=base_path,
+                    trailing_slash=self.trailing_slash,
+                    binary_support=settings.BINARY_SUPPORT,
+                    context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
+                )
+
+                # We are always on https on Lambda, so tell our wsgi app that.
+                environ["HTTPS"] = "on"
+                environ["wsgi.url_scheme"] = "https"
+                environ["lambda.context"] = context
+                environ["lambda.event"] = event
+
+                # Execute the application
+                with Response.from_app(self.wsgi_app, environ) as response:
+                    response_body = None
+                    response_is_base_64_encoded = False
+                    if response.data:
+                        response_body, response_is_base_64_encoded = self._process_response_body(response, settings=settings)
+
+                    response_status_code = response.status_code
+
+                    cookies = []
+                    response_headers = {}
+                    for key, value in response.headers:
+                        if key.lower() == "set-cookie":
+                            cookies.append(value)
+                        else:
+                            if key in response_headers:
+                                updated_value = f"{response_headers[key]},{value}"
+                                response_headers[key] = updated_value
+                            else:
+                                response_headers[key] = value
+
+                    # Calculate the total response time,
+                    # and log it in the Common Log format.
+                    time_end = datetime.datetime.now()
+                    delta = time_end - time_start
+                    response_time_ms = delta.total_seconds() * 1000
+                    response.content = response.data
+                    common_log(environ, response, response_time=response_time_ms)
+
+                    return {
+                        "cookies": cookies,
+                        "isBase64Encoded": response_is_base_64_encoded,
+                        "statusCode": response_status_code,
+                        "headers": response_headers,
+                        "body": response_body,
+                    }
+            except Exception as e:
+                # Print statements are visible in the logs either way
+                print(e)
+                exc_info = sys.exc_info()
+                message = (
+                    "An uncaught exception happened while servicing this request. "
+                    "You can investigate this with the `zappa tail` command."
+                )
+
+                # If we didn't even build an app_module, just raise.
+                if not settings.DJANGO_SETTINGS:
+                    try:
+                        self.app_module
+                    except NameError as ne:
+                        message = "Failed to import module: {}".format(ne.message)
+
+                # Call exception handler for unhandled exceptions
+                exception_handler = self.settings.EXCEPTION_HANDLER
+                self._process_exception(
+                    exception_handler=exception_handler,
+                    event=event,
+                    context=context,
+                    exception=e,
+                )
+
+                # Return this unspecified exception as a 500, using template that API Gateway expects.
+                content = collections.OrderedDict()
+                content["statusCode"] = 500
+                body = {"message": message}
+                if settings.DEBUG:  # only include traceback if debug is on.
+                    body["traceback"] = traceback.format_exception(*exc_info)  # traceback as a list for readability.
+                content["body"] = json.dumps(str(body), sort_keys=True, indent=4)
+                return content
+
         # Normal web app flow
         try:
             # Timing
@@ -613,9 +725,9 @@ class LambdaHandler:
                     # and log it in the Common Log format.
                     time_end = datetime.datetime.now()
                     delta = time_end - time_start
-                    response_time_ms = delta.total_seconds() * 1000
+                    response_time_us = delta.total_seconds() * 1_000_000  # convert to microseconds
                     response.content = response.data
-                    common_log(environ, response, response_time=response_time_ms)
+                    common_log(environ, response, response_time=response_time_us)
 
                     return zappa_returndict
         except Exception as e:  # pragma: no cover
