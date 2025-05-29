@@ -1888,6 +1888,7 @@ class TestZappa(unittest.TestCase):
         """
         zappa_cli = ZappaCLI()
         zappa_cli.domain = "test.example.com"
+        zappa_cli.use_apigateway = True
         try:
             zappa_cli.certify()
         except AttributeError:

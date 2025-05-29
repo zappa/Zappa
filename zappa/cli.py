@@ -124,6 +124,7 @@ class ZappaCLI:
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
     layers = None
+    use_function_url = False
 
     stage_name_env_pattern = re.compile("^[a-zA-Z0-9_]+$")
 
@@ -2126,7 +2127,7 @@ class ZappaCLI:
                     "Please note that it can take up to 40 minutes for this domain to be "
                     "created and propagated through AWS, but it requires no further work on your part."
                 )
-                cert_success = True
+            cert_success = True
 
         if cert_success:
             click.echo("Certificate " + click.style("updated", fg="green", bold=True) + "!")
