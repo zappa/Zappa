@@ -264,12 +264,16 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
 
     # The 'abi3' tag is a compiled distribution format designed for compatibility across multiple Python 3 versions.
     # An abi3 wheel is built against the stable ABI (Application Binary Interface) of a minimum supported Python version.
-    manylinux_suffixes = [r"manylinux_\d+_\d+"]
+    # -- make sure cp3XX version is less than or equal to the runtime version
+    abi_valid_python_minor_versions = [str(i) for i in range(5, int(runtime_minor_version) + 1)]
+    manylinux_suffixes = [r"_\d+_\d+", r"manylinux_\d+_\d+"]
     manylinux_suffixes.extend(manylinux_legacy_tags)
     manylinux_wheel_abi3_file_match = (
-        rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_({"|".join(valid_platform_tags)}).whl$'
+        # rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_({"|".join(valid_platform_tags)}).whl$'
+        rf'^.*cp3({"|".join(abi_valid_python_minor_versions)})-abi3-'
+        rf'manylinux(({"|".join(manylinux_suffixes)})_({"".join(valid_platform_tags)})(\.|))+.whl$'
     )
-    combined_match_pattern = rf"{manylinux_wheel_file_match}|{manylinux_wheel_abi3_file_match}"
+    combined_match_pattern = rf"({manylinux_wheel_file_match})|({manylinux_wheel_abi3_file_match})"
     manylinux_wheel_file_match_pattern = re.compile(combined_match_pattern)
     return manylinux_wheel_file_match_pattern
 
@@ -335,9 +339,9 @@ class Zappa:
         self.runtime = runtime
 
         if not architecture:
-            architecture = "x86_64"
+            architecture = X86_ARCHITECTURE
         if architecture not in VALID_ARCHITECTURES:
-            raise ValueError(f"Invalid architecture. Must be one of: {VALID_ARCHITECTURES}")
+            raise ValueError(f"Invalid architecture '{architecture}'. Must be one of: {VALID_ARCHITECTURES}")
 
         self.architecture = architecture
 
@@ -900,34 +904,33 @@ class Zappa:
         """
         Gets the locally stored version of a manylinux wheel. If one does not exist, the function downloads it.
         """
-        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        cached_wheels_dir = Path(tempfile.gettempdir()) / "cached_wheels"
 
-        if not os.path.isdir(cached_wheels_dir):
-            os.makedirs(cached_wheels_dir)
+        if not cached_wheels_dir.is_dir() or not cached_wheels_dir.exists():
+            cached_wheels_dir.mkdir(parents=True, exist_ok=True)
         else:
             # Check if we already have a cached copy
+            # - get package name from prefix of the wheel file
             wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, flags=re.UNICODE)
-
-            valid_architectures = X86_ARCHITECTURE
+            valid_architectures = (X86_ARCHITECTURE,)
             if self.architecture == ARM_ARCHITECTURE:
-                valid_architectures = (X86_ARCHITECTURE, "aarch64")
+                valid_architectures = (ARM_ARCHITECTURE, "aarch64")
             for arch in valid_architectures:
-                wheel_file = f"{wheel_name}-{package_version}-*_{arch}.whl"
-                wheel_path = os.path.join(cached_wheels_dir, wheel_file)
-
-                for pathname in glob.iglob(wheel_path):
-                    if re.match(self.manylinux_wheel_file_match, pathname):
+                wheel_file_pattern = f"{wheel_name}-{package_version}-*_{arch}.whl"
+                for pathname in cached_wheels_dir.glob(wheel_file_pattern):
+                    if self.manylinux_wheel_file_match.match(str(pathname)):
                         logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
                         return pathname
 
         # The file is not cached, download it.
         wheel_url, filename = self.get_manylinux_wheel_url(package_name, package_version)
         if not wheel_url:
+            logger.warning(f" - {package_name}=={package_version}: No manylinux wheel found for this package")
             return None
 
-        wheel_path = os.path.join(cached_wheels_dir, filename)
+        wheel_path = cached_wheels_dir / filename
         logger.info(f" - {package_name}=={package_version}: Downloading")
-        with open(wheel_path, "wb") as f:
+        with wheel_path.open("wb") as f:
             self.download_url_with_progress(wheel_url, f, disable_progress)
 
         if not zipfile.is_zipfile(wheel_path):
@@ -947,8 +950,8 @@ class Zappa:
         every time.
         """
         cached_pypi_info_dir = Path(tempfile.gettempdir()) / "cached_pypi_info"
-        if not cached_pypi_info_dir.is_dir():
-            os.makedirs(cached_pypi_info_dir)
+        if not cached_pypi_info_dir.exists():
+            cached_pypi_info_dir.mkdir(parents=True, exist_ok=True)
 
         # Even though the metadata is for the package, we save it in a
         # filename that includes the package's version. This helps in
@@ -956,14 +959,14 @@ class Zappa:
         # version of the package.
         # Related: https://github.com/Miserlou/Zappa/issues/899
         data = None
-        json_file_name = "{0!s}-{1!s}.json".format(package_name, package_version)
+        json_file_name = f"{package_name!s}-{package_version!s}.json"
         json_file_path = cached_pypi_info_dir / json_file_name
         if json_file_path.exists():
             with json_file_path.open("rb") as metafile:
                 data = json.load(metafile)
 
         if not data or ignore_cache:
-            url = "https://pypi.python.org/pypi/{}/json".format(package_name)
+            url = f"https://pypi.python.org/pypi/{package_name}/json"
             try:
                 res = requests.get(url, timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)))
                 data = res.json()
@@ -979,7 +982,7 @@ class Zappa:
             return None, None
 
         for f in data["releases"][package_version]:
-            if re.match(self.manylinux_wheel_file_match, f["filename"]):
+            if self.manylinux_wheel_file_match.match(f["filename"]):
                 # Since we have already lowered package names in get_installed_packages
                 # manylinux caching is not working for packages with capital case in names like MarkupSafe
                 return f["url"], f["filename"].lower()
