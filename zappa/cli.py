@@ -4,6 +4,7 @@ Zappa CLI
 Deploy arbitrary Python programs as serverless Zappa applications.
 
 """
+
 import argparse
 import base64
 import collections
@@ -118,6 +119,7 @@ class ZappaCLI:
     authorizer = None
     xray_tracing = False
     aws_kms_key_arn = ""
+    snap_start = None
     context_header_mappings = None
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
@@ -942,6 +944,10 @@ class ZappaCLI:
             except botocore.exceptions.BotoCoreError as e:
                 click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
                 sys.exit(-1)
+            # https://github.com/zappa/Zappa/issues/1313
+            except botocore.exceptions.ClientError as e:
+                click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
+                sys.exit(-1)
             except Exception:
                 click.echo(
                     click.style("Warning!", fg="red")
@@ -1064,6 +1070,7 @@ class ZappaCLI:
             aws_environment_variables=self.aws_environment_variables,
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
+            snap_start=self.snap_start,
             wait=False,
         )
 
@@ -2070,40 +2077,56 @@ class ZappaCLI:
         # Custom SSL / ACM
         else:
             route53 = self.stage_config.get("route53_enabled", True)
-            if not self.zappa.get_domain_name(self.domain, route53=route53):
-                dns_name = self.zappa.create_domain_name(
-                    domain_name=self.domain,
-                    certificate_name=self.domain + "-Zappa-Cert",
-                    certificate_body=certificate_body,
-                    certificate_private_key=certificate_private_key,
-                    certificate_chain=certificate_chain,
-                    certificate_arn=cert_arn,
-                    lambda_name=self.lambda_name,
-                    stage=self.api_stage,
-                    base_path=base_path,
+            if self.use_apigateway:
+                if not self.zappa.get_domain_name(self.domain, route53=route53):
+                    dns_name = self.zappa.create_domain_name(
+                        domain_name=self.domain,
+                        certificate_name=self.domain + "-Zappa-Cert",
+                        certificate_body=certificate_body,
+                        certificate_private_key=certificate_private_key,
+                        certificate_chain=certificate_chain,
+                        certificate_arn=cert_arn,
+                        lambda_name=self.lambda_name,
+                        stage=self.api_stage,
+                        base_path=base_path,
+                    )
+                    if route53:
+                        self.zappa.update_route53_records(self.domain, dns_name)
+                    print(
+                        "Created a new domain name with supplied certificate. "
+                        "Please note that it can take up to 40 minutes for this domain to be "
+                        "created and propagated through AWS, but it requires no further work on your part."
+                    )
+                else:
+                    self.zappa.update_domain_name(
+                        domain_name=self.domain,
+                        certificate_name=self.domain + "-Zappa-Cert",
+                        certificate_body=certificate_body,
+                        certificate_private_key=certificate_private_key,
+                        certificate_chain=certificate_chain,
+                        certificate_arn=cert_arn,
+                        lambda_name=self.lambda_name,
+                        stage=self.api_stage,
+                        route53=route53,
+                        base_path=base_path,
+                    )
+
+                cert_success = True
+
+            if self.use_function_url:
+                self.lambda_arn = self.zappa.get_lambda_function(function_name=self.lambda_name)
+                dns_name = self.zappa.update_lambda_function_url_domains(
+                    self.lambda_arn, self.function_url_domains, cert_arn, self.function_url_cloudfront_config
                 )
                 if route53:
-                    self.zappa.update_route53_records(self.domain, dns_name)
+                    for domain in self.function_url_domains:
+                        self.zappa.update_route53_records(domain, dns_name)
                 print(
                     "Created a new domain name with supplied certificate. "
                     "Please note that it can take up to 40 minutes for this domain to be "
                     "created and propagated through AWS, but it requires no further work on your part."
                 )
-            else:
-                self.zappa.update_domain_name(
-                    domain_name=self.domain,
-                    certificate_name=self.domain + "-Zappa-Cert",
-                    certificate_body=certificate_body,
-                    certificate_private_key=certificate_private_key,
-                    certificate_chain=certificate_chain,
-                    certificate_arn=cert_arn,
-                    lambda_name=self.lambda_name,
-                    stage=self.api_stage,
-                    route53=route53,
-                    base_path=base_path,
-                )
-
-            cert_success = True
+                cert_success = True
 
         if cert_success:
             click.echo("Certificate " + click.style("updated", fg="green", bold=True) + "!")
@@ -2156,7 +2179,7 @@ class ZappaCLI:
                     working_dir = os.getcwd()
 
                 working_dir_importer = pkgutil.get_importer(working_dir)
-                module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+                module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
             except (ImportError, AttributeError):
                 try:  # Callback func might be in virtualenv
@@ -2310,6 +2333,7 @@ class ZappaCLI:
         self.authorizer = self.stage_config.get("authorizer", {})
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
+        self.snap_start = self.stage_config.get("snap_start", "None")
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
@@ -2326,6 +2350,8 @@ class ZappaCLI:
 
         # function URL settings
         self.use_function_url = self.stage_config.get("function_url_enabled", False)
+        self.function_url_domains = self.stage_config.get("function_url_domains", [])
+        self.function_url_cloudfront_config = self.stage_config.get("function_url_cloudfront_config", {})
 
         default_function_url_config = {
             "authorizer": "NONE",
@@ -2876,7 +2902,7 @@ class ZappaCLI:
                 working_dir = os.getcwd()
 
             working_dir_importer = pkgutil.get_importer(working_dir)
-            module_ = working_dir_importer.find_module(mod_name).load_module(mod_name)
+            module_ = working_dir_importer.find_spec(mod_name).loader.load_module(mod_name)
 
         except (ImportError, AttributeError):
             try:  # Prebuild func might be in virtualenv
