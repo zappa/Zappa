@@ -135,6 +135,10 @@
     "lambda_concurrency_enabled": {
         "extends": "ttt888",
         "lambda_concurrency": 6
+    },
+    "function_url_enabled": {
+        "extends": "ttt888",
+        "function_url_enabled": true
      },
     "addtextmimetypes": {
        "s3_bucket": "lmbda",
