@@ -264,8 +264,9 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
 
     # The 'abi3' tag is a compiled distribution format designed for compatibility across multiple Python 3 versions.
     # An abi3 wheel is built against the stable ABI (Application Binary Interface) of a minimum supported Python version.
-    # -- make sure cp3XX version is less than or equal to the runtime version
-    abi_valid_python_minor_versions = [str(i) for i in range(5, int(runtime_minor_version) + 1)]
+    # -- make sure cp3XX version is <= to the runtime version (runtime_minor_version)
+    minimum_minor_version = 5
+    abi_valid_python_minor_versions = [str(i) for i in range(minimum_minor_version, int(runtime_minor_version) + 1)]
     manylinux_suffixes = [r"_\d+_\d+", r"manylinux_\d+_\d+"]
     manylinux_suffixes.extend(manylinux_legacy_tags)
     manylinux_wheel_abi3_file_match = (
@@ -1155,7 +1156,8 @@ class Zappa:
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
             SnapStart={"ApplyOn": snap_start if snap_start else "None"},
             Layers=layers,
-            Architectures=self.architecture,
+            # zappa currently only supports a single architecture, and uses a str value internally
+            Architectures=[self.architecture],
         )
         if not docker_image_uri:
             kwargs["Runtime"] = runtime
