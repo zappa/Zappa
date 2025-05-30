@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import sys
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -148,7 +149,7 @@ def detect_django_settings():
     """
 
     matches = []
-    for root, dirnames, filenames in os.walk(os.getcwd()):
+    for root, dirnames, filenames in os.walk(Path.cwd()):
         for filename in fnmatch.filter(filenames, "*settings.py"):
             full = os.path.join(root, filename)
             if "site-packages" in full:
@@ -156,6 +157,7 @@ def detect_django_settings():
             full = os.path.join(root, filename)
             package_path = full.replace(os.getcwd(), "")
             package_module = package_path.replace(os.sep, ".").split(".", 1)[1].replace(".py", "")
+            print("Detected Django settings file: {}".format(package_module))
 
             matches.append(package_module)
     return matches
@@ -199,7 +201,7 @@ def detect_flask_apps():
     return matches
 
 
-def get_venv_from_python_version():
+def get_venv_from_python_version() -> str:
     return "python{}.{}".format(*sys.version_info)
 
 

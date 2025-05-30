@@ -424,42 +424,43 @@ class Zappa:
     # Packaging
     ##
 
-    def copy_editable_packages(self, egg_links, temp_package_path):
-        """ """
+    def copy_editable_packages(self, egg_links: list[Path], temp_package_path: Path):
+        """
+        Reads the first line of each egg-link file, which contains the path to the package,
+        copies the package contents to the temporary package path, then removes the egg-link files.
+        """
         for egg_link in egg_links:
-            with open(egg_link, "rb") as df:
-                egg_path = df.read().decode("utf-8").splitlines()[0].strip()
-                pkgs = set([x.split(".")[0] for x in find_packages(egg_path, exclude=["test", "tests"])])
+            with egg_link.open("rb") as df:
+                egg_path: str = df.read().decode("utf-8").splitlines()[0].strip()
+                pkgs = set(x.split(".")[0] for x in find_packages(egg_path, exclude=["test", "tests"]))
                 for pkg in pkgs:
+                    egg_package_path = Path(egg_path) / pkg
                     copytree(
-                        os.path.join(egg_path, pkg),
-                        os.path.join(temp_package_path, pkg),
+                        str(egg_package_path.resolve()),
+                        str(temp_package_path / pkg),
                         metadata=False,
                         symlinks=False,
                     )
 
         if temp_package_path:
             # now remove any egg-links as they will cause issues if they still exist
-            for link in glob.glob(os.path.join(temp_package_path, "*.egg-link")):
-                os.remove(link)
+            for link in temp_package_path.glob("*.egg-link"):
+                link.unlink()  # delete the egg-link file
 
     def get_deps_list(self, pkg_name, installed_distros=None):
         """
         For a given package, returns a list of required packages. Recursive.
         """
-        # https://github.com/Miserlou/Zappa/issues/1478.  Using `pkg_resources`
-        # instead of `pip` is the recommended approach.  The usage is nearly
-        # identical.
-        import pkg_resources
+        import importlib
 
         deps = []
         if not installed_distros:
-            installed_distros = pkg_resources.WorkingSet()
+            installed_distros = importlib.metadata.distributions()
         for package in installed_distros:
-            if package.project_name.lower() == pkg_name.lower():
-                deps = [(package.project_name, package.version)]
+            if package.name.lower() == pkg_name.lower():
+                deps = [(package.name, package.version)]
                 for req in package.requires():
-                    deps += self.get_deps_list(pkg_name=req.project_name, installed_distros=installed_distros)
+                    deps += self.get_deps_list(pkg_name=req.name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
@@ -469,28 +470,31 @@ class Zappa:
         import subprocess
 
         # We will need the currenv venv to pull Zappa from
-        current_venv = self.get_current_venv()
+        current_venv: Optional[Path] = self.get_current_venv()
 
         # Make a new folder for the handler packages
-        ve_path = os.path.join(os.getcwd(), "handler_venv")
+        ve_path: Path = Path.cwd() / "handler_venv"
 
-        if sys.platform == "win32":
-            current_site_packages_dir = os.path.join(current_venv, "Lib", "site-packages")
-            venv_site_packages_dir = os.path.join(ve_path, "Lib", "site-packages")
+        if current_venv and sys.platform == "win32":
+            current_site_packages_dir = current_venv / "Lib" / "site-packages"
+            venv_site_packages_dir = ve_path / "Lib" / "site-packages"
+        elif current_venv:
+            current_site_packages_dir = current_venv / "lib" / get_venv_from_python_version() / "site-packages"
+            venv_site_packages_dir = ve_path / "lib" / get_venv_from_python_version() / "site-packages"
         else:
-            current_site_packages_dir = os.path.join(current_venv, "lib", get_venv_from_python_version(), "site-packages")
-            venv_site_packages_dir = os.path.join(ve_path, "lib", get_venv_from_python_version(), "site-packages")
+            raise ValueError("Could not determine current virtualenv. Please activate it before running this command.")
 
-        if not os.path.isdir(venv_site_packages_dir):
-            os.makedirs(venv_site_packages_dir)
+        if not venv_site_packages_dir.exists():
+            venv_site_packages_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy zappa* to the new virtualenv
-        zappa_things = [z for z in os.listdir(current_site_packages_dir) if z.lower()[:5] == "zappa"]
-        for z in zappa_things:
-            copytree(
-                os.path.join(current_site_packages_dir, z),
-                os.path.join(venv_site_packages_dir, z),
-            )
+        for zappa_thing in current_site_packages_dir.glob("[zZ]appa*"):
+            # copytree(
+            #     os.path.join(current_site_packages_dir, z),
+            #     os.path.join(venv_site_packages_dir, z),
+            # )
+            dest = venv_site_packages_dir / zappa_thing.name
+            copytree(str(zappa_thing.resolve()), str(dest.resolve()))
 
         # Use pip to download zappa's dependencies.
         # Copying from current venv causes issues with things like PyYAML that installs as yaml
@@ -511,7 +515,7 @@ class Zappa:
             "install",
             "--quiet",
             "--target",
-            venv_site_packages_dir,
+            str(venv_site_packages_dir),
         ] + pkg_list
 
         # This is the recommended method for installing packages if you don't
@@ -534,12 +538,12 @@ class Zappa:
 
     # staticmethod as per https://github.com/Miserlou/Zappa/issues/780
     @staticmethod
-    def get_current_venv():
+    def get_current_venv() -> Optional[Path]:
         """
         Returns the path to the current virtualenv
         """
         if "VIRTUAL_ENV" in os.environ:
-            venv = os.environ["VIRTUAL_ENV"]
+            venv: Path = Path(os.environ["VIRTUAL_ENV"])
             return venv
 
         # pyenv available check
@@ -553,9 +557,9 @@ class Zappa:
             # Each Python version is installed into its own directory under $(pyenv root)/versions
             # https://github.com/pyenv/pyenv#locating-pyenv-provided-python-installations
             # Related: https://github.com/zappa/Zappa/issues/1132
-            pyenv_root = subprocess.check_output(["pyenv", "root"]).decode("utf-8").strip()
-            pyenv_version = subprocess.check_output(["pyenv", "version-name"]).decode("utf-8").strip()
-            venv = os.path.join(pyenv_root, "versions", pyenv_version)
+            pyenv_root: Path = Path(subprocess.check_output(["pyenv", "root"]).decode("utf-8").strip())
+            pyenv_version: str = subprocess.check_output(["pyenv", "version-name"]).decode("utf-8").strip()
+            venv: Path = pyenv_root / "versions" / pyenv_version  # type: ignore
             return venv
 
         return None
@@ -683,19 +687,19 @@ class Zappa:
         package_id_file.close()
 
         # Then, do site site-packages..
-        egg_links = []
-        temp_package_path = tempfile.mkdtemp(prefix="zappa-packages")
+        egg_links: list[Path] = []
+        temp_package_path = Path(tempfile.mkdtemp(prefix="zappa-packages"))
         if sys.platform == "win32":
-            site_packages = os.path.join(venv, "Lib", "site-packages")
+            site_packages = venv / "Lib" / "site-packages"
         else:
-            site_packages = os.path.join(venv, "lib", get_venv_from_python_version(), "site-packages")
-        egg_links.extend(glob.glob(os.path.join(site_packages, "*.egg-link")))
+            site_packages = venv / "lib" / get_venv_from_python_version() / "site-packages"
+        egg_links.extend(list(site_packages.glob("*.egg-link")))
 
         if minify:
             excludes = ZIP_EXCLUDES + exclude
             copytree(
-                site_packages,
-                temp_package_path,
+                str(site_packages.resolve()),
+                str(temp_package_path.resolve()),
                 metadata=False,
                 symlinks=False,
                 ignore=shutil.ignore_patterns(*excludes),
@@ -704,20 +708,20 @@ class Zappa:
             copytree(site_packages, temp_package_path, metadata=False, symlinks=False)
 
         # We may have 64-bin specific packages too.
-        site_packages_64 = os.path.join(venv, "lib64", get_venv_from_python_version(), "site-packages")
-        if os.path.exists(site_packages_64):
-            egg_links.extend(glob.glob(os.path.join(site_packages_64, "*.egg-link")))
+        site_packages_64 = venv / "lib" / get_venv_from_python_version() / "site-packages" / "64"
+        if site_packages_64.exists():
+            egg_links.extend(list(site_packages_64.glob("*.egg-link")))
             if minify:
                 excludes = ZIP_EXCLUDES + exclude
                 copytree(
-                    site_packages_64,
-                    temp_package_path,
+                    str(site_packages_64.resolve()),
+                    str(temp_package_path.resolve()),
                     metadata=False,
                     symlinks=False,
                     ignore=shutil.ignore_patterns(*excludes),
                 )
             else:
-                copytree(site_packages_64, temp_package_path, metadata=False, symlinks=False)
+                copytree(str(site_packages_64.resolve()), str(temp_package_path.resolve()), metadata=False, symlinks=False)
 
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
@@ -856,27 +860,32 @@ class Zappa:
         return archive_fname
 
     @staticmethod
-    def get_installed_packages(site_packages, site_packages_64):
+    def get_installed_packages(
+        site_packages: Optional[Path] = None, site_packages_64: Optional[Path] = None
+    ) -> dict[str, str]:
         """
         Returns a dict of installed packages that Zappa cares about.
         """
-        import pkg_resources
+        import importlib
 
-        package_to_keep = []
-        if os.path.isdir(site_packages):
-            package_to_keep += os.listdir(site_packages)
-        if os.path.isdir(site_packages_64):
-            package_to_keep += os.listdir(site_packages_64)
+        # collect pre-existing packages
+        packages_to_keep: list[str] = []
+        if site_packages and site_packages.is_dir():
+            packages_to_keep.extend([p.name.lower() for p in site_packages.glob("*")])
+        if site_packages_64 and site_packages_64.is_dir():
+            packages_to_keep.extend([p.name.lower() for p in site_packages_64.glob("*")])
 
-        package_to_keep = [x.lower() for x in package_to_keep]
+        additional_install_locations = []
+        if site_packages:
+            additional_install_locations.append(site_packages)
+        if site_packages_64:
+            additional_install_locations.append(site_packages_64)
 
-        installed_packages = {
-            package.project_name.lower(): package.version
-            for package in pkg_resources.WorkingSet()
-            if package.project_name.lower() in package_to_keep
-            or package.location.lower() in [site_packages.lower(), site_packages_64.lower()]
-        }
-
+        installed_packages = {}  # {PACKAGE_NAME: VERSION}
+        for package in importlib.metadata.distributions():  # returns PathDistribution objects
+            package_installed_directory: Path = package.locate_file()  # type: ignore
+            if package.name.lower() in packages_to_keep or package_installed_directory in additional_install_locations:
+                installed_packages[package.name.lower()] = package.version
         return installed_packages
 
     @staticmethod

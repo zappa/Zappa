@@ -27,7 +27,6 @@ import argcomplete
 import botocore
 import click
 import hjson as json
-import pkg_resources
 import requests
 import slugify
 import toml
@@ -37,6 +36,7 @@ from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
+from . import __version__
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
     check_new_version_available,
@@ -199,7 +199,7 @@ class ZappaCLI:
             "-v",
             "--version",
             action="version",
-            version=pkg_resources.get_distribution("zappa").version,
+            version=__version__,
             help="Print the zappa version",
         )
         parser.add_argument("--color", default="auto", choices=["auto", "never", "always"])
@@ -1847,11 +1847,6 @@ class ZappaCLI:
             app_function = app_function.replace("'", "")
             app_function = app_function.replace('"', "")
 
-        # TODO: Create VPC?
-        # Memory size? Time limit?
-        # Domain? LE keys? Region?
-        # 'Advanced Settings' mode?
-
         # Globalize
         click.echo(
             "\nYou can optionally deploy to "
@@ -2181,8 +2176,7 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            version = pkg_resources.require("zappa")[0].version
-            updateable = check_new_version_available(version)
+            updateable = check_new_version_available(__version__)
             if updateable:
                 click.echo(
                     click.style("Important!", fg="yellow", bold=True)
@@ -2444,7 +2438,7 @@ class ZappaCLI:
             # Make sure the normal venv is not included in the handler's zip
             exclude = self.stage_config.get("exclude", [])
             cur_venv = self.zappa.get_current_venv()  # type: ignore[attr-defined]
-            exclude.append(cur_venv.split("/")[-1])
+            exclude.append(cur_venv.name)
             self.handler_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix="handler_{0!s}".format(self.lambda_name),
                 venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),  # type: ignore[attr-defined]
