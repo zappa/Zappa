@@ -173,7 +173,7 @@ def process_lambda_payload_v2(event_info):
     headers = event_info["headers"]
     if event_info.get("cookies"):
         headers["cookie"] = "; ".join(event_info["cookies"])
-    path = unquote(event_info["requestContext"]["http"]["path"])
+    path = unquote(event_info["rawPath"])
     query = event_info.get("queryStringParameters", {})
     query_string = urlencode(query) if query else ""
     # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
