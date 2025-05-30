@@ -883,7 +883,7 @@ class Zappa:
 
         installed_packages = {}  # {PACKAGE_NAME: VERSION}
         for package in importlib.metadata.distributions():  # returns PathDistribution objects
-            package_installed_directory: Path = package.locate_file()  # type: ignore
+            package_installed_directory: Path = package.locate_file(path="")  # type: ignore
             if package.name.lower() in packages_to_keep or package_installed_directory in additional_install_locations:
                 installed_packages[package.name.lower()] = package.version
         return installed_packages
