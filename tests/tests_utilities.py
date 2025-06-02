@@ -47,7 +47,6 @@ class GeneralUtilitiesTestCase(unittest.TestCase):
 
     @mock.patch("zappa.core.find_packages", return_value=["package", "package.subpackage", "package.another"])
     def test_copy_editable_packages(self, mock_find_packages):
-        # TODO: Update to support pathlib.Path implementation
         virtual_env = Path(os.environ.get("VIRTUAL_ENV"))
         if not virtual_env:
             return self.skipTest("test_copy_editable_packages must be run in a virtualenv")

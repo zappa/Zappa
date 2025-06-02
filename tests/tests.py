@@ -344,16 +344,6 @@ class TestZappa(unittest.TestCase):
     def test_getting_installed_packages_mixed_case_location(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pip packages call to be same as what our mocked site packages dir has
-        # mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        # mock_pip_installed_packages = [
-        #     mock_package("SuperPackage", "0.1", "/Venv/site-packages"),
-        #     mock_package("SuperPackage64", "0.1", "/Venv/site-packages64"),
-        # ]
-        #
-        # with mock.patch("os.path.isdir", return_value=True):
-        #     with mock.patch("os.listdir", return_value=[]):
-        #         import pkg_resources  # this gets called in non-test Zappa mode
         mock_pip_installed_packages = []
         for package_name, version, location in ("SuperPackage", "0.1", "/Venv/site-packages"), (
             "SuperPackage64",
@@ -1381,8 +1371,6 @@ class TestZappa(unittest.TestCase):
         if os.path.exists("zappa_settings.json"):
             os.remove("zappa_settings.json")
 
-        # TODO: why isn't it finding `zappa`
-        #  seems like an execution permissions issue...changed by move to Path usage??
         process = subprocess.Popen(
             ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
         )
