@@ -20,7 +20,7 @@ import tempfile
 import time
 import zipfile
 from builtins import bytes, input
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import argcomplete
@@ -1533,8 +1533,8 @@ class ZappaCLI:
             function_invocations = self.zappa.cloudwatch.get_metric_statistics(
                 Namespace="AWS/Lambda",
                 MetricName="Invocations",
-                StartTime=datetime.utcnow() - timedelta(days=1),
-                EndTime=datetime.utcnow(),
+                StartTime=datetime.now(timezone.utc) - timedelta(days=1),
+                EndTime=datetime.now(timezone.utc),
                 Period=1440,
                 Statistics=["Sum"],
                 Dimensions=[{"Name": "FunctionName", "Value": "{}".format(self.lambda_name)}],
@@ -1545,8 +1545,8 @@ class ZappaCLI:
             function_errors = self.zappa.cloudwatch.get_metric_statistics(
                 Namespace="AWS/Lambda",
                 MetricName="Errors",
-                StartTime=datetime.utcnow() - timedelta(days=1),
-                EndTime=datetime.utcnow(),
+                StartTime=datetime.now(timezone.utc) - timedelta(days=1),
+                EndTime=datetime.now(timezone.utc),
                 Period=1440,
                 Statistics=["Sum"],
                 Dimensions=[{"Name": "FunctionName", "Value": "{}".format(self.lambda_name)}],

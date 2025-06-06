@@ -22,7 +22,7 @@ import zipfile
 from builtins import bytes, int
 from io import open
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 import boto3
 import botocore
@@ -447,19 +447,20 @@ class Zappa:
             for link in temp_package_path.glob("*.egg-link"):
                 link.unlink()  # delete the egg-link file
 
-    def get_deps_list(self, pkg_name, installed_distros=None):
+    def get_deps_list(self, pkg_name: str, installed_distros: Optional[Iterable] = None):
         """
         For a given package, returns a list of required packages. Recursive.
         """
         import importlib
+        from importlib.metadata import PathDistribution
 
         deps = []
-        if not installed_distros:
-            installed_distros = importlib.metadata.distributions()
-        for package in installed_distros:
+        if installed_distros is None:
+            installed_distros: Iterable[PathDistribution] = importlib.metadata.distributions()  # type: ignore
+        for package in installed_distros:  # type: ignore
             if package.name.lower() == pkg_name.lower():
                 deps = [(package.name, package.version)]
-                for req in package.requires():
+                for req in package.requires:
                     deps += self.get_deps_list(pkg_name=req.name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
