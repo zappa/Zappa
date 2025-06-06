@@ -26,6 +26,8 @@ jobs:
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
       - name: make sure we have version tags
         run: git fetch --unshallow --tags
+      - name: Install pipenv
+        run: python -m pip install --upgrade pip pipenv
       - name: Setup/install dependencies (pipenv)
         run: python -m pipenv install --dev
       - name: Lint (flake/black/isort)
