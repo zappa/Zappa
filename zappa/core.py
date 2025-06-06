@@ -457,11 +457,13 @@ class Zappa:
         deps = []
         if installed_distros is None:
             installed_distros: Iterable[PathDistribution] = importlib.metadata.distributions()  # type: ignore
-        for package in installed_distros:  # type: ignore
-            if package.name.lower() == pkg_name.lower():
-                deps = [(package.name, package.version)]
-                for req in package.requires:
-                    deps += self.get_deps_list(pkg_name=req.name, installed_distros=installed_distros)
+        for distribution_package in installed_distros:  # type: ignore
+            if distribution_package.name.lower() == pkg_name.lower():
+                deps = [(distribution_package.name, distribution_package.version)]
+                for (
+                    requirement_package_name
+                ) in distribution_package.requires:  # Generated requirements specified for this Distribution
+                    deps += self.get_deps_list(pkg_name=requirement_package_name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
