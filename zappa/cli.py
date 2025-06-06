@@ -31,7 +31,7 @@ import requests
 import slugify
 import toml
 import yaml
-from click import BaseCommand, Context
+from click import Command, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
@@ -3029,14 +3029,14 @@ def shamelessly_promote():
 
 def disable_click_colors():
     """
-    Set a Click context where colors are disabled. Creates a throwaway BaseCommand
+    Set a Click context where colors are disabled. Creates a throwaway Command
     to play nicely with the Context constructor.
     The intended side-effect here is that click.echo() checks this context and will
     suppress colors.
     https://github.com/pallets/click/blob/e1aa43a3/click/globals.py#L39
     """
 
-    ctx = Context(BaseCommand("AllYourBaseAreBelongToUs"))
+    ctx = Context(Command("AllYourBaseAreBelongToUs"))
     ctx.color = False
     push_context(ctx)
 
