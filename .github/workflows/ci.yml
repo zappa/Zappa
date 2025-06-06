@@ -26,16 +26,14 @@ jobs:
           restore-keys: ${{ runner.os }}-pip${{ matrix.python }}-
       - name: make sure we have version tags
         run: git fetch --unshallow --tags
-      - name: Setup Virtualenv
-        run: python -m venv .venv
-      - name: Install
-        run: source .venv/bin/activate && make requirements && python setup.py install
-      - name: Lint
-        run: source .venv/bin/activate && make flake black-check isort-check
+      - name: Setup/install dependencies (pipenv)
+        run: python -m pipenv install --dev
+      - name: Lint (flake/black/isort)
+        run: pipenv run make flake black-check isort-check
       - name: Test
-        run: source .venv/bin/activate && make tests
+        run: pipenv run make tests
       - name: Upload Coverage
-        run: .venv/bin/coveralls --service=github
+        run: pipenv run coveralls --service=github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_FLAG_NAME: py${{ matrix.python }}
