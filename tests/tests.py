@@ -24,6 +24,7 @@ import botocore
 import botocore.stub
 import flask
 import mock
+import pytest
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
@@ -1366,26 +1367,49 @@ class TestZappa(unittest.TestCase):
     # CLI
     ##
 
+    # @pytest.fixture(autouse=True)
     def test_zappa_init(self):
+
         # delete if file exists
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+        current_dir = os.getcwd()
+        with tempfile.TemporaryDirectory("zappa_test") as tempdir:
+            try:
+                os.chdir(tempdir)
+                tempdir = Path(tempdir)
 
-        process = subprocess.Popen(
-            ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
-        )
-        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
-        self.assertTrue(os.path.exists("zappa_settings.json"))
+                settings_filepath = tempdir / "zappa_settings.json"
+                if settings_filepath.exists():
+                    settings_filepath.unlink()  # delete the file if it exists
+                assert settings_filepath.exists() is False
 
-        with open("zappa_settings.json", "r") as f:
-            zappa_settings = json.load(f)
-            self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
-            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
-            self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+                zappa_cli = ZappaCLI()
+                with mock.patch("zappa.cli.ZappaCLI._get_init_env", return_value="dev"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_profile", return_value=("default", {"region": "us-west-2"})
+                ), mock.patch("zappa.cli.ZappaCLI._get_init_bucket", return_value="my-zappa-bucket"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_django_settings", return_value="test_settings"
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_global_settings", return_value=["n", False]
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_confirm", return_value="y"
+                ):
+                    zappa_cli.init()
 
-        # delete the file
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+                # make sure the expected `zappa_settings.json` file was created in the current directory
+                self.assertTrue(settings_filepath.exists())
+
+                with settings_filepath.open("r") as f:
+                    zappa_settings = json.load(f)
+                    self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+                    self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
+                    self.assertEqual(
+                        zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+                    )
+
+                # delete the file
+                if os.path.exists("zappa_settings.json"):
+                    os.remove("zappa_settings.json")
+            finally:
+                os.chdir(current_dir)
 
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()

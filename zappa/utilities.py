@@ -163,7 +163,7 @@ def detect_django_settings():
     return matches
 
 
-def detect_flask_apps():
+def detect_flask_apps() -> list[str]:
     """
     Automatically try to discover Flask apps files,
     return them as relative module paths.
