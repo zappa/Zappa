@@ -20,23 +20,24 @@ import tempfile
 import time
 import zipfile
 from builtins import bytes, input
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import argcomplete
 import botocore
 import click
 import hjson as json
-import pkg_resources
 import requests
 import slugify
 import toml
 import yaml
-from click import BaseCommand, Context
+from click import Command, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
+from . import __version__
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
     check_new_version_available,
@@ -199,7 +200,7 @@ class ZappaCLI:
             "-v",
             "--version",
             action="version",
-            version=pkg_resources.get_distribution("zappa").version,
+            version=__version__,
             help="Print the zappa version",
         )
         parser.add_argument("--color", default="auto", choices=["auto", "never", "always"])
@@ -1533,8 +1534,8 @@ class ZappaCLI:
             function_invocations = self.zappa.cloudwatch.get_metric_statistics(
                 Namespace="AWS/Lambda",
                 MetricName="Invocations",
-                StartTime=datetime.utcnow() - timedelta(days=1),
-                EndTime=datetime.utcnow(),
+                StartTime=datetime.now(timezone.utc) - timedelta(days=1),
+                EndTime=datetime.now(timezone.utc),
                 Period=1440,
                 Statistics=["Sum"],
                 Dimensions=[{"Name": "FunctionName", "Value": "{}".format(self.lambda_name)}],
@@ -1545,8 +1546,8 @@ class ZappaCLI:
             function_errors = self.zappa.cloudwatch.get_metric_statistics(
                 Namespace="AWS/Lambda",
                 MetricName="Errors",
-                StartTime=datetime.utcnow() - timedelta(days=1),
-                EndTime=datetime.utcnow(),
+                StartTime=datetime.now(timezone.utc) - timedelta(days=1),
+                EndTime=datetime.now(timezone.utc),
                 Period=1440,
                 Statistics=["Sum"],
                 Dimensions=[{"Name": "FunctionName", "Value": "{}".format(self.lambda_name)}],
@@ -1646,7 +1647,130 @@ class ZappaCLI:
         else:
             return True
 
-    def init(self, settings_file="zappa_settings.json"):
+    def _get_init_env(self) -> str:
+        # Create Env
+        while True:
+            click.echo(
+                "Your Zappa configuration can support multiple production stages, like '"
+                + click.style("dev", bold=True)
+                + "', '"
+                + click.style("staging", bold=True)
+                + "', and '"
+                + click.style("production", bold=True)
+                + "'."
+            )
+            env = input("What do you want to call this environment (default 'dev'): ") or "dev"
+            try:
+                self.check_stage_name(env)
+                break
+            except ValueError:
+                click.echo(click.style("Stage names must match a-zA-Z0-9_", fg="red"))
+        return env
+
+    def _get_init_profile(self, default_profile: str, profiles: dict, profile_names: list) -> tuple[str, dict]:
+        while True:
+            profile_name = (
+                input(
+                    "We found the following profiles: {}, and {}. "
+                    "Which would you like us to use? (default '{}'): ".format(
+                        ", ".join(profile_names[:-1]),
+                        profile_names[-1],
+                        default_profile,
+                    )
+                )
+                or default_profile
+            )
+            if profile_name in profiles:
+                profile = profiles[profile_name]
+                break
+            else:
+                click.echo("Please enter a valid name for your AWS profile.")
+        return profile_name, profile
+
+    def _get_init_bucket(self, default_bucket: str) -> str:
+        while True:
+            bucket = input("What do you want to call your bucket? (default '%s'): " % default_bucket) or default_bucket
+
+            if is_valid_bucket_name(bucket):
+                break
+
+            click.echo(click.style("Invalid bucket name!", bold=True))
+            click.echo("S3 buckets must be named according to the following rules:")
+            click.echo(
+                """* Bucket names must be unique across all existing bucket names in Amazon S3.
+* Bucket names must comply with DNS naming conventions.
+* Bucket names must be at least 3 and no more than 63 characters long.
+* Bucket names must not contain uppercase characters or underscores.
+* Bucket names must start with a lowercase letter or number.
+* Bucket names must be a series of one or more labels. Adjacent labels are separated
+  by a single period (.). Bucket names can contain lowercase letters, numbers, and
+  hyphens. Each label must start and end with a lowercase letter or a number.
+* Bucket names must not be formatted as an IP address (for example, 192.168.5.4).
+* When you use virtual hosted–style buckets with Secure Sockets Layer (SSL), the SSL
+  wildcard certificate only matches buckets that don't contain periods. To work around
+  this, use HTTP or write your own certificate verification logic. We recommend that
+  you do not use periods (".") in bucket names when using virtual hosted–style buckets.
+"""
+            )
+        return bucket
+
+    def _get_init_django_settings(self, matches: list) -> str:  # type: ignore
+        django_settings = None
+        while django_settings in [None, ""]:
+            if matches:
+                click.echo(
+                    "We discovered: "
+                    + click.style(
+                        ", ".join("{}".format(i) for v, i in enumerate(matches)),
+                        bold=True,
+                    )
+                )
+                django_settings = input("Where are your project's settings? (default '%s'): " % matches[0]) or matches[0]
+            else:
+                click.echo("(This will likely be something like 'your_project.settings')")
+                django_settings = input("Where are your project's settings?: ")
+        return django_settings  # type: ignore
+
+    def _get_init_app_function(self, matches: list[str]) -> str:  # type: ignore
+        """Get the flask app function from the user."""
+        app_function = None
+        while app_function in [None, ""]:
+            if matches:
+                click.echo(
+                    "We discovered: "
+                    + click.style(
+                        ", ".join("{}".format(i) for v, i in enumerate(matches)),
+                        bold=True,
+                    )
+                )
+                app_function = input("Where is your app's function? (default '%s'): " % matches[0]) or matches[0]
+            else:
+                app_function = input("Where is your app's function?: ")
+        return app_function  # type: ignore
+
+    def _get_init_global_settings(self) -> tuple[str, bool]:
+        global_deployment = False
+        while True:
+            global_type = input(
+                "Would you like to deploy this application "
+                + click.style("globally", bold=True)
+                + "? (default 'n') [y/n/(p)rimary]: "
+            )
+            if not global_type:
+                break
+            if global_type.lower() in ["y", "yes", "p", "primary"]:
+                global_deployment = True
+                break
+            if global_type.lower() in ["n", "no"]:
+                global_deployment = False
+                break
+        return global_type, global_deployment
+
+    def _get_init_confirm(self) -> str:
+        confirm = input("\nDoes this look " + click.style("okay", bold=True, fg="green") + "? (default 'y') [y/n]: ") or "yes"
+        return confirm
+
+    def init(self, settings_file: str = "zappa_settings.json"):
         """
         Initialize a new Zappa project by creating a new zappa_settings.json in a guided process.
         This should probably be broken up into few separate componants once it's stable.
@@ -1657,7 +1781,8 @@ class ZappaCLI:
         self.check_venv()
 
         # Ensure that we don't already have a zappa_settings file.
-        if os.path.isfile(settings_file):
+        settings_file_filepath = Path(settings_file).resolve()
+        if settings_file_filepath.exists() and settings_file_filepath.is_file():
             raise ClickException(
                 "This project already has a " + click.style("{0!s} file".format(settings_file), fg="red", bold=True) + "!"
             )
@@ -1686,23 +1811,7 @@ class ZappaCLI:
         click.echo("This `init` command will help you create and configure your new Zappa deployment.")
         click.echo("Let's get started!\n")
 
-        # Create Env
-        while True:
-            click.echo(
-                "Your Zappa configuration can support multiple production stages, like '"
-                + click.style("dev", bold=True)
-                + "', '"
-                + click.style("staging", bold=True)
-                + "', and '"
-                + click.style("production", bold=True)
-                + "'."
-            )
-            env = input("What do you want to call this environment (default 'dev'): ") or "dev"
-            try:
-                self.check_stage_name(env)
-                break
-            except ValueError:
-                click.echo(click.style("Stage names must match a-zA-Z0-9_", fg="red"))
+        env = self._get_init_env()
 
         # Detect AWS profiles and regions
         # If anyone knows a more straightforward way to easily detect and
@@ -1735,23 +1844,7 @@ class ZappaCLI:
             else:
                 default_profile = profile_names[0]
 
-            while True:
-                profile_name = (
-                    input(
-                        "We found the following profiles: {}, and {}. "
-                        "Which would you like us to use? (default '{}'): ".format(
-                            ", ".join(profile_names[:-1]),
-                            profile_names[-1],
-                            default_profile,
-                        )
-                    )
-                    or default_profile
-                )
-                if profile_name in profiles:
-                    profile = profiles[profile_name]
-                    break
-                else:
-                    click.echo("Please enter a valid name for your AWS profile.")
+            profile_name, profile = self._get_init_profile(default_profile, profiles, profile_names)
 
         profile_region = profile.get("region") if profile else None
 
@@ -1761,30 +1854,7 @@ class ZappaCLI:
         )
         click.echo("If you don't have a bucket yet, we'll create one for you too.")
         default_bucket = "zappa-" + "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(9))
-        while True:
-            bucket = input("What do you want to call your bucket? (default '%s'): " % default_bucket) or default_bucket
-
-            if is_valid_bucket_name(bucket):
-                break
-
-            click.echo(click.style("Invalid bucket name!", bold=True))
-            click.echo("S3 buckets must be named according to the following rules:")
-            click.echo(
-                """* Bucket names must be unique across all existing bucket names in Amazon S3.
-* Bucket names must comply with DNS naming conventions.
-* Bucket names must be at least 3 and no more than 63 characters long.
-* Bucket names must not contain uppercase characters or underscores.
-* Bucket names must start with a lowercase letter or number.
-* Bucket names must be a series of one or more labels. Adjacent labels are separated
-  by a single period (.). Bucket names can contain lowercase letters, numbers, and
-  hyphens. Each label must start and end with a lowercase letter or a number.
-* Bucket names must not be formatted as an IP address (for example, 192.168.5.4).
-* When you use virtual hosted–style buckets with Secure Sockets Layer (SSL), the SSL
-  wildcard certificate only matches buckets that don't contain periods. To work around
-  this, use HTTP or write your own certificate verification logic. We recommend that
-  you do not use periods (".") in bucket names when using virtual hosted–style buckets.
-"""
-            )
+        bucket = self._get_init_bucket(default_bucket)
 
         # Detect Django/Flask
         try:  # pragma: no cover
@@ -1806,22 +1876,8 @@ class ZappaCLI:
         if has_django:  # pragma: no cover
             click.echo("It looks like this is a " + click.style("Django", bold=True) + " application!")
             click.echo("What is the " + click.style("module path", bold=True) + " to your projects's Django settings?")
-            django_settings = None
-
             matches = detect_django_settings()
-            while django_settings in [None, ""]:
-                if matches:
-                    click.echo(
-                        "We discovered: "
-                        + click.style(
-                            ", ".join("{}".format(i) for v, i in enumerate(matches)),
-                            bold=True,
-                        )
-                    )
-                    django_settings = input("Where are your project's settings? (default '%s'): " % matches[0]) or matches[0]
-                else:
-                    click.echo("(This will likely be something like 'your_project.settings')")
-                    django_settings = input("Where are your project's settings?: ")
+            django_settings = self._get_init_django_settings(matches)
             django_settings = django_settings.replace("'", "")
             django_settings = django_settings.replace('"', "")
         else:
@@ -1831,26 +1887,9 @@ class ZappaCLI:
                 matches = detect_flask_apps()
             click.echo("What's the " + click.style("modular path", bold=True) + " to your app's function?")
             click.echo("This will likely be something like 'your_module.app'.")
-            app_function = None
-            while app_function in [None, ""]:
-                if matches:
-                    click.echo(
-                        "We discovered: "
-                        + click.style(
-                            ", ".join("{}".format(i) for v, i in enumerate(matches)),
-                            bold=True,
-                        )
-                    )
-                    app_function = input("Where is your app's function? (default '%s'): " % matches[0]) or matches[0]
-                else:
-                    app_function = input("Where is your app's function?: ")
+            app_function = self._get_init_app_function(matches)
             app_function = app_function.replace("'", "")
             app_function = app_function.replace('"', "")
-
-        # TODO: Create VPC?
-        # Memory size? Time limit?
-        # Domain? LE keys? Region?
-        # 'Advanced Settings' mode?
 
         # Globalize
         click.echo(
@@ -1859,21 +1898,7 @@ class ZappaCLI:
             + " in order to provide fast global service."
         )
         click.echo("If you are using Zappa for the first time, you probably don't want to do this!")
-        global_deployment = False
-        while True:
-            global_type = input(
-                "Would you like to deploy this application "
-                + click.style("globally", bold=True)
-                + "? (default 'n') [y/n/(p)rimary]: "
-            )
-            if not global_type:
-                break
-            if global_type.lower() in ["y", "yes", "p", "primary"]:
-                global_deployment = True
-                break
-            if global_type.lower() in ["n", "no"]:
-                global_deployment = False
-                break
+        global_type, global_deployment = self._get_init_global_settings()
 
         # The given environment name
         zappa_settings = {
@@ -1913,13 +1938,13 @@ class ZappaCLI:
         click.echo("\nOkay, here's your " + click.style("zappa_settings.json", bold=True) + ":\n")
         click.echo(click.style(zappa_settings_json, fg="yellow", bold=False))
 
-        confirm = input("\nDoes this look " + click.style("okay", bold=True, fg="green") + "? (default 'y') [y/n]: ") or "yes"
+        confirm = self._get_init_confirm()
         if confirm[0] not in ["y", "Y", "yes", "YES"]:
             click.echo("" + click.style("Sorry", bold=True, fg="red") + " to hear that! Please init again.")
             return
 
         # Write
-        with open("zappa_settings.json", "w") as zappa_settings_file:
+        with settings_file_filepath.open("w", encoding="utf8") as zappa_settings_file:
             zappa_settings_file.write(zappa_settings_json)
 
         if global_deployment:
@@ -2181,8 +2206,7 @@ class ZappaCLI:
         Print a warning if there's a new Zappa version available.
         """
         try:
-            version = pkg_resources.require("zappa")[0].version
-            updateable = check_new_version_available(version)
+            updateable = check_new_version_available(__version__)
             if updateable:
                 click.echo(
                     click.style("Important!", fg="yellow", bold=True)
@@ -2444,7 +2468,7 @@ class ZappaCLI:
             # Make sure the normal venv is not included in the handler's zip
             exclude = self.stage_config.get("exclude", [])
             cur_venv = self.zappa.get_current_venv()  # type: ignore[attr-defined]
-            exclude.append(cur_venv.split("/")[-1])
+            exclude.append(cur_venv.name)
             self.handler_path = self.zappa.create_lambda_zip(  # type: ignore[attr-defined]
                 prefix="handler_{0!s}".format(self.lambda_name),
                 venv=self.zappa.create_handler_venv(use_zappa_release=use_zappa_release),  # type: ignore[attr-defined]
@@ -3035,14 +3059,14 @@ def shamelessly_promote():
 
 def disable_click_colors():
     """
-    Set a Click context where colors are disabled. Creates a throwaway BaseCommand
+    Set a Click context where colors are disabled. Creates a throwaway Command
     to play nicely with the Context constructor.
     The intended side-effect here is that click.echo() checks this context and will
     suppress colors.
     https://github.com/pallets/click/blob/e1aa43a3/click/globals.py#L39
     """
 
-    ctx = Context(BaseCommand("AllYourBaseAreBelongToUs"))
+    ctx = Context(Command("AllYourBaseAreBelongToUs"))
     ctx.color = False
     push_context(ctx)
 
