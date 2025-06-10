@@ -47,6 +47,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           flag-name: py${{ matrix.python }}
           parallel: true
+          debug: true
 
   coverage:
     needs: test
@@ -64,3 +65,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
           carryforward: "run-3.9,run-3.10,run-3.11,run-3.12,run-3.13"
+          debug: true
