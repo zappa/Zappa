@@ -1372,7 +1372,7 @@ class TestZappa(unittest.TestCase):
 
         # delete if file exists
         current_dir = os.getcwd()
-        with tempfile.TemporaryDirectory("zappa_test") as tempdir:
+        with tempfile.TemporaryDirectory(prefix="zappa_test") as tempdir:
             try:
                 os.chdir(tempdir)
                 tempdir = Path(tempdir)
