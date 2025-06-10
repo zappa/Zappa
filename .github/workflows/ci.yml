@@ -34,13 +34,6 @@ jobs:
         run: pipenv run make flake black-check isort-check
       - name: Test
         run: pipenv run make tests
-#      - name: Run Coverage
-#        run: pipenv run coveralls --service=github
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          COVERALLS_FLAG_NAME: py${{ matrix.python }}
-#          COVERALLS_PARALLEL: true
-#          COVERALLS_SERVICE_JOB_ID: ${{ github.run_id }}
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
         with:
@@ -56,10 +49,6 @@ jobs:
     steps:
       - name: Set up Python
         uses: actions/setup-python@v5
-#      - name: Finalise Coverage
-#        run: python -m pip install --upgrade coveralls && coveralls --service=github --finish
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Coveralls Finished
         uses: coverallsapp/github-action@v2
         with:
