@@ -92,5 +92,6 @@ tests:
 		tests/tests.py \
 		tests/tests_utilities.py \
 		--cov=zappa
+		--cov-report=xml \
 		--durations=0
 
