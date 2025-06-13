@@ -909,6 +909,7 @@ to change Zappa's behavior. Use these at your own risk!
               "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
             }
         },
+        "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
         "async_response_table": "your_dynamodb_table_name",  // the DynamoDB table name to use for captured async responses; defaults to None (can't capture)

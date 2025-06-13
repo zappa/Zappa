@@ -239,10 +239,44 @@ ZIP_EXCLUDES = [
 # the Lambda.
 # See: https://github.com/Miserlou/Zappa/pull/1730
 ALB_LAMBDA_ALIAS = "current-alb-version"
+X86_ARCHITECTURE = "x86_64"
+ARM_ARCHITECTURE = "arm64"
+VALID_ARCHITECTURES = (X86_ARCHITECTURE, ARM_ARCHITECTURE)
 
-##
-# Classes
-##
+
+def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) -> re.Pattern:
+    # Support PEP600 (https://peps.python.org/pep-0600/)
+    # The wheel filename is {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+    runtime_major_version, runtime_minor_version = runtime[6:].split(".")
+    python_tag = f"cp{runtime_major_version}{runtime_minor_version}"  # python3.13 -> cp313
+    manylinux_legacy_tags = ("manylinux2014", "manylinux2010", "manylinux1")
+    if architecture == X86_ARCHITECTURE:
+        valid_platform_tags = [X86_ARCHITECTURE]
+    elif architecture == ARM_ARCHITECTURE:
+        valid_platform_tags = [ARM_ARCHITECTURE, "aarch64"]
+    else:
+        raise ValueError(f"Invalid 'architecture', must be one of {VALID_ARCHITECTURES}, got: {architecture}")
+
+    manylinux_wheel_file_match = (
+        rf'^.*{python_tag}-(manylinux_\d+_\d+_({"|".join(valid_platform_tags)})[.])?'
+        rf'({"|".join(manylinux_legacy_tags)})_({"|".join(valid_platform_tags)})[.]whl$'
+    )
+
+    # The 'abi3' tag is a compiled distribution format designed for compatibility across multiple Python 3 versions.
+    # An abi3 wheel is built against the stable ABI (Application Binary Interface) of a minimum supported Python version.
+    # -- make sure cp3XX version is <= to the runtime version (runtime_minor_version)
+    minimum_minor_version = 5
+    abi_valid_python_minor_versions = [str(i) for i in range(minimum_minor_version, int(runtime_minor_version) + 1)]
+    manylinux_suffixes = [r"_\d+_\d+", r"manylinux_\d+_\d+"]
+    manylinux_suffixes.extend(manylinux_legacy_tags)
+    manylinux_wheel_abi3_file_match = (
+        # rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_({"|".join(valid_platform_tags)}).whl$'
+        rf'^.*cp3({"|".join(abi_valid_python_minor_versions)})-abi3-'
+        rf'manylinux(({"|".join(manylinux_suffixes)})_({"".join(valid_platform_tags)})(\.|))+.whl$'
+    )
+    combined_match_pattern = rf"({manylinux_wheel_file_match})|({manylinux_wheel_abi3_file_match})"
+    manylinux_wheel_file_match_pattern = re.compile(combined_match_pattern)
+    return manylinux_wheel_file_match_pattern
 
 
 class Zappa:
@@ -263,7 +297,7 @@ class Zappa:
     apigateway_policy = None
     cloudwatch_log_levels = ["OFF", "ERROR", "INFO"]
     xray_tracing = False
-
+    architecture = None
     ##
     # Credentials
     ##
@@ -283,6 +317,7 @@ class Zappa:
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
+        architecture=None,
     ):
         """
         Instantiate this new Zappa instance, loading any custom credentials if necessary.
@@ -304,14 +339,14 @@ class Zappa:
 
         self.runtime = runtime
 
-        # TODO: Support PEP600 properly (https://peps.python.org/pep-0600/)
-        self.manylinux_suffix_start = f"cp{self.runtime[6:].replace('.', '')}"
-        self.manylinux_suffixes = ("_2_24", "2014", "2010", "1")
-        # TODO: Support aarch64 architecture
-        self.manylinux_wheel_file_match = re.compile(
-            rf'^.*{self.manylinux_suffix_start}-(manylinux_\d+_\d+_x86_64[.])?manylinux({"|".join(self.manylinux_suffixes)})_x86_64[.]whl$'  # noqa: E501
-        )
-        self.manylinux_wheel_abi3_file_match = re.compile(r"^.*cp3.-abi3-manylinux.*_x86_64[.]whl$")
+        if not architecture:
+            architecture = X86_ARCHITECTURE
+        if architecture not in VALID_ARCHITECTURES:
+            raise ValueError(f"Invalid architecture '{architecture}'. Must be one of: {VALID_ARCHITECTURES}")
+
+        self.architecture = architecture
+
+        self.manylinux_wheel_file_match = build_manylinux_wheel_file_match_pattern(runtime, architecture)
 
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
@@ -754,7 +789,7 @@ class Zappa:
                 # use the compiled bytecode anyway..
                 if filename[-3:] == ".py" and root[-10:] != "migrations":
                     abs_filename = os.path.join(root, filename)
-                    abs_pyc_filename = abs_filename + "c"
+                    abs_pyc_filename = f"{abs_filename}c"  # XXX.pyc
                     if os.path.isfile(abs_pyc_filename):
                         # but only if the pyc is older than the py,
                         # otherwise we'll deploy outdated code!
@@ -870,34 +905,33 @@ class Zappa:
         """
         Gets the locally stored version of a manylinux wheel. If one does not exist, the function downloads it.
         """
-        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
+        cached_wheels_dir = Path(tempfile.gettempdir()) / "cached_wheels"
 
-        if not os.path.isdir(cached_wheels_dir):
-            os.makedirs(cached_wheels_dir)
+        if not cached_wheels_dir.is_dir() or not cached_wheels_dir.exists():
+            cached_wheels_dir.mkdir(parents=True, exist_ok=True)
         else:
             # Check if we already have a cached copy
+            # - get package name from prefix of the wheel file
             wheel_name = re.sub(r"[^\w\d.]+", "_", package_name, flags=re.UNICODE)
-            wheel_file = f"{wheel_name}-{package_version}-*_x86_64.whl"
-            wheel_path = os.path.join(cached_wheels_dir, wheel_file)
-
-            for pathname in glob.iglob(wheel_path):
-                if re.match(self.manylinux_wheel_file_match, pathname):
-                    logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
-                    return pathname
-                elif re.match(self.manylinux_wheel_abi3_file_match, pathname):
-                    for manylinux_suffix in self.manylinux_suffixes:
-                        if f"manylinux{manylinux_suffix}_x86_64" in pathname:
-                            logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
-                            return pathname
+            valid_architectures = (X86_ARCHITECTURE,)
+            if self.architecture == ARM_ARCHITECTURE:
+                valid_architectures = (ARM_ARCHITECTURE, "aarch64")
+            for arch in valid_architectures:
+                wheel_file_pattern = f"{wheel_name}-{package_version}-*_{arch}.whl"
+                for pathname in cached_wheels_dir.glob(wheel_file_pattern):
+                    if self.manylinux_wheel_file_match.match(str(pathname)):
+                        logger.info(f" - {package_name}=={package_version}: Using locally cached manylinux wheel")
+                        return pathname
 
         # The file is not cached, download it.
         wheel_url, filename = self.get_manylinux_wheel_url(package_name, package_version)
         if not wheel_url:
+            logger.warning(f" - {package_name}=={package_version}: No manylinux wheel found for this package")
             return None
 
-        wheel_path = os.path.join(cached_wheels_dir, filename)
+        wheel_path = cached_wheels_dir / filename
         logger.info(f" - {package_name}=={package_version}: Downloading")
-        with open(wheel_path, "wb") as f:
+        with wheel_path.open("wb") as f:
             self.download_url_with_progress(wheel_url, f, disable_progress)
 
         if not zipfile.is_zipfile(wheel_path):
@@ -917,8 +951,8 @@ class Zappa:
         every time.
         """
         cached_pypi_info_dir = Path(tempfile.gettempdir()) / "cached_pypi_info"
-        if not cached_pypi_info_dir.is_dir():
-            os.makedirs(cached_pypi_info_dir)
+        if not cached_pypi_info_dir.exists():
+            cached_pypi_info_dir.mkdir(parents=True, exist_ok=True)
 
         # Even though the metadata is for the package, we save it in a
         # filename that includes the package's version. This helps in
@@ -926,14 +960,14 @@ class Zappa:
         # version of the package.
         # Related: https://github.com/Miserlou/Zappa/issues/899
         data = None
-        json_file_name = "{0!s}-{1!s}.json".format(package_name, package_version)
+        json_file_name = f"{package_name!s}-{package_version!s}.json"
         json_file_path = cached_pypi_info_dir / json_file_name
         if json_file_path.exists():
             with json_file_path.open("rb") as metafile:
                 data = json.load(metafile)
 
         if not data or ignore_cache:
-            url = "https://pypi.python.org/pypi/{}/json".format(package_name)
+            url = f"https://pypi.python.org/pypi/{package_name}/json"
             try:
                 res = requests.get(url, timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)))
                 data = res.json()
@@ -949,14 +983,10 @@ class Zappa:
             return None, None
 
         for f in data["releases"][package_version]:
-            if re.match(self.manylinux_wheel_file_match, f["filename"]):
+            if self.manylinux_wheel_file_match.match(f["filename"]):
                 # Since we have already lowered package names in get_installed_packages
                 # manylinux caching is not working for packages with capital case in names like MarkupSafe
                 return f["url"], f["filename"].lower()
-            elif re.match(self.manylinux_wheel_abi3_file_match, f["filename"]):
-                for manylinux_suffix in self.manylinux_suffixes:
-                    if f"manylinux{manylinux_suffix}_x86_64" in f["filename"]:
-                        return f["url"], f["filename"].lower()
         return None, None
 
     ##
@@ -1126,6 +1156,8 @@ class Zappa:
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
             SnapStart={"ApplyOn": snap_start if snap_start else "None"},
             Layers=layers,
+            # zappa currently only supports a single architecture, and uses a str value internally
+            Architectures=[self.architecture],
         )
         if not docker_image_uri:
             kwargs["Runtime"] = runtime
