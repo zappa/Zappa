@@ -91,6 +91,7 @@ tests:
 		tests/tests_async.py \
 		tests/tests.py \
 		tests/tests_utilities.py \
-		--cov=zappa
+		--cov=zappa \
+		--cov-report=xml \
 		--durations=0
 
