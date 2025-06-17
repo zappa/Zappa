@@ -1415,6 +1415,79 @@ class TestZappa(unittest.TestCase):
         zappa_cli = ZappaCLI()
         return
 
+    def test_zappacli_settings(self):
+        """
+        Test the settings command functionality.
+        """
+        zappa_cli = ZappaCLI()
+
+        # Test basic settings command with default stage
+        with redirect_stdout(io.StringIO()) as f:
+            zappa_cli.handle(["settings"])
+            output = f.getvalue()
+
+        # Parse JSON output and verify structure
+        settings = json.loads(output)
+        self.assertIn("dev", settings)
+        self.assertEqual(settings["dev"]["app_function"], "app.app")
+        self.assertEqual(settings["dev"]["aws_region"], "us-east-1")
+
+        # Test settings command with custom stage
+        with redirect_stdout(io.StringIO()) as f:
+            zappa_cli.handle(["settings", "--stage", "production"])
+            output = f.getvalue()
+
+        settings = json.loads(output)
+        self.assertIn("production", settings)
+        self.assertEqual(settings["production"]["app_function"], "app.app")
+        self.assertEqual(settings["production"]["aws_region"], "us-east-1")
+
+        # Test settings command with config arguments
+        with redirect_stdout(io.StringIO()) as f:
+            zappa_cli.handle(["settings", "--config", "binary_support=true", "--config", "memory_size=512"])
+            output = f.getvalue()
+
+        settings = json.loads(output)
+        self.assertIn("dev", settings)
+        self.assertEqual(settings["dev"]["binary_support"], True)
+        self.assertEqual(settings["dev"]["memory_size"], 512)
+
+        # Test settings command with environment variables
+        original_env = os.environ.copy()
+        try:
+            os.environ["ZAPPA_DEBUG"] = "true"
+            os.environ["ZAPPA_TIMEOUT_SECONDS"] = "30"
+
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["debug"], True)
+            self.assertEqual(settings["dev"]["timeout_seconds"], 30)
+        finally:
+            # Restore original environment
+            os.environ.clear()
+            os.environ.update(original_env)
+
+        # Test CLI arguments take precedence over environment variables
+        try:
+            os.environ["ZAPPA_BINARY_SUPPORT"] = "false"
+
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings", "--config", "binary_support=true"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            # CLI argument should override environment variable
+            self.assertEqual(settings["dev"]["binary_support"], True)
+        finally:
+            # Restore original environment
+            os.environ.clear()
+            os.environ.update(original_env)
+
     def test_load_settings(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"

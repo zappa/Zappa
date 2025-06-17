@@ -261,6 +261,17 @@ class ZappaCLI:
         subparsers.add_parser("init", help="Initialize Zappa app.")
 
         ##
+        # Settings
+        ##
+        settings_parser = subparsers.add_parser(
+            "settings", help="Create zappa_settings.json file with optional configuration."
+        )
+        settings_parser.add_argument(
+            "--config", action="append", help="Configuration setting in format key=value (e.g., --config binary_support=false)"
+        )
+        settings_parser.add_argument("--stage", default="dev", help="Stage environment name (default: dev)")
+
+        ##
         # Package
         ##
         package_parser = subparsers.add_parser(
@@ -493,6 +504,10 @@ class ZappaCLI:
         # before a project has been initialized.)
         if self.command == "init":
             self.init()
+            return
+
+        if self.command == "settings":
+            self.settings()
             return
 
         # Make sure there isn't a new version available
@@ -1988,6 +2003,62 @@ class ZappaCLI:
         click.echo(" ~ Team " + click.style("Zappa", bold=True) + "!")
 
         return
+
+    def settings(self):
+        """
+        Create zappa_settings.json configuration with optional command-line arguments and environment variables.
+        """
+        import json
+        import os
+
+        # Get stage from command arguments, default to 'dev'
+        stage = self.vargs.get("stage", "dev")
+
+        # Base configuration structure
+        settings = {stage: {"app_function": "app.app", "aws_region": "us-east-1"}}
+
+        # Read environment variables with ZAPPA_ prefix
+        env_config = {}
+        for key, value in os.environ.items():
+            if key.startswith("ZAPPA_"):
+                config_key = key[6:].lower()  # Remove ZAPPA_ prefix and convert to lowercase
+                # Convert string values to appropriate types
+                if value.lower() in ["true", "false"]:
+                    env_config[config_key] = value.lower() == "true"
+                elif value.isdigit():
+                    env_config[config_key] = int(value)
+                else:
+                    env_config[config_key] = value
+
+        # Apply environment variables to settings
+        settings[stage].update(env_config)
+
+        # Parse command-line --config arguments (these take precedence)
+        config_args = self.vargs.get("config")
+        if config_args:
+            for config_item in config_args:
+                if "=" in config_item:
+                    key, value = config_item.split("=", 1)
+                    # Convert string values to appropriate types
+                    if value.lower() in ["true", "false"]:
+                        settings[stage][key] = value.lower() == "true"
+                    elif value.isdigit():
+                        settings[stage][key] = int(value)
+                    else:
+                        settings[stage][key] = value
+                else:
+                    click.echo(f"Error: Invalid config format '{config_item}'. Use key=value format.", err=True)
+                    return 1
+
+        # Output JSON to stdout with sorted keys
+        try:
+            json_output = json.dumps(settings, indent=4, sort_keys=True)
+            click.echo(json_output)
+        except Exception as e:
+            click.echo(f"Error: Failed to generate JSON output: {e}", err=True)
+            return 1
+
+        return 0
 
     def certify(self, no_confirm=True, manual=False):
         """
