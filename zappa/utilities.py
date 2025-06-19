@@ -536,23 +536,27 @@ class SNSEventSource(BaseEventSource):
             LOG.exception("Unable to add SNS event source")
 
     def remove(self, function_arn: str) -> bool:
-        # Remove Lambda permission
-        try:
-            self._lambda.remove_permission(FunctionName=function_arn, StatementId=f"sns-{self.arn.split(':')[-1]}")
-        except botocore.exceptions.ClientError:
-            pass
-
-        # Unsubscribe from topic
+        # Check if subscription exists and unsubscribe
+        subscription_removed = False
         try:
             response = self._sns.list_subscriptions_by_topic(TopicArn=self.arn)
             for subscription in response["Subscriptions"]:
                 if subscription["Endpoint"] == function_arn:
                     self._sns.unsubscribe(SubscriptionArn=subscription["SubscriptionArn"])
                     LOG.debug("Removed SNS subscription")
-                    return True
+                    subscription_removed = True
+                    break
         except Exception:
             LOG.exception("Unable to remove SNS event source")
-        return False
+
+        # Only remove Lambda permission if we actually had a subscription
+        if subscription_removed:
+            try:
+                self._lambda.remove_permission(FunctionName=function_arn, StatementId=f"sns-{self.arn.split(':')[-1]}")
+            except Exception as e:
+                LOG.warning(f"Failed to remove Lambda permission for SNS event source {self.arn}: {e.args}")
+
+        return subscription_removed
 
     def status(self, function_arn: str) -> Optional[Dict[str, Any]]:
         try:
