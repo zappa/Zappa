@@ -815,13 +815,15 @@ class Zappa:
                 if archive_format == "zip":
                     # Actually put the file into the proper place in the zip
                     # Related: https://github.com/Miserlou/Zappa/pull/716
-                    zipi = zipfile.ZipInfo(os.path.join(root.replace(str(temp_project_path), "").lstrip(os.sep), filename))
+                    rel_root = Path(root).relative_to(temp_project_path)
+                    zipi = zipfile.ZipInfo(str(rel_root / filename))
                     zipi.create_system = 3
                     zipi.external_attr = 0o755 << int(16)  # Is this P2/P3 functional?
                     with open(os.path.join(root, filename), "rb") as f:
                         archivef.writestr(zipi, f.read(), compression_method)
                 elif archive_format == "tarball":
-                    tarinfo = tarfile.TarInfo(os.path.join(root.replace(str(temp_project_path), "").lstrip(os.sep), filename))
+                    rel_root = Path(root).relative_to(temp_project_path)
+                    tarinfo = tarfile.TarInfo(str(rel_root / filename))
                     tarinfo.mode = 0o755
 
                     stat = os.stat(os.path.join(root, filename))
@@ -842,10 +844,8 @@ class Zappa:
                     open(tmp_init, "a").close()
                     os.chmod(tmp_init, 0o755)
 
-                    arcname = os.path.join(
-                        root.replace(str(temp_project_path), ""),
-                        os.path.join(root.replace(str(temp_project_path), ""), "__init__.py"),
-                    )
+                    rel_root = Path(root).relative_to(temp_project_path)
+                    arcname = str(rel_root / "__init__.py")
                     if archive_format == "zip":
                         archivef.write(tmp_init, arcname)
                     elif archive_format == "tarball":
