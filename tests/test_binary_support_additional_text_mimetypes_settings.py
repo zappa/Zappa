@@ -1,14 +1,16 @@
+from typing import Dict, List, Optional
+
 API_STAGE = "dev"
 APP_FUNCTION = "app"
 APP_MODULE = "tests.test_wsgi_binary_support_app"
 BINARY_SUPPORT = True
-CONTEXT_HEADER_MAPPINGS = {}
+CONTEXT_HEADER_MAPPINGS: Dict[str, str] = {}
 DEBUG = "True"
-DJANGO_SETTINGS = None
+DJANGO_SETTINGS: Optional[str] = None
 DOMAIN = "api.example.com"
-ENVIRONMENT_VARIABLES = {}
+ENVIRONMENT_VARIABLES: Dict[str, str] = {}
 LOG_LEVEL = "DEBUG"
 PROJECT_NAME = "binary_support_settings"
-COGNITO_TRIGGER_MAPPING = {}
-EXCEPTION_HANDLER = None
-ADDITIONAL_TEXT_MIMETYPES = ["application/vnd.oai.openapi"]
+COGNITO_TRIGGER_MAPPING: Dict[str, str] = {}
+EXCEPTION_HANDLER: Optional[str] = None
+ADDITIONAL_TEXT_MIMETYPES: List[str] = ["application/vnd.oai.openapi"]

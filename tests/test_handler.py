@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, Tuple
 
 from mock import Mock
 
@@ -8,35 +9,35 @@ from zappa.utilities import merge_headers
 from .utils import is_base64
 
 
-def no_args():
+def no_args() -> None:
     return
 
 
-def one_arg(first):
+def one_arg(first: Any) -> Any:
     return first
 
 
-def two_args(first, second):
+def two_args(first: Any, second: Any) -> Tuple[Any, Any]:
     return first, second
 
 
-def var_args(*args):
+def var_args(*args: Any) -> Tuple[Any, ...]:
     return args
 
 
-def var_args_with_one(first, *args):
+def var_args_with_one(first: Any, *args: Any) -> Tuple[Any, Any]:
     return first, args[0]
 
 
-def unsupported(first, second, third):
+def unsupported(first: Any, second: Any, third: Any) -> Tuple[Any, Any, Any]:
     return first, second, third
 
 
-def raises_exception(*args, **kwargs):
+def raises_exception(*args: Any, **kwargs: Any) -> None:
     raise Exception("app exception")
 
 
-def handle_bot_intent(event, context):
+def handle_bot_intent(event: Any, context: Any) -> str:
     return "Success"
 
 
