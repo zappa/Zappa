@@ -43,11 +43,11 @@ DEFAULT_TEXT_MIMETYPES = (
 
 
 def copytree(
-    src: str,
-    dst: str,
+    src: Path,
+    dst: Path,
     metadata: bool = True,
     symlinks: bool = False,
-    ignore: Optional[Callable[[str, List[str]], List[str]]] = None,
+    ignore: Optional[Callable[[Path, List[str]], List[str]]] = None,
 ) -> None:
     """
     This is a contributed re-implementation of 'copytree' that
@@ -73,12 +73,12 @@ def copytree(
                 except Exception:
                     LOG.warning(f"Unable to perform chmod on: {d}")
         elif s.is_dir():
-            copytree(str(s), str(d), metadata, symlinks, ignore)
+            copytree(s, d, metadata, symlinks, ignore)
         else:
             shutil.copy2(str(s), str(d)) if metadata else shutil.copy(str(s), str(d))
 
-    src_path = Path(src)
-    dst_path = Path(dst)
+    src_path = src
+    dst_path = dst
 
     try:
         lst = [p.name for p in src_path.iterdir()]
@@ -91,7 +91,7 @@ def copytree(
         return
 
     if ignore:
-        excl = ignore(src, lst)
+        excl = ignore(src_path, lst)
         lst = [x for x in lst if x not in excl]
 
     for item in lst:

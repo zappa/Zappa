@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -79,8 +78,8 @@ class GeneralUtilitiesTestCase(unittest.TestCase):
                     # are copied to the temp package directory
                     # find_packages() is called on the egg_path to find the packages
                     mock_copytree.assert_called_with(
-                        os.path.join(egg_path, "package"),
-                        os.path.join(temp_package_dir, "package"),
+                        Path(egg_path) / "package",
+                        temp_package_dir / "package",
                         metadata=False,
                         symlinks=False,
                     )

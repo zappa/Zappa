@@ -436,8 +436,8 @@ class Zappa:
                 for pkg in pkgs:
                     egg_package_path = Path(egg_path) / pkg
                     copytree(
-                        str(egg_package_path.resolve()),
-                        str(temp_package_path / pkg),
+                        egg_package_path.resolve(),
+                        temp_package_path / pkg,
                         metadata=False,
                         symlinks=False,
                     )
@@ -497,7 +497,7 @@ class Zappa:
             #     os.path.join(venv_site_packages_dir, z),
             # )
             dest = venv_site_packages_dir / zappa_thing.name
-            copytree(str(zappa_thing.resolve()), str(dest.resolve()))
+            copytree(zappa_thing.resolve(), dest.resolve())
 
         # Use pip to download zappa's dependencies.
         # Copying from current venv causes issues with things like PyYAML that installs as yaml
@@ -598,7 +598,7 @@ class Zappa:
             venv = self.get_current_venv()
 
         build_time = str(int(time.time()))
-        cwd = os.getcwd()
+        cwd = Path.cwd()
         if not output:
             if archive_format == "zip":
                 archive_fname = prefix + "-" + build_time + ".zip"
@@ -606,7 +606,7 @@ class Zappa:
                 archive_fname = prefix + "-" + build_time + ".tar.gz"
         else:
             archive_fname = output
-        archive_path = os.path.join(cwd, archive_fname)
+        archive_path = cwd / archive_fname
 
         # Files that should be excluded from the zip
         if exclude is None:
@@ -616,7 +616,7 @@ class Zappa:
             exclude_glob = list()
 
         # Exclude the zip itself
-        exclude.append(archive_path)
+        exclude.append(str(archive_path))
 
         # Make sure that 'concurrent' is always forbidden.
         # https://github.com/Miserlou/Zappa/issues/827
@@ -701,8 +701,8 @@ class Zappa:
         if minify:
             excludes = ZIP_EXCLUDES + exclude
             copytree(
-                str(site_packages.resolve()),
-                str(temp_package_path.resolve()),
+                site_packages.resolve(),
+                temp_package_path.resolve(),
                 metadata=False,
                 symlinks=False,
                 ignore=shutil.ignore_patterns(*excludes),
@@ -717,14 +717,14 @@ class Zappa:
             if minify:
                 excludes = ZIP_EXCLUDES + exclude
                 copytree(
-                    str(site_packages_64.resolve()),
-                    str(temp_package_path.resolve()),
+                    site_packages_64.resolve(),
+                    temp_package_path.resolve(),
                     metadata=False,
                     symlinks=False,
                     ignore=shutil.ignore_patterns(*excludes),
                 )
             else:
-                copytree(str(site_packages_64.resolve()), str(temp_package_path.resolve()), metadata=False, symlinks=False)
+                copytree(site_packages_64.resolve(), temp_package_path.resolve(), metadata=False, symlinks=False)
 
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
@@ -777,11 +777,11 @@ class Zappa:
                 compression_method = zipfile.ZIP_DEFLATED
             except ImportError:  # pragma: no cover
                 compression_method = zipfile.ZIP_STORED
-            archivef = zipfile.ZipFile(archive_path, "w", compression_method)
+            archivef = zipfile.ZipFile(str(archive_path), "w", compression_method)
 
         elif archive_format == "tarball":
             print("Packaging project as gzipped tarball.")
-            archivef = tarfile.open(archive_path, "w|gz")
+            archivef = tarfile.open(str(archive_path), "w|gz")
 
         for root, dirs, files in os.walk(temp_project_path):
             for filename in files:
