@@ -2301,13 +2301,7 @@ class ZappaCLI:
         Returns the loaded Zappa object.
         """
 
-        # Ensure we're passed a valid settings file.
-        if not settings_file:
-            settings_file = self.get_json_or_yaml_settings()
-        if not os.path.isfile(settings_file):
-            raise ClickException("Please configure your zappa_settings file.")
-
-        # Load up file
+        # Load up settings (from file or environment)
         self.load_settings_file(settings_file)
 
         # Make sure that this stage is our settings
@@ -2451,23 +2445,61 @@ class ZappaCLI:
 
         return self.zappa
 
+    def generate_settings_from_environment(self, stage=None):
+        """
+        Generate settings from environment variables with ZAPPA_ prefix.
+        Returns a dict with stage configuration, or empty dict if no ZAPPA_ vars found.
+        """
+        if not stage:
+            stage = self.stage_env or "dev"
+
+        settings = {stage: {}}
+        has_zappa_vars = False
+
+        # Read environment variables with ZAPPA_ prefix
+        for key, value in os.environ.items():
+            if key.startswith("ZAPPA_"):
+                has_zappa_vars = True
+                config_key = key[6:].lower()  # Remove ZAPPA_ prefix and convert to lowercase
+                # Convert string values to appropriate types
+                if value.lower() in ["true", "false"]:
+                    settings[stage][config_key] = value.lower() == "true"
+                elif value.isdigit():
+                    settings[stage][config_key] = int(value)
+                else:
+                    settings[stage][config_key] = value
+
+        # Only set defaults if we have ZAPPA_ environment variables
+        if has_zappa_vars:
+            # Set required defaults if not provided
+            if "app_function" not in settings[stage] and not settings[stage].get("django_settings"):
+                settings[stage]["app_function"] = "app.app"
+            if "aws_region" not in settings[stage]:
+                settings[stage]["aws_region"] = "us-east-1"
+        else:
+            # Return empty dict if no ZAPPA_ environment variables found
+            settings = {}
+
+        return settings
+
     def get_json_or_yaml_settings(self, settings_name="zappa_settings"):
         """
         Return zappa_settings path as JSON or YAML (or TOML), as appropriate.
+        Returns None if no settings file exists.
         """
         zs_json = settings_name + ".json"
         zs_yml = settings_name + ".yml"
         zs_yaml = settings_name + ".yaml"
         zs_toml = settings_name + ".toml"
 
-        # Must have at least one
+        # Return None if no settings file exists
         if (
             not os.path.isfile(zs_json)
             and not os.path.isfile(zs_yml)
             and not os.path.isfile(zs_yaml)
             and not os.path.isfile(zs_toml)
         ):
-            raise ClickException("Please configure a zappa_settings file or call `zappa init`.")
+            return None
 
         # Prefer JSON
         if os.path.isfile(zs_json):
@@ -2483,33 +2515,44 @@ class ZappaCLI:
 
     def load_settings_file(self, settings_file=None):
         """
-        Load our settings file.
+        Load our settings file. If no settings file exists, attempt to generate
+        settings from environment variables.
         """
 
         if not settings_file:
             settings_file = self.get_json_or_yaml_settings()
-        if not os.path.isfile(settings_file):
-            raise ClickException("Please configure your zappa_settings file or call `zappa init`.")
 
-        path, ext = os.path.splitext(settings_file)
-        if ext == ".yml" or ext == ".yaml":
-            with open(settings_file) as yaml_file:
-                try:
-                    self.zappa_settings = yaml.safe_load(yaml_file)
-                except ValueError:  # pragma: no cover
-                    raise ValueError("Unable to load the Zappa settings YAML. It may be malformed.")
-        elif ext == ".toml":
-            with open(settings_file) as toml_file:
-                try:
-                    self.zappa_settings = toml.load(toml_file)
-                except ValueError:  # pragma: no cover
-                    raise ValueError("Unable to load the Zappa settings TOML. It may be malformed.")
+        if settings_file and os.path.isfile(settings_file):
+            # Load from file
+            path, ext = os.path.splitext(settings_file)
+            if ext == ".yml" or ext == ".yaml":
+                with open(settings_file) as yaml_file:
+                    try:
+                        self.zappa_settings = yaml.safe_load(yaml_file)
+                    except ValueError:  # pragma: no cover
+                        raise ValueError("Unable to load the Zappa settings YAML. It may be malformed.")
+            elif ext == ".toml":
+                with open(settings_file) as toml_file:
+                    try:
+                        self.zappa_settings = toml.load(toml_file)
+                    except ValueError:  # pragma: no cover
+                        raise ValueError("Unable to load the Zappa settings TOML. It may be malformed.")
+            else:
+                with open(settings_file) as json_file:
+                    try:
+                        self.zappa_settings = json.load(json_file)
+                    except ValueError:  # pragma: no cover
+                        raise ValueError("Unable to load the Zappa settings JSON. It may be malformed.")
         else:
-            with open(settings_file) as json_file:
-                try:
-                    self.zappa_settings = json.load(json_file)
-                except ValueError:  # pragma: no cover
-                    raise ValueError("Unable to load the Zappa settings JSON. It may be malformed.")
+            # No settings file exists, try to generate from environment
+            self.zappa_settings = self.generate_settings_from_environment()
+
+            # Check if we got valid settings from environment
+            if not self.zappa_settings or not any(self.zappa_settings.values()):
+                raise ClickException(
+                    "No zappa_settings file found and no ZAPPA_ environment variables set.\n"
+                    "Please configure your zappa_settings file, use 'zappa init', or set ZAPPA_ environment variables."
+                )
 
     def create_package(self, output=None, use_zappa_release: Optional[str] = None):
         """

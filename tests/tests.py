@@ -1606,6 +1606,101 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(expected_additional_text_mimetypes, zappa_cli.stage_config["additional_text_mimetypes"])
         self.assertEqual(True, zappa_cli.stage_config["binary_support"])
 
+    def test_load_settings_from_environment_variables(self):
+        """Test loading settings from environment variables when no settings file exists."""
+        # Store original environment variables
+        original_env = {}
+        env_vars_to_test = ["ZAPPA_APP_FUNCTION", "ZAPPA_AWS_REGION", "ZAPPA_MEMORY_SIZE", "ZAPPA_TIMEOUT"]
+        for var in env_vars_to_test:
+            if var in os.environ:
+                original_env[var] = os.environ[var]
+
+        try:
+            # Set test environment variables
+            os.environ["ZAPPA_APP_FUNCTION"] = "myapp.handler"
+            os.environ["ZAPPA_AWS_REGION"] = "us-west-2"
+            os.environ["ZAPPA_MEMORY_SIZE"] = "256"
+            os.environ["ZAPPA_TIMEOUT"] = "30"
+
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "dev"
+
+            # Test generate_settings_from_environment directly
+            settings = zappa_cli.generate_settings_from_environment("dev")
+
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["app_function"], "myapp.handler")
+            self.assertEqual(settings["dev"]["aws_region"], "us-west-2")
+            self.assertEqual(settings["dev"]["memory_size"], 256)
+            self.assertEqual(settings["dev"]["timeout"], 30)
+
+        finally:
+            # Restore original environment
+            for var in env_vars_to_test:
+                if var in original_env:
+                    os.environ[var] = original_env[var]
+                elif var in os.environ:
+                    del os.environ[var]
+
+    def test_load_settings_file_fallback_to_environment(self):
+        """Test that load_settings_file falls back to environment variables when no file exists."""
+        # Store original environment variables
+        original_env = {}
+        env_vars_to_test = ["ZAPPA_APP_FUNCTION", "ZAPPA_AWS_REGION"]
+        for var in env_vars_to_test:
+            if var in os.environ:
+                original_env[var] = os.environ[var]
+
+        try:
+            # Set minimal environment variables
+            os.environ["ZAPPA_APP_FUNCTION"] = "testapp.handler"
+            os.environ["ZAPPA_AWS_REGION"] = "eu-west-1"
+
+            zappa_cli = ZappaCLI()
+
+            # Mock get_json_or_yaml_settings to return None (no file found)
+            with mock.patch.object(zappa_cli, "get_json_or_yaml_settings", return_value=None):
+                zappa_cli.load_settings_file()
+
+                # Verify settings were loaded from environment
+                self.assertIsNotNone(zappa_cli.zappa_settings)
+                self.assertIn("dev", zappa_cli.zappa_settings)  # default stage
+                self.assertEqual(zappa_cli.zappa_settings["dev"]["app_function"], "testapp.handler")
+                self.assertEqual(zappa_cli.zappa_settings["dev"]["aws_region"], "eu-west-1")
+
+        finally:
+            # Restore original environment
+            for var in env_vars_to_test:
+                if var in original_env:
+                    os.environ[var] = original_env[var]
+                elif var in os.environ:
+                    del os.environ[var]
+
+    def test_load_settings_file_no_file_no_environment(self):
+        """Test that load_settings_file raises exception when no file and no environment variables exist."""
+        # Store and clear relevant environment variables
+        original_env = {}
+        zappa_env_vars = [var for var in os.environ.keys() if var.startswith("ZAPPA_")]
+        for var in zappa_env_vars:
+            original_env[var] = os.environ[var]
+            del os.environ[var]
+
+        try:
+            zappa_cli = ZappaCLI()
+
+            # Mock get_json_or_yaml_settings to return None (no file found)
+            with mock.patch.object(zappa_cli, "get_json_or_yaml_settings", return_value=None):
+                with self.assertRaises(ClickException) as cm:
+                    zappa_cli.load_settings_file()
+
+                self.assertIn("No zappa_settings file found", str(cm.exception))
+                self.assertIn("no ZAPPA_ environment variables", str(cm.exception))
+
+        finally:
+            # Restore original environment
+            for var, value in original_env.items():
+                os.environ[var] = value
+
     def test_settings_extension(self):
         """
         Make sure Zappa uses settings in the proper order: JSON, TOML, YAML.
