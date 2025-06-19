@@ -3,7 +3,6 @@ Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
 import getpass
-import glob
 import hashlib
 import json
 import logging
@@ -645,7 +644,7 @@ class Zappa:
             )
 
         # First, do the project..
-        temp_project_path = tempfile.mkdtemp(prefix="zappa-project")
+        temp_project_path = Path(tempfile.mkdtemp(prefix="zappa-project"))
 
         if not slim_handler:
             # Slim handler does not take the project files.
@@ -662,18 +661,18 @@ class Zappa:
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
             for glob_path in exclude_glob:
-                for path in glob.glob(os.path.join(temp_project_path, glob_path)):
-                    try:
-                        if str(path).startswith(temp_project_path):
-                            os.remove(path)
-                    except OSError:  # is a directory
-                        shutil.rmtree(path)
+                exclude_glob_path = temp_project_path / glob_path
+                for path in exclude_glob_path.glob("*"):
+                    if path.exists() and path.is_file():
+                        path.unlink()
+                    elif path.exists() and path.is_dir():
+                        shutil.rmtree(str(path))
 
         # If a handler_file is supplied, copy that to the root of the package,
         # because that's where AWS Lambda looks for it. It can't be inside a package.
         if handler_file:
             filename = handler_file.split(os.sep)[-1]
-            shutil.copy(handler_file, os.path.join(temp_project_path, filename))
+            shutil.copy(handler_file, str(temp_project_path / filename))
 
         # Create and populate package ID file and write to temp project path
         package_info = {}
@@ -681,13 +680,13 @@ class Zappa:
         package_info["build_time"] = build_time
         package_info["build_platform"] = os.sys.platform
         package_info["build_user"] = getpass.getuser()
-        package_id_file = open(os.path.join(temp_project_path, "package_info.json"), "w")
-        dumped = json.dumps(package_info, indent=4)
-        try:
-            package_id_file.write(dumped)
-        except TypeError:  # This is a Python 2/3 issue. TODO: Make pretty!
-            package_id_file.write(str(dumped))
-        package_id_file.close()
+        package_info_filepath = temp_project_path / "package_info.json"
+        with package_info_filepath.open("w", encoding="utf-8") as package_id_file:
+            dumped = json.dumps(package_info, indent=4)
+            try:
+                package_id_file.write(dumped)
+            except TypeError:  # This is a Python 2/3 issue. TODO: Make pretty!
+                package_id_file.write(str(dumped))
 
         # Then, do site site-packages..
         egg_links: list[Path] = []
@@ -750,11 +749,11 @@ class Zappa:
                         # Otherwise try to use manylinux packages from PyPi..
                         # Related: https://github.com/Miserlou/Zappa/issues/398
                         shutil.rmtree(
-                            os.path.join(temp_project_path, installed_package_name),
+                            str(temp_project_path / installed_package_name),
                             ignore_errors=True,
                         )
                         with zipfile.ZipFile(cached_wheel_path) as zfile:
-                            zfile.extractall(temp_project_path)
+                            zfile.extractall(str(temp_project_path))
 
             except Exception as e:
                 print(e)
@@ -762,12 +761,14 @@ class Zappa:
 
         # Cleanup
         for glob_path in exclude_glob:
-            for path in glob.glob(os.path.join(temp_project_path, glob_path)):
-                try:
-                    if str(path).startswith(temp_project_path):
-                        os.remove(path)
-                except OSError:  # is a directory
-                    shutil.rmtree(path)
+            exclude_glob_path = temp_project_path / glob_path
+            for path in exclude_glob_path.glob("*"):
+                if path.exists() and path.is_file():
+                    path.unlink()
+                elif path.exists() and path.is_dir():
+                    shutil.rmtree(str(path))
+                else:
+                    print(f"WARNING - missing expected: {path.resolve()}")
 
         # Then archive it all up..
         if archive_format == "zip":
@@ -783,7 +784,7 @@ class Zappa:
             print("Packaging project as gzipped tarball.")
             archivef = tarfile.open(str(archive_path), "w|gz")
 
-        for root, dirs, files in os.walk(temp_project_path):
+        for root, dirs, files in os.walk(str(temp_project_path)):
             for filename in files:
                 # Skip .pyc files for Django migrations
                 # https://github.com/Miserlou/Zappa/issues/436
@@ -814,13 +815,13 @@ class Zappa:
                 if archive_format == "zip":
                     # Actually put the file into the proper place in the zip
                     # Related: https://github.com/Miserlou/Zappa/pull/716
-                    zipi = zipfile.ZipInfo(os.path.join(root.replace(temp_project_path, "").lstrip(os.sep), filename))
+                    zipi = zipfile.ZipInfo(os.path.join(root.replace(str(temp_project_path), "").lstrip(os.sep), filename))
                     zipi.create_system = 3
                     zipi.external_attr = 0o755 << int(16)  # Is this P2/P3 functional?
                     with open(os.path.join(root, filename), "rb") as f:
                         archivef.writestr(zipi, f.read(), compression_method)
                 elif archive_format == "tarball":
-                    tarinfo = tarfile.TarInfo(os.path.join(root.replace(temp_project_path, "").lstrip(os.sep), filename))
+                    tarinfo = tarfile.TarInfo(os.path.join(root.replace(str(temp_project_path), "").lstrip(os.sep), filename))
                     tarinfo.mode = 0o755
 
                     stat = os.stat(os.path.join(root, filename))
@@ -837,13 +838,13 @@ class Zappa:
                 dirs[:] = [d for d in dirs if d != root]
             else:
                 if "__init__.py" not in files and not conflicts_with_a_neighbouring_module(root):
-                    tmp_init = os.path.join(temp_project_path, "__init__.py")
+                    tmp_init = str(temp_project_path / "__init__.py")
                     open(tmp_init, "a").close()
                     os.chmod(tmp_init, 0o755)
 
                     arcname = os.path.join(
-                        root.replace(temp_project_path, ""),
-                        os.path.join(root.replace(temp_project_path, ""), "__init__.py"),
+                        root.replace(str(temp_project_path), ""),
+                        os.path.join(root.replace(str(temp_project_path), ""), "__init__.py"),
                     )
                     if archive_format == "zip":
                         archivef.write(tmp_init, arcname)
@@ -854,8 +855,8 @@ class Zappa:
         archivef.close()
 
         # Trash the temp directory
-        shutil.rmtree(temp_project_path)
-        shutil.rmtree(temp_package_path)
+        shutil.rmtree(str(temp_project_path))
+        shutil.rmtree(str(temp_package_path))
         if os.path.isdir(venv) and slim_handler:
             # Remove the temporary handler venv folder
             shutil.rmtree(venv)
