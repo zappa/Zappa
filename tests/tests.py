@@ -1,4 +1,3 @@
-# -*- coding: utf8 -*-
 import base64
 import collections
 import hashlib
@@ -25,6 +24,7 @@ import botocore
 import botocore.stub
 import flask
 import mock
+import pytest
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
@@ -308,34 +308,35 @@ class TestZappa(unittest.TestCase):
 
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.8")
+        sample_package = mock.MagicMock()
+        sample_package.name = "super_package"
+        sample_package.version = "0.1"
+        sample_package.locate_file = mock.MagicMock()
+        sample_package.locate_file.return_value = "/venv/site-packages"
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("super_package", "0.1", "/venv/site-packages")]
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/super_package")])
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=["super_package"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
-
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(z.get_installed_packages("", ""), {"super_package": "0.1"})
+        mock_pip_installed_packages = [sample_package]
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"super_package": "0.1"})
 
     def test_get_current_venv(self, *args):
         z = Zappa()
 
-        expected = "/expected/versions/path"
-
         # VIRTUL_ENV test
+        expected = "/expected/versions/path"
         os_env = {"VIRTUAL_ENV": expected}
         with mock.patch.dict("os.environ", os_env):
             current_venv = z.get_current_venv()
-            self.assertEqual(current_venv, expected)
+            self.assertEqual(str(current_venv), expected)
 
         # pyenv test
         with mock.patch.dict("os.environ", {}, clear=True):
             with mock.patch("subprocess.check_output", side_effect=[None, b"/expected", b"path"]):
                 current_venv = z.get_current_venv()
-                self.assertEqual(current_venv, expected)
+                self.assertEqual(str(current_venv), expected)
 
             with mock.patch("subprocess.check_output", side_effect=OSError("No pyenv!")):
                 current_venv = z.get_current_venv()
@@ -344,39 +345,52 @@ class TestZappa(unittest.TestCase):
     def test_getting_installed_packages_mixed_case_location(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pip packages call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [
-            mock_package("SuperPackage", "0.1", "/Venv/site-packages"),
-            mock_package("SuperPackage64", "0.1", "/Venv/site-packages64"),
-        ]
+        mock_pip_installed_packages = []
+        for package_name, version, location in ("SuperPackage", "0.1", "/Venv/site-packages"), (
+            "SuperPackage64",
+            "0.1",
+            "/Venv/site-packages64",
+        ):
+            sample_package = mock.MagicMock()
+            sample_package.name = package_name
+            sample_package.version = version
+            sample_package.locate_file = mock.MagicMock()
+            sample_package.locate_file.return_value = location
+            mock_pip_installed_packages.append(sample_package)
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=[]):
-                import pkg_resources  # this gets called in non-test Zappa mode
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/SuperPackage")])
 
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(
-                        z.get_installed_packages("/venv/Site-packages", "/venv/site-packages64"),
-                        {
-                            "superpackage": "0.1",
-                            "superpackage64": "0.1",
-                        },
-                    )
+        site_packages64 = mock.MagicMock()
+        site_packages64.is_dir = mock.MagicMock(return_value=True)
+        site_packages64.glob = mock.MagicMock(return_value=[Path("/venv/site-packages64/SuperPackage64")])
+
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(
+                z.get_installed_packages(site_packages, site_packages64),
+                {
+                    "superpackage": "0.1",
+                    "superpackage64": "0.1",
+                },
+            )
 
     def test_getting_installed_packages_mixed_case(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("SuperPackage", "0.1", "/venv/site-packages")]
+        sample_package = mock.MagicMock()
+        sample_package.name = "SuperPackage"
+        sample_package.version = "0.1"
+        sample_package.locate_file = mock.MagicMock()
+        sample_package.locate_file.return_value = "/venv/site-packages"
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=["superpackage"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/superpackage")])
 
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(z.get_installed_packages("", ""), {"superpackage": "0.1"})
+        mock_pip_installed_packages = [sample_package]
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"superpackage": "0.1"})
 
     def test_load_credentials(self):
         z = Zappa()
@@ -1353,26 +1367,49 @@ class TestZappa(unittest.TestCase):
     # CLI
     ##
 
+    # @pytest.fixture(autouse=True)
     def test_zappa_init(self):
+
         # delete if file exists
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+        current_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="zappa_test") as tempdir:
+            try:
+                os.chdir(tempdir)
+                tempdir = Path(tempdir)
 
-        process = subprocess.Popen(
-            ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
-        )
-        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
-        self.assertTrue(os.path.exists("zappa_settings.json"))
+                settings_filepath = tempdir / "zappa_settings.json"
+                if settings_filepath.exists():
+                    settings_filepath.unlink()  # delete the file if it exists
+                assert settings_filepath.exists() is False
 
-        with open("zappa_settings.json", "r") as f:
-            zappa_settings = json.load(f)
-            self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
-            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
-            self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+                zappa_cli = ZappaCLI()
+                with mock.patch("zappa.cli.ZappaCLI._get_init_env", return_value="dev"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_profile", return_value=("default", {"region": "us-west-2"})
+                ), mock.patch("zappa.cli.ZappaCLI._get_init_bucket", return_value="my-zappa-bucket"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_django_settings", return_value="test_settings"
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_global_settings", return_value=["n", False]
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_confirm", return_value="y"
+                ):
+                    zappa_cli.init()
 
-        # delete the file
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+                # make sure the expected `zappa_settings.json` file was created in the current directory
+                self.assertTrue(settings_filepath.exists())
+
+                with settings_filepath.open("r") as f:
+                    zappa_settings = json.load(f)
+                    self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+                    self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
+                    self.assertEqual(
+                        zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+                    )
+
+                # delete the file
+                if os.path.exists("zappa_settings.json"):
+                    os.remove("zappa_settings.json")
+            finally:
+                os.chdir(current_dir)
 
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()
@@ -2281,8 +2318,6 @@ class TestZappa(unittest.TestCase):
         with zipfile.ZipFile(zappa_cli.zip_path, "r") as lambda_zip:
             content = lambda_zip.read("zappa_settings.py")
         zappa_cli.remove_local_zip()
-        # m = re.search("REMOTE_ENV='(.*)'", content)
-        # self.assertEqual(m.group(1), 's3://lmbda-env/dev/env.json')
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "remote_env"
@@ -2292,8 +2327,6 @@ class TestZappa(unittest.TestCase):
         with zipfile.ZipFile(zappa_cli.zip_path, "r") as lambda_zip:
             content = lambda_zip.read("zappa_settings.py")
         zappa_cli.remove_local_zip()
-        # m = re.search("REMOTE_ENV='(.*)'", content)
-        # self.assertEqual(m.group(1), 's3://lmbda-env/prod/env.json')
 
     def test_package_only(self):
         for delete_local_zip in [True, False]:
