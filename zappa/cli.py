@@ -22,7 +22,7 @@ import zipfile
 from builtins import bytes, input
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Union
 
 import argcomplete
 import botocore
@@ -38,7 +38,7 @@ from click.globals import push_context
 from dateutil import parser
 
 from . import __version__
-from .core import API_GATEWAY_REGIONS, Zappa
+from .core import API_GATEWAY_REGIONS, DEFAULT_AWS_REGION, Zappa
 from .utilities import (
     check_new_version_available,
     detect_django_settings,
@@ -68,6 +68,7 @@ CUSTOM_SETTINGS = [
 ]
 
 BOTO3_CONFIG_DOCS_URL = "https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration"
+DEFAULT_APP_FUNCTION = "app.app"
 
 
 ##
@@ -2004,51 +2005,74 @@ class ZappaCLI:
 
         return
 
+    def _parse_config_value(self, value: str) -> Union[bool, int, str]:
+        """
+        Parse a configuration value string into the appropriate type.
+        Converts 'true'/'false' to boolean, numeric strings to integers,
+        and returns other values as strings.
+        """
+        if value.lower() in {"true", "false"}:
+            return value.lower() == "true"
+        elif value.isdigit():
+            return int(value)
+        else:
+            return value
+
+    def _get_config_from_environment_and_args(
+        self, env_prefix: str = "ZAPPA_", config_args: Optional[List[str]] = None
+    ) -> Dict[str, Union[bool, int, str]]:
+        """
+        Common method to extract and parse configuration from environment variables
+        and command-line config arguments.
+
+        Args:
+            env_prefix: Prefix for environment variables (default: "ZAPPA_")
+            config_args: List of key=value config arguments from command line
+
+        Returns:
+            dict: Configuration dictionary with parsed values
+        """
+        config: Dict[str, Union[bool, int, str]] = {}
+
+        # Read environment variables with specified prefix
+        for key, value in os.environ.items():
+            if key.startswith(env_prefix):
+                config_key = key[len(env_prefix) :].lower()  # Remove prefix and convert to lowercase
+                config[config_key] = self._parse_config_value(value)
+
+        # Parse command-line config arguments (these take precedence)
+        if config_args:
+            for config_item in config_args:
+                if "=" in config_item:
+                    key, value = config_item.split("=", 1)
+                    config[key] = self._parse_config_value(value)
+                else:
+                    raise ValueError(f"Invalid config format '{config_item}'. Use key=value format.")
+
+        return config
+
     def settings(self):
         """
         Create zappa_settings.json configuration with optional command-line arguments and environment variables.
         """
         import json
-        import os
 
         # Get stage from command arguments, default to 'dev'
         stage = self.vargs.get("stage", "dev")
 
         # Base configuration structure
-        settings = {stage: {"app_function": "app.app", "aws_region": "us-east-1"}}
+        settings = {stage: {"app_function": DEFAULT_APP_FUNCTION, "aws_region": DEFAULT_AWS_REGION}}
 
-        # Read environment variables with ZAPPA_ prefix
-        env_config = {}
-        for key, value in os.environ.items():
-            if key.startswith("ZAPPA_"):
-                config_key = key[6:].lower()  # Remove ZAPPA_ prefix and convert to lowercase
-                # Convert string values to appropriate types
-                if value.lower() in ["true", "false"]:
-                    env_config[config_key] = value.lower() == "true"
-                elif value.isdigit():
-                    env_config[config_key] = int(value)
-                else:
-                    env_config[config_key] = value
+        # Get configuration from environment variables and command-line args
+        try:
+            config_args = self.vargs.get("config")
+            config = self._get_config_from_environment_and_args(env_prefix="ZAPPA_", config_args=config_args)
 
-        # Apply environment variables to settings
-        settings[stage].update(env_config)
-
-        # Parse command-line --config arguments (these take precedence)
-        config_args = self.vargs.get("config")
-        if config_args:
-            for config_item in config_args:
-                if "=" in config_item:
-                    key, value = config_item.split("=", 1)
-                    # Convert string values to appropriate types
-                    if value.lower() in ["true", "false"]:
-                        settings[stage][key] = value.lower() == "true"
-                    elif value.isdigit():
-                        settings[stage][key] = int(value)
-                    else:
-                        settings[stage][key] = value
-                else:
-                    click.echo(f"Error: Invalid config format '{config_item}'. Use key=value format.", err=True)
-                    return 1
+            # Apply configuration to settings
+            settings[stage].update(config)
+        except ValueError as e:
+            click.echo(f"Error: {e}", err=True)
+            return 1
 
         # Output JSON to stdout with sorted keys
         try:
@@ -2445,43 +2469,6 @@ class ZappaCLI:
 
         return self.zappa
 
-    def generate_settings_from_environment(self, stage=None):
-        """
-        Generate settings from environment variables with ZAPPA_ prefix.
-        Returns a dict with stage configuration, or empty dict if no ZAPPA_ vars found.
-        """
-        if not stage:
-            stage = self.stage_env or "dev"
-
-        settings = {stage: {}}
-        has_zappa_vars = False
-
-        # Read environment variables with ZAPPA_ prefix
-        for key, value in os.environ.items():
-            if key.startswith("ZAPPA_"):
-                has_zappa_vars = True
-                config_key = key[6:].lower()  # Remove ZAPPA_ prefix and convert to lowercase
-                # Convert string values to appropriate types
-                if value.lower() in ["true", "false"]:
-                    settings[stage][config_key] = value.lower() == "true"
-                elif value.isdigit():
-                    settings[stage][config_key] = int(value)
-                else:
-                    settings[stage][config_key] = value
-
-        # Only set defaults if we have ZAPPA_ environment variables
-        if has_zappa_vars:
-            # Set required defaults if not provided
-            if "app_function" not in settings[stage] and not settings[stage].get("django_settings"):
-                settings[stage]["app_function"] = "app.app"
-            if "aws_region" not in settings[stage]:
-                settings[stage]["aws_region"] = "us-east-1"
-        else:
-            # Return empty dict if no ZAPPA_ environment variables found
-            settings = {}
-
-        return settings
-
     def get_json_or_yaml_settings(self, settings_name="zappa_settings"):
         """
         Return zappa_settings path as JSON or YAML (or TOML), as appropriate.
@@ -2544,7 +2531,26 @@ class ZappaCLI:
                     except ValueError:  # pragma: no cover
                         raise ValueError("Unable to load the Zappa settings JSON. It may be malformed.")
         else:
-            # No settings file exists, try to generate from environment
+
+            # No settings file exists, try to generate default from environment
+            stage = self.stage_env if self.stage_env else "dev"
+
+            # Get configuration from environment variables
+            stage_config = self._get_config_from_environment_and_args()
+
+            # If no environment variables found, return empty dict
+            if not stage_config:
+                return {}
+
+            # Create settings structure with the stage
+            settings = {stage: stage_config}
+
+            # Set required defaults if not provided
+            if "app_function" not in settings[stage] and not settings[stage].get("django_settings"):
+                settings[stage]["app_function"] = DEFAULT_APP_FUNCTION
+            if "aws_region" not in settings[stage]:
+                settings[stage]["aws_region"] = DEFAULT_AWS_REGION
+
             self.zappa_settings = self.generate_settings_from_environment()
 
             # Check if we got valid settings from environment
