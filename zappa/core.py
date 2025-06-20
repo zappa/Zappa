@@ -242,6 +242,8 @@ ALB_LAMBDA_ALIAS = "current-alb-version"
 X86_ARCHITECTURE = "x86_64"
 ARM_ARCHITECTURE = "arm64"
 VALID_ARCHITECTURES = (X86_ARCHITECTURE, ARM_ARCHITECTURE)
+DEFAULT_AWS_REGION = "us-east-1"
+ACM_CERTIFICATE_REGION = "us-east-1"
 
 
 def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) -> re.Pattern:
@@ -375,7 +377,7 @@ class Zappa:
             self.events_client = self.boto_client("events")
             self.apigateway_client = self.boto_client("apigateway")
             # AWS ACM certificates need to be created from us-east-1 to be used by API gateway
-            east_config = botocore.client.Config(region_name="us-east-1")
+            east_config = botocore.client.Config(region_name=ACM_CERTIFICATE_REGION)
             self.acm_client = self.boto_client("acm", config=east_config)
             self.logs_client = self.boto_client("logs")
             self.iam_client = self.boto_client("iam")
