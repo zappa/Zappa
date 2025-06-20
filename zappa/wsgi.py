@@ -26,29 +26,10 @@ def create_wsgi_request(
     Given some event_info via API Gateway,
     create and return a valid WSGI request environ.
     """
-    method = event_info.get("httpMethod", None)
-    headers = merge_headers(event_info) or {}  # Allow for the AGW console 'Test' button to work (Pull #735)
-
-    # API Gateway and ALB both started allowing for multi-value querystring
-    # params in Nov. 2018. If there aren't multi-value params present, then
-    # it acts identically to 'queryStringParameters', so we can use it as a
-    # drop-in replacement.
-    #
-    # The one caveat here is that ALB will only include _one_ of
-    # queryStringParameters _or_ multiValueQueryStringParameters, which means
-    # we have to check for the existence of one and then fall back to the
-    # other.
-
-    # Assumes that the lambda event provides the unencoded string as
-    # the value in "queryStringParameters"/"multiValueQueryStringParameters"
-    # The QUERY_STRING value provided to WSGI expects the query string to be properly urlencoded.
-    # See https://github.com/zappa/Zappa/issues/1227 for discussion of this behavior.
-    if "multiValueQueryStringParameters" in event_info:
-        query = event_info["multiValueQueryStringParameters"]
-        query_string = urlencode(query, doseq=True) if query else ""
+    if event_info.get("version", "") == "2.0":
+        method, headers, path, query_string, remote_user, authorizer = process_lambda_payload_v2(event_info)
     else:
-        query = event_info.get("queryStringParameters", {})
-        query_string = urlencode(query) if query else ""
+        method, headers, path, query_string, remote_user, authorizer = process_lambda_payload_v1(event_info)
 
     if context_header_mappings:
         for key, value in context_header_mappings.items():
@@ -73,12 +54,12 @@ def create_wsgi_request(
             encoded_body = event_info["body"]
             body = base64.b64decode(encoded_body)
         else:
-            body = event_info["body"]
+            body = event_info.get("body")
             if isinstance(body, str):
                 body = body.encode("utf-8")
 
     else:
-        body = event_info["body"]
+        body = event_info.get("body")
         if isinstance(body, str):
             body = body.encode("utf-8")
 
@@ -86,7 +67,6 @@ def create_wsgi_request(
     # https://github.com/Miserlou/Zappa/issues/1188
     headers = titlecase_keys(headers)
 
-    path = unquote(event_info["path"])
     if base_path:
         script_name = "/" + base_path
 
@@ -125,16 +105,8 @@ def create_wsgi_request(
         "wsgi.run_once": False,
     }
 
-    # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
-    # Extract remote_user, authorizer if Authorizer is enabled
-    remote_user = None
-    if "requestContext" in event_info:
-        authorizer = event_info["requestContext"].get("authorizer", None)
-        if authorizer:
-            remote_user = authorizer.get("principalId")
-            environ["API_GATEWAY_AUTHORIZER"] = authorizer
-        elif event_info["requestContext"].get("identity"):
-            remote_user = event_info["requestContext"]["identity"].get("userArn")
+    if authorizer:
+        environ["API_GATEWAY_AUTHORIZER"] = authorizer
 
     # Input processing
     if method in ["POST", "PUT", "PATCH", "DELETE"]:
@@ -161,6 +133,60 @@ def create_wsgi_request(
         environ["REMOTE_USER"] = remote_user
 
     return environ
+
+
+def process_lambda_payload_v1(event_info):
+    method = event_info.get("httpMethod", None)
+    headers = merge_headers(event_info) or {}  # Allow for the AGW console 'Test' button to work (Pull #735)
+    path = unquote(event_info["path"])
+    # API Gateway and ALB both started allowing for multi-value querystring
+    # params in Nov. 2018. If there aren't multi-value params present, then
+    # it acts identically to 'queryStringParameters', so we can use it as a
+    # drop-in replacement.
+    #
+    # The one caveat here is that ALB will only include _one_ of
+    # queryStringParameters _or_ multiValueQueryStringParameters, which means
+    # we have to check for the existence of one and then fall back to the
+    # other.
+    if "multiValueQueryStringParameters" in event_info:
+        query = event_info["multiValueQueryStringParameters"]
+        query_string = urlencode(query, doseq=True) if query else ""
+    else:
+        query = event_info.get("queryStringParameters", {})
+        query_string = urlencode(query) if query else ""
+    # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
+    # Extract remote_user, authorizer if Authorizer is enabled
+    authorizer, remote_user = None, None
+    if "requestContext" in event_info:
+        authorizer = event_info["requestContext"].get("authorizer", None)
+        if authorizer:
+            remote_user = authorizer.get("principalId")
+        elif event_info["requestContext"].get("identity"):
+            remote_user = event_info["requestContext"]["identity"].get("userArn")
+    return method, headers, path, query_string, remote_user, authorizer
+
+
+def process_lambda_payload_v2(event_info):
+    # See the new format documentation
+    # here: https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html#urls-payloads
+    method = event_info["requestContext"]["http"]["method"]
+    headers = event_info["headers"]
+    if event_info.get("cookies"):
+        headers["cookie"] = "; ".join(event_info["cookies"])
+    path = unquote(event_info["rawPath"])
+    query = event_info.get("queryStringParameters", {})
+    query_string = urlencode(query) if query else ""
+    # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
+    # Extract remote_user, authorizer if Authorizer is enabled
+    remote_user = None
+    authorizer = event_info["requestContext"].get("authorizer", None)
+    if authorizer:
+        if authorizer.get("lambda"):
+            # Need to add principalId manually to lambda authorizer response context
+            remote_user = authorizer["lambda"].get("principalId")
+        elif authorizer.get("iam"):
+            remote_user = authorizer["iam"].get("userArn")
+    return method, headers, path, query_string, remote_user, authorizer
 
 
 def common_log(environ, response, response_time: Optional[int] = None):

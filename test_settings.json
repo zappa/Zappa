@@ -142,5 +142,19 @@
        "delete_local_zip": true,
        "binary_support": true,
        "additional_text_mimetypes": ["application/custommimetype"]
-    }
+    },
+    "arch_arm64": {
+        "s3_bucket": "lmbda",
+        "app_function": "tests.test_app.hello_world",
+        "delete_local_zip": true,
+        "debug": true,
+        "architecture": "arm64"
+     },
+     "archfail": {
+        "s3_bucket": "lmbda",
+        "app_function": "tests.test_app.hello_world",
+        "delete_local_zip": true,
+        "debug": true,
+        "architecture": "invalid_architecture"
+     }
 }
