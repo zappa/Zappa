@@ -75,7 +75,7 @@ def copytree(
         elif s.is_dir():
             copytree(s, d, metadata, symlinks, ignore)
         else:
-            shutil.copy2(str(s), str(d)) if metadata else shutil.copy(str(s), str(d))
+            shutil.copy2(s, d) if metadata else shutil.copy(s, d)
 
     src_path = src
     dst_path = dst
@@ -85,7 +85,7 @@ def copytree(
         if not dst_path.exists():
             dst_path.mkdir(parents=True, exist_ok=True)
             if metadata:
-                shutil.copystat(str(src_path), str(dst_path))
+                shutil.copystat(src_path, dst_path)
     except NotADirectoryError:  # egg-link files
         copy_file(src_path.parent, dst_path.parent, src_path.name)
         return

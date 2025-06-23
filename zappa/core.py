@@ -666,13 +666,14 @@ class Zappa:
                     if path.exists() and path.is_file():
                         path.unlink()
                     elif path.exists() and path.is_dir():
-                        shutil.rmtree(str(path))
+                        shutil.rmtree(path)
 
         # If a handler_file is supplied, copy that to the root of the package,
         # because that's where AWS Lambda looks for it. It can't be inside a package.
         if handler_file:
             filename = handler_file.split(os.sep)[-1]
-            shutil.copy(handler_file, str(temp_project_path / filename))
+            filepath = temp_project_path / filename
+            shutil.copy(handler_file, filepath)
 
         # Create and populate package ID file and write to temp project path
         package_info = {}
@@ -748,8 +749,9 @@ class Zappa:
                     if cached_wheel_path:
                         # Otherwise try to use manylinux packages from PyPi..
                         # Related: https://github.com/Miserlou/Zappa/issues/398
+                        installed_package_path = temp_project_path / installed_package_name
                         shutil.rmtree(
-                            str(temp_project_path / installed_package_name),
+                            installed_package_path,
                             ignore_errors=True,
                         )
                         with zipfile.ZipFile(cached_wheel_path) as zfile:
@@ -766,7 +768,7 @@ class Zappa:
                 if path.exists() and path.is_file():
                     path.unlink()
                 elif path.exists() and path.is_dir():
-                    shutil.rmtree(str(path))
+                    shutil.rmtree(path)
                 else:
                     print(f"WARNING - missing expected: {path.resolve()}")
 
@@ -855,8 +857,8 @@ class Zappa:
         archivef.close()
 
         # Trash the temp directory
-        shutil.rmtree(str(temp_project_path))
-        shutil.rmtree(str(temp_package_path))
+        shutil.rmtree(temp_project_path)
+        shutil.rmtree(temp_package_path)
         if os.path.isdir(venv) and slim_handler:
             # Remove the temporary handler venv folder
             shutil.rmtree(venv)
