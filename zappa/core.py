@@ -3089,7 +3089,7 @@ class Zappa:
             # update or zappa schedule.
             if service not in excluded_source_services:
                 remove_event_source(event_source, lambda_arn, function, self.boto_session)
-                displayed_event = f" ({event_source["events"]})" if "events" in event_source else ""
+                displayed_event = f' ({event_source["events"]})' if "events" in event_source else ""
                 logger.info(f"Removed event {name}{displayed_event}.")
 
     ###
