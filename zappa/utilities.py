@@ -47,7 +47,7 @@ def copytree(
     dst: Path,
     metadata: bool = True,
     symlinks: bool = False,
-    ignore: Optional[Callable[[Path, List[str]], List[str]]] = None,
+    ignore: Optional[Callable[[Any, list[str]], set[str]]] = None,
 ) -> None:
     """
     This is a contributed re-implementation of 'copytree' that

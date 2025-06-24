@@ -650,20 +650,13 @@ class Zappa:
             # Slim handler does not take the project files.
             if minify:
                 # Related: https://github.com/Miserlou/Zappa/issues/744
-                excludes = ZIP_EXCLUDES + exclude + [split_venv[-1]]
-
-                # Create a wrapper function that matches the expected signature
-                def ignore_patterns(path: Path, names: list[str]) -> list[str]:
-                    ignore_func = shutil.ignore_patterns(*excludes)
-                    # shutil.ignore_patterns expects str path, not Path
-                    return list(ignore_func(str(path), names))
-
+                excludes: list[str] = ZIP_EXCLUDES + exclude + [split_venv[-1]]  # type: ignore
                 copytree(
                     cwd,
                     temp_project_path,
                     metadata=False,
                     symlinks=False,
-                    ignore=ignore_patterns,
+                    ignore=shutil.ignore_patterns(*excludes),
                 )
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
@@ -706,20 +699,13 @@ class Zappa:
         egg_links.extend(list(site_packages.glob("*.egg-link")))
 
         if minify:
-            excludes = ZIP_EXCLUDES + exclude
-
-            # Create a wrapper function that matches the expected signature
-            def ignore_patterns(path: Path, names: list[str]) -> list[str]:
-                ignore_func = shutil.ignore_patterns(*excludes)
-                # shutil.ignore_patterns expects str path, not Path
-                return list(ignore_func(str(path), names))
-
+            excludes: list[str] = ZIP_EXCLUDES + exclude  # type: ignore
             copytree(
                 site_packages.resolve(),
                 temp_package_path.resolve(),
                 metadata=False,
                 symlinks=False,
-                ignore=ignore_patterns,
+                ignore=shutil.ignore_patterns(*excludes),
             )
         else:
             copytree(site_packages, temp_package_path, metadata=False, symlinks=False)
@@ -729,20 +715,13 @@ class Zappa:
         if site_packages_64.exists():
             egg_links.extend(list(site_packages_64.glob("*.egg-link")))
             if minify:
-                excludes = ZIP_EXCLUDES + exclude
-
-                # Create a wrapper function that matches the expected signature
-                def ignore_patterns(path: Path, names: list[str]) -> list[str]:
-                    ignore_func = shutil.ignore_patterns(*excludes)
-                    # shutil.ignore_patterns expects str path, not Path
-                    return list(ignore_func(str(path), names))
-
+                excludes: list[str] = ZIP_EXCLUDES + exclude  # type: ignore
                 copytree(
                     site_packages_64.resolve(),
                     temp_package_path.resolve(),
                     metadata=False,
                     symlinks=False,
-                    ignore=ignore_patterns,
+                    ignore=shutil.ignore_patterns(*excludes),
                 )
             else:
                 copytree(site_packages_64.resolve(), temp_package_path.resolve(), metadata=False, symlinks=False)
