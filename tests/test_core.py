@@ -8,7 +8,6 @@ import random
 import re
 import shutil
 import string
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,7 +23,6 @@ import botocore
 import botocore.stub
 import flask
 import mock
-import pytest
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
