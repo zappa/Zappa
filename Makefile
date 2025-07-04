@@ -58,25 +58,25 @@ flake:
 	flake8 zappa --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 test-docs:
-	pytest tests/tests_docs.py --cov=zappa --durations=0
+	pytest tests/test_docs.py --cov=zappa --durations=0
 
 test-handler:
 	pytest tests/test_handler.py --cov=zappa --durations=0
 
 test-middleware:
-	pytest tests/tests_middleware.py --cov=zappa --durations=0
+	pytest tests/test_middleware.py --cov=zappa --durations=0
 
 test-placebo:
-	pytest tests/tests_placebo.py --cov=zappa --durations=0
+	pytest tests/test_placebo.py --cov=zappa --durations=0
 
 test-async:
-	pytest tests/tests_async.py --cov=zappa --durations=0
+	pytest tests/test_async.py --cov=zappa --durations=0
 
 test-general:
-	pytest tests/tests.py --cov=zappa --durations=0
+	pytest tests/test_core.py --cov=zappa --durations=0
 
 test-utilities:
-	pytest tests/tests_utilities.py --cov=zappa --durations=0
+	pytest tests/test_utilities.py --cov=zappa --durations=0
 
 coverage-report:
 	coverage report --include="*/zappa*"
@@ -84,13 +84,13 @@ coverage-report:
 tests:
 	make clean
 	pytest \
-		tests/tests_docs.py \
+		tests/test_docs.py \
 		tests/test_handler.py \
-		tests/tests_middleware.py \
-		tests/tests_placebo.py \
-		tests/tests_async.py \
-		tests/tests.py \
-		tests/tests_utilities.py \
+		tests/test_middleware.py \
+		tests/test_placebo.py \
+		tests/test_async.py \
+		tests/test_core.py \
+		tests/test_utilities.py \
 		--cov=zappa \
 		--cov-report=xml \
 		--durations=0

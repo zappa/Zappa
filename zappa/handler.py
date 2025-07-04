@@ -393,7 +393,6 @@ class LambdaHandler:
 
         """
         settings = self.settings
-
         # If in DEBUG mode, log all raw incoming events.
         if settings.DEBUG:
             logger.debug("Zappa Event: {}".format(event))
@@ -663,6 +662,10 @@ class LambdaHandler:
                             # stage, so we must tell Flask to include the API
                             # stage in the url it calculates. See https://github.com/Miserlou/Zappa/issues/1014
                             script_name = "/" + settings.API_STAGE
+                        # fix function url domain
+                        if host.find("lambda-url") > -1 and event.get("headers", {}).get("cloudfront-host"):
+                            # https://stackoverflow.com/questions/73024633/cloudfront-forward-host-header-to-lambda-function-url-origin
+                            event["headers"]["host"] = event["headers"]["cloudfront-host"]
                     else:
                         # This is a test request sent from the AWS console
                         if settings.DOMAIN:

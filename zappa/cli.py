@@ -126,6 +126,7 @@ class ZappaCLI:
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
     layers = None
+    use_function_url = False
     architecture = None
 
     stage_name_env_pattern = re.compile("^[a-zA-Z0-9_]+$")
@@ -871,6 +872,13 @@ class ZappaCLI:
             )
             self.zappa.deploy_lambda_alb(**kwargs)
 
+        if self.use_function_url:
+            kwargs = dict(
+                function_name=self.lambda_arn,
+                function_url_config=self.function_url_config,
+            )
+            self.zappa.deploy_lambda_function_url(**kwargs)
+
         if self.use_apigateway:
             # Create and configure the API Gateway
             self.zappa.create_stack_template(
@@ -1134,6 +1142,15 @@ class ZappaCLI:
 
         else:
             endpoint_url = None
+
+        if self.use_function_url:
+            kwargs = dict(
+                function_name=self.lambda_arn,
+                function_url_config=self.function_url_config,
+            )
+            self.zappa.update_lambda_function_url(**kwargs)
+        else:
+            self.zappa.delete_lambda_function_url(self.lambda_arn)
 
         self.schedule()
 
@@ -2182,39 +2199,55 @@ class ZappaCLI:
         # Custom SSL / ACM
         else:
             route53 = self.stage_config.get("route53_enabled", True)
-            if not self.zappa.get_domain_name(self.domain, route53=route53):
-                dns_name = self.zappa.create_domain_name(
-                    domain_name=self.domain,
-                    certificate_name=self.domain + "-Zappa-Cert",
-                    certificate_body=certificate_body,
-                    certificate_private_key=certificate_private_key,
-                    certificate_chain=certificate_chain,
-                    certificate_arn=cert_arn,
-                    lambda_name=self.lambda_name,
-                    stage=self.api_stage,
-                    base_path=base_path,
+            if self.use_apigateway:
+                if not self.zappa.get_domain_name(self.domain, route53=route53):
+                    dns_name = self.zappa.create_domain_name(
+                        domain_name=self.domain,
+                        certificate_name=self.domain + "-Zappa-Cert",
+                        certificate_body=certificate_body,
+                        certificate_private_key=certificate_private_key,
+                        certificate_chain=certificate_chain,
+                        certificate_arn=cert_arn,
+                        lambda_name=self.lambda_name,
+                        stage=self.api_stage,
+                        base_path=base_path,
+                    )
+                    if route53:
+                        self.zappa.update_route53_records(self.domain, dns_name)
+                    print(
+                        "Created a new domain name with supplied certificate. "
+                        "Please note that it can take up to 40 minutes for this domain to be "
+                        "created and propagated through AWS, but it requires no further work on your part."
+                    )
+                else:
+                    self.zappa.update_domain_name(
+                        domain_name=self.domain,
+                        certificate_name=self.domain + "-Zappa-Cert",
+                        certificate_body=certificate_body,
+                        certificate_private_key=certificate_private_key,
+                        certificate_chain=certificate_chain,
+                        certificate_arn=cert_arn,
+                        lambda_name=self.lambda_name,
+                        stage=self.api_stage,
+                        route53=route53,
+                        base_path=base_path,
+                    )
+
+                cert_success = True
+
+            if self.use_function_url:
+                self.lambda_arn = self.zappa.get_lambda_function(function_name=self.lambda_name)
+                dns_name = self.zappa.update_lambda_function_url_domains(
+                    self.lambda_arn, self.function_url_domains, cert_arn, self.function_url_cloudfront_config
                 )
                 if route53:
-                    self.zappa.update_route53_records(self.domain, dns_name)
+                    for domain in self.function_url_domains:
+                        self.zappa.update_route53_records(domain, dns_name)
                 print(
                     "Created a new domain name with supplied certificate. "
                     "Please note that it can take up to 40 minutes for this domain to be "
                     "created and propagated through AWS, but it requires no further work on your part."
                 )
-            else:
-                self.zappa.update_domain_name(
-                    domain_name=self.domain,
-                    certificate_name=self.domain + "-Zappa-Cert",
-                    certificate_body=certificate_body,
-                    certificate_private_key=certificate_private_key,
-                    certificate_chain=certificate_chain,
-                    certificate_arn=cert_arn,
-                    lambda_name=self.lambda_name,
-                    stage=self.api_stage,
-                    route53=route53,
-                    base_path=base_path,
-                )
-
             cert_success = True
 
         if cert_success:
@@ -2429,6 +2462,25 @@ class ZappaCLI:
         # Load ALB-related settings
         self.use_alb = self.stage_config.get("alb_enabled", False)
         self.alb_vpc_config = self.stage_config.get("alb_vpc_config", {})
+
+        # function URL settings
+        self.use_function_url = self.stage_config.get("function_url_enabled", False)
+        self.function_url_domains = self.stage_config.get("function_url_domains", [])
+        self.function_url_cloudfront_config = self.stage_config.get("function_url_cloudfront_config", {})
+
+        default_function_url_config = {
+            "authorizer": "NONE",
+            "cors": {
+                "allowedOrigins": ["*"],
+                "allowedHeaders": ["*"],
+                "allowedMethods": ["*"],
+                "allowCredentials": False,
+                "exposedResponseHeaders": ["*"],
+                "maxAge": 0,
+            },
+        }
+        default_function_url_config.update(self.stage_config.get("function_url_config", {}))
+        self.function_url_config = default_function_url_config
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
