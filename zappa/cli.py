@@ -22,7 +22,7 @@ import zipfile
 from builtins import bytes, input
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import argcomplete
 import botocore
@@ -69,6 +69,7 @@ CUSTOM_SETTINGS = [
 
 BOTO3_CONFIG_DOCS_URL = "https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration"
 DEFAULT_APP_FUNCTION = "app.app"
+DEFAULT_EXCLUDES = ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
 
 
 ##
@@ -83,7 +84,7 @@ class ZappaCLI:
     """
 
     # CLI
-    vargs = None
+    vargs: Optional[Dict[str, Any]] = None
     command = None
     stage_env = None
 
@@ -229,6 +230,11 @@ class ZappaCLI:
         # https://github.com/Miserlou/Zappa/issues/891
         group.add_argument("--disable_progress", action="store_true", help="Disable progress bars.")
         group.add_argument("--no_venv", action="store_true", help="Skip venv check.")
+        group.add_argument(
+            "--create-settings",
+            action="store_true",
+            help="Create a default zappa_settings.json file if none exists and no environment variables are set.",
+        )
 
         ##
         # Certify
@@ -323,6 +329,11 @@ class ZappaCLI:
         # This is explicitly added here because this is the only subcommand that doesn't inherit from env_parser
         # https://github.com/Miserlou/Zappa/issues/1002
         manage_parser.add_argument("-s", "--settings_file", help="The path to a Zappa settings file.")
+        manage_parser.add_argument(
+            "--create-settings",
+            action="store_true",
+            help="Create a default zappa_settings.json file if none exists and no environment variables are set.",
+        )
 
         ##
         # Rollback
@@ -1914,7 +1925,7 @@ class ZappaCLI:
             django_settings = django_settings.replace("'", "")
             django_settings = django_settings.replace('"', "")
         else:
-            matches = None
+            matches = []
             if has_flask:
                 click.echo("It looks like this is a " + click.style("Flask", bold=True) + " application.")
                 matches = detect_flask_apps()
@@ -1933,16 +1944,13 @@ class ZappaCLI:
         click.echo("If you are using Zappa for the first time, you probably don't want to do this!")
         global_type, global_deployment = self._get_init_global_settings()
 
-        # The given environment name
-        zappa_settings = {
-            env: {
-                "profile_name": profile_name,
-                "s3_bucket": bucket,
-                "runtime": get_venv_from_python_version(),
-                "project_name": self.get_project_name(),
-                "exclude": ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"],
-            }
-        }
+        # Generate base settings using the shared method
+        zappa_settings = self._generate_settings_dict(stage=env)
+
+        # Update with init-specific values
+        if profile_name is not None:
+            zappa_settings[env]["profile_name"] = profile_name
+        zappa_settings[env]["s3_bucket"] = bucket
 
         if profile_region:
             zappa_settings[env]["aws_region"] = profile_region
@@ -1961,7 +1969,7 @@ class ZappaCLI:
 
             for region in additional_regions:
                 env_name = env + "_" + region.replace("-", "_")
-                g_env = {env_name: {"extends": env, "aws_region": region}}
+                g_env: Dict[str, Dict[str, Union[bool, int, str]]] = {env_name: {"extends": env, "aws_region": region}}
                 zappa_settings.update(g_env)
 
         import json as json  # hjson is fine for loading, not fine for writing.
@@ -2068,25 +2076,53 @@ class ZappaCLI:
 
         return config
 
+    def _generate_settings_dict(
+        self, stage: Optional[str] = None, config_args: Optional[List[str]] = None
+    ) -> Dict[str, Dict[str, Union[bool, int, str]]]:
+        """
+        Generate settings dictionary with optional command-line arguments and environment variables.
+        This method is used by both the settings command and load_settings_file.
+
+        Args:
+            stage: Stage environment name (default: 'dev')
+            config_args: List of key=value config arguments from command line
+
+        Returns:
+            dict: Settings dictionary structure
+        """
+        # Get stage from parameters or command arguments, default to 'dev'
+        if stage is None:
+            stage = self.vargs.get("stage", "dev") if self.vargs is not None else "dev"
+
+        # Base configuration structure with init defaults
+        settings = {
+            stage: {
+                "app_function": DEFAULT_APP_FUNCTION,
+                "aws_region": DEFAULT_AWS_REGION,
+                "runtime": get_venv_from_python_version(),
+                "project_name": self.get_project_name(),
+                "exclude": DEFAULT_EXCLUDES,
+            }
+        }
+
+        # Get configuration from environment variables and command-line args
+        config = self._get_config_from_environment_and_args(env_prefix="ZAPPA_", config_args=config_args)
+
+        # Apply configuration to settings (will override defaults)
+        settings[stage].update(config)
+
+        return settings
+
     def settings(self):
         """
         Create zappa_settings.json configuration with optional command-line arguments and environment variables.
         """
         import json
 
-        # Get stage from command arguments, default to 'dev'
-        stage = self.vargs.get("stage", "dev")
-
-        # Base configuration structure
-        settings = {stage: {"app_function": DEFAULT_APP_FUNCTION, "aws_region": DEFAULT_AWS_REGION}}
-
-        # Get configuration from environment variables and command-line args
+        # Use the shared settings generation method
         try:
             config_args = self.vargs.get("config")
-            config = self._get_config_from_environment_and_args(env_prefix="ZAPPA_", config_args=config_args)
-
-            # Apply configuration to settings
-            settings[stage].update(config)
+            settings = self._generate_settings_dict(config_args=config_args)
         except ValueError as e:
             click.echo(f"Error: {e}", err=True)
             return 1
@@ -2587,26 +2623,13 @@ class ZappaCLI:
             # No settings file exists, try to generate default from environment
             stage = self.stage_env if self.stage_env else "dev"
 
-            # Get configuration from environment variables
-            stage_config = self._get_config_from_environment_and_args()
-
-            # If no environment variables found, return empty dict
-            if not stage_config:
-                return {}
-
-            # Create settings structure with the stage
-            settings = {stage: stage_config}
-
-            # Set required defaults if not provided
-            if "app_function" not in settings[stage] and not settings[stage].get("django_settings"):
-                settings[stage]["app_function"] = DEFAULT_APP_FUNCTION
-            if "aws_region" not in settings[stage]:
-                settings[stage]["aws_region"] = DEFAULT_AWS_REGION
-
-            self.zappa_settings = self.generate_settings_from_environment()
+            # Use the common settings generation method
+            self.zappa_settings = self._generate_settings_dict(stage=stage)
 
             # Check if we got valid settings from environment
-            if not self.zappa_settings or not any(self.zappa_settings.values()):
+            # If no settings were provided via environment variables, the dict will only have defaults
+            stage_config = self._get_config_from_environment_and_args()
+            if not stage_config:
                 raise ClickException(
                     "No zappa_settings file found and no ZAPPA_ environment variables set.\n"
                     "Please configure your zappa_settings file, use 'zappa init', or set ZAPPA_ environment variables."

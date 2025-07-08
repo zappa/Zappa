@@ -2882,20 +2882,6 @@ class Zappa:
         except Exception:
             return None
 
-        ##
-        # Old, automatic logic.
-        # If re-introduced, should be moved to a new function.
-        # Related ticket: https://github.com/Miserlou/Zappa/pull/458
-        ##
-
-        # We may be in a position where Route53 doesn't have a domain, but the API Gateway does.
-        # We need to delete this before we can create the new Route53.
-        # try:
-        #     api_gateway_domain = self.apigateway_client.get_domain_name(domainName=domain_name)
-        #     self.apigateway_client.delete_domain_name(domainName=domain_name)
-        # except Exception:
-        #     pass
-
         return None
 
     ##
