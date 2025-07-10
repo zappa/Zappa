@@ -2567,14 +2567,16 @@ class ZappaCLI:
         zs_yaml = settings_name + ".yaml"
         zs_toml = settings_name + ".toml"
 
-        # Return None if no settings file exists
+        # Raise ClickException if no settings file exists
         if (
             not os.path.isfile(zs_json)
             and not os.path.isfile(zs_yml)
             and not os.path.isfile(zs_yaml)
             and not os.path.isfile(zs_toml)
         ):
-            return None
+            raise ClickException(
+                "No settings file found. Expected one of: {}, {}, {}, {}".format(zs_json, zs_toml, zs_yml, zs_yaml)
+            )
 
         # Prefer JSON
         if os.path.isfile(zs_json):
@@ -2595,7 +2597,11 @@ class ZappaCLI:
         """
 
         if not settings_file:
-            settings_file = self.get_json_or_yaml_settings()
+            try:
+                settings_file = self.get_json_or_yaml_settings()
+            except ClickException:
+                # No settings file found, we'll generate from environment variables
+                settings_file = None
 
         if settings_file and os.path.isfile(settings_file):
             # Load from file

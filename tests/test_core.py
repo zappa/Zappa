@@ -1629,8 +1629,8 @@ class TestZappa(unittest.TestCase):
             zappa_cli = ZappaCLI()
             zappa_cli.api_stage = "dev"
 
-            # Test generate_settings_from_environment directly
-            settings = zappa_cli.generate_settings_from_environment("dev")
+            # Test _generate_settings_dict directly
+            settings = zappa_cli._generate_settings_dict(stage="dev")
 
             self.assertIn("dev", settings)
             self.assertEqual(settings["dev"]["app_function"], "myapp.handler")
