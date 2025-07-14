@@ -80,6 +80,9 @@
   - [Endpoint Configuration](#endpoint-configuration)
     - [Example Private API Gateway configuration](#example-private-api-gateway-configuration)
   - [Cold Starts (Experimental)](#cold-starts-experimental)
+  - [Lambda Test Console Usage](#lambda-test-console-usage)
+    - [`raw_command`](#raw_command)
+    - [`manage`](#manage)
 - [Zappa Guides](#zappa-guides)
 - [Zappa in the Press](#zappa-in-the-press)
 - [Sites Using Zappa](#sites-using-zappa)
@@ -133,7 +136,7 @@ And finally, Zappa is **super easy to use**. You can deploy your application wit
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.8/3.9/3.10/3.11/3.12 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.8/3.9/3.10/3.11/3.12/3.13 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -444,7 +447,7 @@ For instance, suppose you have a basic application in a file called "my_app.py",
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.8/3.9/3.10/3.11/3.12 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.8/3.9/3.10/3.11/3.12/3.13 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -837,7 +840,7 @@ Example:
 
 ```python
 from zappa.asynchronous import task, get_async_response
-from flask import Flask, make_response, abort, url_for, redirect, request, jsonify
+from flask import Flask, abort, url_for, redirect, request, jsonify
 from time import sleep
 
 app = Flask(__name__)
@@ -894,6 +897,19 @@ to change Zappa's behavior. Use these at your own risk!
         "assume_policy": "my_assume_policy.json", // optional, IAM assume policy JSON file
         "attach_policy": "my_attach_policy.json", // optional, IAM attach policy JSON file
         "apigateway_policy": "my_apigateway_policy.json", // optional, API Gateway resource policy JSON file
+        "function_url_enabled": false, // optional, set to true if you want to enable function URL. Default false.
+        "function_url_config": {
+            "authorizer": "NONE", // required if function url is enabled. default None. https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
+            "cors": { // set to false if disable cors.
+              "allowedOrigins": [], // The origins that can access your function URL. default [*]
+              "allowedHeaders": [], // The HTTP headers that origins can include in requests to your function URL.
+              "allowedMethods": [], // The HTTP methods that are allowed when calling your function URL. For example: GET , POST , DELETE , or the wildcard character (* ). default [*]
+              "allowCredentials": false, //required, Whether to allow cookies or other credentials in requests to your function URL. default false.
+              "exposedResponseHeaders": [], The HTTP headers in your function response that you want to expose to origins that call your function URL.
+              "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
+            }
+        },
+        "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
         "async_response_table": "your_dynamodb_table_name",  // the DynamoDB table name to use for captured async responses; defaults to None (can't capture)
@@ -992,7 +1008,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.12", // Python runtime to use on Lambda. Can be one of: "python3.8", "python3.9", "python3.10", "python3.11", or "python3.12". Defaults to whatever the current Python being used is.
+        "runtime": "python3.13", // Python runtime to use on Lambda. Can be one of: "python3.8", "python3.9", "python3.10", "python3.11", "python3.12", or "python3.13". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None".
@@ -1519,6 +1535,37 @@ apigateway_resource_policy.json:
 ### Cold Starts (Experimental)
 
 Lambda may provide additional resources than provisioned during cold start initialization. Set `INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True` to instantiate the lambda handler on import. This is an experimental feature - if startup time is critical, look into using Provisioned Concurrency.
+
+### Lambda Test Console Usage
+
+The zappa lambda handler allows zappa commands can be initiated from the Lambda Test Console by providing the associated JSON payload.
+
+#### `raw_command`
+
+`raw_command` allows you to execute arbitrary python code in the context of your Zappa application. 
+This is useful for testing or debugging purposes.
+
+> **Warning**: This is a powerful feature and should be used with caution. 
+> It can execute any code in your application context, including potentially harmful commands.
+
+Example:
+```json
+{
+    "raw_command": "from myapp import my_function;x = my_function();print(x)"
+}
+```
+
+#### `manage`
+
+Django `manage` commands are also supported. 
+You can run any Django management command using the `manage` key in the payload.
+
+Example:
+```json
+{
+    "manage": "migrate"
+}
+```
 
 ## Zappa Guides
 

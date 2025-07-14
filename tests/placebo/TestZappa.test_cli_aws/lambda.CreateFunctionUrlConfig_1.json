@@ -1,0 +1,11 @@
+{
+    "status_code": 201,
+    "data": {
+        "ResponseMetadata": {
+            "HTTPStatusCode": 201,
+            "RetryAttempts": 0
+        },
+        "FunctionUrl": "https://xxxxx.lambda-url.ap-southeast-1.on.aws/",
+        "FunctionArn": "arn:aws:lambda:ap-southeast-1:123456789:function:dev"
+    }
+}

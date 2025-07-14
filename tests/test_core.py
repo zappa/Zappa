@@ -1,4 +1,3 @@
-# -*- coding: utf8 -*-
 import base64
 import collections
 import hashlib
@@ -9,7 +8,6 @@ import random
 import re
 import shutil
 import string
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -97,34 +95,7 @@ class TestZappa(unittest.TestCase):
             "zappa.core.Zappa.get_installed_packages",
             return_value=mock_installed_packages,
         ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-    def test_get_manylinux_python38(self):
-        z = Zappa(runtime="python3.8")
-        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.8.4"))
-        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
-
-        # mock with a known manylinux wheel package so that code for downloading them gets invoked
-        mock_installed_packages = {"psycopg2-binary": "2.8.4"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
-            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
-            self.assertTrue(os.path.isfile(path))
-            os.remove(path)
-
-        # same, but with an ABI3 package
-        mock_installed_packages = {"cryptography": "2.8"}
-        with mock.patch(
-            "zappa.core.Zappa.get_installed_packages",
-            return_value=mock_installed_packages,
-        ):
-            z = Zappa(runtime="python3.8")
+            z = Zappa(runtime="python3.13")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -237,16 +208,42 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_get_manylinux_python313(self):
+        z = Zappa(runtime="python3.13")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.2.5"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg-binary": "3.2.5"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.13")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "44.0.2"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.13")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
     def test_verify_downloaded_manylinux_wheel(self):
         z = Zappa(runtime="python3.10")
-        cached_wheels_dir = os.path.join(tempfile.gettempdir(), "cached_wheels")
-        expected_wheel_path = os.path.join(
-            cached_wheels_dir,
-            "pycryptodome-3.16.0-cp35-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        cached_wheels_dir = Path(tempfile.gettempdir()) / "cached_wheels"
+        expected_wheel_path = (
+            cached_wheels_dir / "pycryptodome-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
         )
 
         # check with a known manylinux wheel package
-        actual_wheel_path = z.get_cached_manylinux_wheel("pycryptodome", "3.16.0")
+        actual_wheel_path = z.get_cached_manylinux_wheel("pycryptodome", "3.23.0")
         self.assertEqual(actual_wheel_path, expected_wheel_path)
         os.remove(actual_wheel_path)
 
@@ -309,34 +306,35 @@ class TestZappa(unittest.TestCase):
 
     def test_getting_installed_packages(self, *args):
         z = Zappa(runtime="python3.8")
+        sample_package = mock.MagicMock()
+        sample_package.name = "super_package"
+        sample_package.version = "0.1"
+        sample_package.locate_file = mock.MagicMock()
+        sample_package.locate_file.return_value = "/venv/site-packages"
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("super_package", "0.1", "/venv/site-packages")]
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/super_package")])
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=["super_package"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
-
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(z.get_installed_packages("", ""), {"super_package": "0.1"})
+        mock_pip_installed_packages = [sample_package]
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"super_package": "0.1"})
 
     def test_get_current_venv(self, *args):
         z = Zappa()
 
-        expected = "/expected/versions/path"
-
         # VIRTUL_ENV test
+        expected = "/expected/versions/path"
         os_env = {"VIRTUAL_ENV": expected}
         with mock.patch.dict("os.environ", os_env):
             current_venv = z.get_current_venv()
-            self.assertEqual(current_venv, expected)
+            self.assertEqual(str(current_venv), expected)
 
         # pyenv test
         with mock.patch.dict("os.environ", {}, clear=True):
             with mock.patch("subprocess.check_output", side_effect=[None, b"/expected", b"path"]):
                 current_venv = z.get_current_venv()
-                self.assertEqual(current_venv, expected)
+                self.assertEqual(str(current_venv), expected)
 
             with mock.patch("subprocess.check_output", side_effect=OSError("No pyenv!")):
                 current_venv = z.get_current_venv()
@@ -345,39 +343,52 @@ class TestZappa(unittest.TestCase):
     def test_getting_installed_packages_mixed_case_location(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pip packages call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [
-            mock_package("SuperPackage", "0.1", "/Venv/site-packages"),
-            mock_package("SuperPackage64", "0.1", "/Venv/site-packages64"),
-        ]
+        mock_pip_installed_packages = []
+        for package_name, version, location in ("SuperPackage", "0.1", "/Venv/site-packages"), (
+            "SuperPackage64",
+            "0.1",
+            "/Venv/site-packages64",
+        ):
+            sample_package = mock.MagicMock()
+            sample_package.name = package_name
+            sample_package.version = version
+            sample_package.locate_file = mock.MagicMock()
+            sample_package.locate_file.return_value = location
+            mock_pip_installed_packages.append(sample_package)
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=[]):
-                import pkg_resources  # this gets called in non-test Zappa mode
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/SuperPackage")])
 
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(
-                        z.get_installed_packages("/venv/Site-packages", "/venv/site-packages64"),
-                        {
-                            "superpackage": "0.1",
-                            "superpackage64": "0.1",
-                        },
-                    )
+        site_packages64 = mock.MagicMock()
+        site_packages64.is_dir = mock.MagicMock(return_value=True)
+        site_packages64.glob = mock.MagicMock(return_value=[Path("/venv/site-packages64/SuperPackage64")])
+
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(
+                z.get_installed_packages(site_packages, site_packages64),
+                {
+                    "superpackage": "0.1",
+                    "superpackage64": "0.1",
+                },
+            )
 
     def test_getting_installed_packages_mixed_case(self, *args):
         z = Zappa(runtime="python3.8")
 
-        # mock pkg_resources call to be same as what our mocked site packages dir has
-        mock_package = collections.namedtuple("mock_package", ["project_name", "version", "location"])
-        mock_pip_installed_packages = [mock_package("SuperPackage", "0.1", "/venv/site-packages")]
+        sample_package = mock.MagicMock()
+        sample_package.name = "SuperPackage"
+        sample_package.version = "0.1"
+        sample_package.locate_file = mock.MagicMock()
+        sample_package.locate_file.return_value = "/venv/site-packages"
 
-        with mock.patch("os.path.isdir", return_value=True):
-            with mock.patch("os.listdir", return_value=["superpackage"]):
-                import pkg_resources  # this gets called in non-test Zappa mode
+        site_packages = mock.MagicMock()
+        site_packages.is_dir = mock.MagicMock(return_value=True)
+        site_packages.glob = mock.MagicMock(return_value=[Path("/venv/site-packages/superpackage")])
 
-                with mock.patch("pkg_resources.WorkingSet", return_value=mock_pip_installed_packages):
-                    self.assertDictEqual(z.get_installed_packages("", ""), {"superpackage": "0.1"})
+        mock_pip_installed_packages = [sample_package]
+        with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
+            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"superpackage": "0.1"})
 
     def test_load_credentials(self):
         z = Zappa()
@@ -1192,6 +1203,160 @@ class TestZappa(unittest.TestCase):
         response_tuple = collections.namedtuple("Response", ["status_code", "content"])
         response = response_tuple(200, "hello")
 
+    def test_wsgi_from_v2_event(self):
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/api/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate, br",
+                "accept-language": "en-US,en;q=0.9",
+                "cache-control": "no-cache",
+                "content-length": "0",
+                "dnt": "1",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "pragma": "no-cache",
+                "upgrade-insecure-requests": "1",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "GET",
+                    "path": "/api",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                },
+                "requestId": "xTG4wqXdSQ0RHpA=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "16/Oct/2022:11:17:12 +0000",
+                "timeEpoch": 1665919032135,
+            },
+            "pathParameters": {"proxy": ""},
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event)
+        self.assertTrue(environ)
+        self.assertEqual(environ["PATH_INFO"], "/api/")
+        self.assertEqual(environ["QUERY_STRING"], "")
+
+    def test_wsgi_from_v2_event_with_lambda_authorizer(self):
+        principal_id = "user|a1b2c3d4"
+        authorizer = {"lambda": {"bool": True, "key": "value", "number": 1, "principalId": principal_id}}
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate, br",
+                "authorization": "Bearer 1232314343",
+                "content-length": "28",
+                "content-type": "application/json",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "authorizer": authorizer,
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "POST",
+                    "path": "/",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+                },
+                "requestId": "aJ6Rqi93zQ0GPng=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "17/Oct/2022:14:58:44 +0000",
+                "timeEpoch": 1666018724000,
+            },
+            "pathParameters": {"proxy": ""},
+            "body": "{'data':'0123456789'}",
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event)
+        self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
+        self.assertEqual(environ["REMOTE_USER"], principal_id)
+
+    def test_wsgi_from_v2_event_with_iam_authorizer(self):
+        user_arn = "arn:aws:sts::724336686645:assumed-role/SAMLUSER/user.name"
+        authorizer = {
+            "iam": {
+                "accessKey": "AWSACCESSKEYID",
+                "accountId": "724336686645",
+                "callerId": "KFDJSURSUC8FU3ITCWEDJ:user.name",
+                "cognitoIdentity": None,
+                "principalOrgId": "aws:PrincipalOrgID",
+                "userArn": user_arn,
+                "userId": "KFDJSURSUC8FU3ITCWEDJ:user.name",
+            }
+        }
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/",
+            "rawQueryString": "",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate",
+                "authorization": "AWS4-HMAC-SHA256 Credential=AWSACCESSKEYID/20221017/eu-west-1/execute-api/aws4_request, SignedHeaders=host;x-amz-date;x-amz-security-token, Signature=foosignature",
+                "content-length": "17",
+                "content-type": "application/json",
+                "host": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "user-agent": "python-requests/2.28.1",
+                "x-amz-content-sha256": "foobar",
+                "x-amz-date": "20221017T150616Z",
+                "x-amz-security-token": "footoken",
+                "x-forwarded-for": "50.191.225.98",
+                "x-forwarded-port": "443",
+                "x-forwarded-proto": "https",
+            },
+            "requestContext": {
+                "accountId": "724336686645",
+                "apiId": "qw8klxioji",
+                "authorizer": authorizer,
+                "domainName": "qw8klxioji.execute-api.eu-west-1.amazonaws.com",
+                "domainPrefix": "qw8klxioji",
+                "http": {
+                    "method": "POST",
+                    "path": "/",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                    "userAgent": "python-requests/2.28.1",
+                },
+                "requestId": "aJ5ZZgeYiQ0Rz-A=",
+                "routeKey": "ANY /{proxy+}",
+                "stage": "$default",
+                "time": "17/Oct/2022:15:06:16 +0000",
+                "timeEpoch": 1666019176656,
+            },
+            "pathParameters": {"proxy": ""},
+            "body": "{'data': '12345'}",
+            "isBase64Encoded": False,
+        }
+        environ = create_wsgi_request(event)
+        self.assertEqual(environ["API_GATEWAY_AUTHORIZER"], authorizer)
+        self.assertEqual(environ["REMOTE_USER"], user_arn)
+
     ##
     # Handler
     ##
@@ -1200,26 +1365,49 @@ class TestZappa(unittest.TestCase):
     # CLI
     ##
 
+    # @pytest.fixture(autouse=True)
     def test_zappa_init(self):
+
         # delete if file exists
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+        current_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="zappa_test") as tempdir:
+            try:
+                os.chdir(tempdir)
+                tempdir = Path(tempdir)
 
-        process = subprocess.Popen(
-            ["zappa", "init"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
-        )
-        process.communicate("dev\nmy-zappa-bucket\ntest_settings\ndefault\nn\ny\n")
-        self.assertTrue(os.path.exists("zappa_settings.json"))
+                settings_filepath = tempdir / "zappa_settings.json"
+                if settings_filepath.exists():
+                    settings_filepath.unlink()  # delete the file if it exists
+                assert settings_filepath.exists() is False
 
-        with open("zappa_settings.json", "r") as f:
-            zappa_settings = json.load(f)
-            self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
-            self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
-            self.assertEqual(zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"])
+                zappa_cli = ZappaCLI()
+                with mock.patch("zappa.cli.ZappaCLI._get_init_env", return_value="dev"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_profile", return_value=("default", {"region": "us-west-2"})
+                ), mock.patch("zappa.cli.ZappaCLI._get_init_bucket", return_value="my-zappa-bucket"), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_django_settings", return_value="test_settings"
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_global_settings", return_value=["n", False]
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_confirm", return_value="y"
+                ):
+                    zappa_cli.init()
 
-        # delete the file
-        if os.path.exists("zappa_settings.json"):
-            os.remove("zappa_settings.json")
+                # make sure the expected `zappa_settings.json` file was created in the current directory
+                self.assertTrue(settings_filepath.exists())
+
+                with settings_filepath.open("r") as f:
+                    zappa_settings = json.load(f)
+                    self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
+                    self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
+                    self.assertEqual(
+                        zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+                    )
+
+                # delete the file
+                if os.path.exists("zappa_settings.json"):
+                    os.remove("zappa_settings.json")
+            finally:
+                os.chdir(current_dir)
 
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()
@@ -1255,6 +1443,21 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual("lmbda", zappa_cli.stage_config["s3_bucket"])
         self.assertEqual(True, zappa_cli.stage_config["touch"])
+        self.assertIn("x86_64", zappa_cli.architecture)
+
+        if sys.version_info.major == 3 and sys.version_info.minor < 8:
+            with self.assertRaises(ValueError):
+                zappa_cli = ZappaCLI()
+                zappa_cli.api_stage = "arch_arm64"
+                zappa_cli.load_settings("test_settings.json")
+                self.assertIn("arm64", zappa_cli.stage_config["architecture"])
+                self.assertIn("arm64", zappa_cli.architecture)
+        else:
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "arch_arm64"
+            zappa_cli.load_settings("test_settings.json")
+            self.assertIn("arm64", zappa_cli.stage_config["architecture"])
+            self.assertIn("arm64", zappa_cli.architecture)
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "extendofail"
@@ -1273,11 +1476,22 @@ class TestZappa(unittest.TestCase):
         self.assertTrue(zappa_cli.stage_config["touch"])  # First Extension
         self.assertTrue(zappa_cli.stage_config["delete_local_zip"])  # The base
 
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "archfail"
+        with self.assertRaises(ValueError):
+            zappa_cli.load_settings("test_settings.json")
+
     def test_load_settings__lambda_concurrency_enabled(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "lambda_concurrency_enabled"
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(6, zappa_cli.stage_config["lambda_concurrency"])
+
+    def test_load_settings__function_url_enabled(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "function_url_enabled"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(True, zappa_cli.stage_config["function_url_enabled"])
 
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
@@ -1728,6 +1942,7 @@ class TestZappa(unittest.TestCase):
         """
         zappa_cli = ZappaCLI()
         zappa_cli.domain = "test.example.com"
+        zappa_cli.use_apigateway = True
         try:
             zappa_cli.certify()
         except AttributeError:
@@ -2101,8 +2316,6 @@ class TestZappa(unittest.TestCase):
         with zipfile.ZipFile(zappa_cli.zip_path, "r") as lambda_zip:
             content = lambda_zip.read("zappa_settings.py")
         zappa_cli.remove_local_zip()
-        # m = re.search("REMOTE_ENV='(.*)'", content)
-        # self.assertEqual(m.group(1), 's3://lmbda-env/dev/env.json')
 
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "remote_env"
@@ -2112,8 +2325,6 @@ class TestZappa(unittest.TestCase):
         with zipfile.ZipFile(zappa_cli.zip_path, "r") as lambda_zip:
             content = lambda_zip.read("zappa_settings.py")
         zappa_cli.remove_local_zip()
-        # m = re.search("REMOTE_ENV='(.*)'", content)
-        # self.assertEqual(m.group(1), 's3://lmbda-env/prod/env.json')
 
     def test_package_only(self):
         for delete_local_zip in [True, False]:
@@ -2576,6 +2787,261 @@ class TestZappa(unittest.TestCase):
             FunctionName="abc",
         )
 
+    @mock.patch("botocore.client")
+    def test_deploy_lambda_function_url(self, client):
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+        function_name = "abc"
+        function_url_config = {
+            "authorizer": "NONE",
+            "cors": {
+                "allowedOrigins": ["*"],
+                "allowedHeaders": ["*"],
+                "allowedMethods": ["*"],
+                "allowCredentials": False,
+                "exposedResponseHeaders": ["*"],
+                "maxAge": 0,
+            },
+        }
+        zappa_core.lambda_client.create_function_url_config.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 201,
+                "RetryAttempts": 0,
+            },
+            "FunctionUrl": "https://xxxxx.lambda-url.ap-southeast-1.on.aws/",
+            "FunctionArn": "arn:aws:lambda:ap-southeast-1:123456789:function:{}".format(function_name),
+        }
+        zappa_core.lambda_client.add_permission.return_value = {
+            "ResponseMetadata": {
+                "RequestId": "cbe73d4e-007e-4476-a4a0-fbd07599570a",
+                "HTTPStatusCode": 201,
+                "RetryAttempts": 0,
+            },
+            "Statement": '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":"arn:aws:lambda:ap-southeast-1:123456789:function:abc"}, "Condition":{"StringEquals":{"lambda: FunctionUrlAuthType":"NONE"}}',
+        }
+
+        zappa_core.deploy_lambda_function_url(function_name="abc", function_url_config=function_url_config)
+        boto_mock.client().create_function_url_config.assert_called_with(
+            FunctionName=function_name,
+            AuthType=function_url_config["authorizer"],
+            Cors={
+                "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                "MaxAge": function_url_config["cors"]["maxAge"],
+            },
+        )
+
+        boto_mock.client().add_permission.assert_called_with(
+            FunctionName=function_name,
+            StatementId="FunctionURLAllowPublicAccess",
+            Action="lambda:InvokeFunctionUrl",
+            Principal="*",
+            FunctionUrlAuthType=function_url_config["authorizer"],
+        )
+
+    @mock.patch("botocore.client")
+    def test_update_lambda_function_url(self, client):
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+        function_name = "abc"
+        function_arn = "arn:aws:lambda:ap-southeast-1:123456789:function:{}".format(function_name)
+        function_url_config = {
+            "authorizer": "NONE",
+            "cors": {
+                "allowedOrigins": ["*"],
+                "allowedHeaders": ["*"],
+                "allowedMethods": ["*"],
+                "allowCredentials": False,
+                "exposedResponseHeaders": ["*"],
+                "maxAge": 0,
+            },
+        }
+        zappa_core.lambda_client.list_function_url_configs.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "FunctionUrlConfigs": [
+                {
+                    "FunctionUrl": "https://123456789.lambda-url.ap-southeast-1.on.aws/",
+                    "FunctionArn": function_arn,
+                }
+            ],
+        }
+        zappa_core.lambda_client.update_function_url_config.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "FunctionUrl": "https://123456789.lambda-url.ap-southeast-1.on.aws/",
+            "FunctionArn": function_arn,
+        }
+        zappa_core.lambda_client.get_policy.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+        }
+
+        zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
+        boto_mock.client().update_function_url_config.assert_called_with(
+            FunctionName=function_arn,
+            AuthType=function_url_config["authorizer"],
+            Cors={
+                "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                "MaxAge": function_url_config["cors"]["maxAge"],
+            },
+        )
+
+        boto_mock.client().get_policy.assert_called_with(
+            FunctionName=function_arn,
+        )
+        boto_mock.client().add_permission.assert_not_called()
+        boto_mock.client().create_function_url_config.assert_not_called()
+
+    @mock.patch("botocore.client")
+    def test_update_lambda_function_url_iam_authorizer(self, client):
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+        function_name = "abc"
+        function_arn = "arn:aws:lambda:ap-southeast-1:123456789:function:{}".format(function_name)
+        function_url_config = {
+            "authorizer": "AWS_IAM",
+            "cors": {
+                "allowedOrigins": ["*"],
+                "allowedHeaders": ["*"],
+                "allowedMethods": ["*"],
+                "allowCredentials": False,
+                "exposedResponseHeaders": ["*"],
+                "maxAge": 0,
+            },
+        }
+        zappa_core.lambda_client.list_function_url_configs.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "FunctionUrlConfigs": [
+                {
+                    "FunctionUrl": "https://123456789.lambda-url.ap-southeast-1.on.aws/",
+                    "FunctionArn": function_arn,
+                }
+            ],
+        }
+        zappa_core.lambda_client.update_function_url_config.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "FunctionUrl": "https://123456789.lambda-url.ap-southeast-1.on.aws/",
+            "FunctionArn": function_arn,
+        }
+        zappa_core.lambda_client.get_policy.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+        }
+        zappa_core.lambda_client.remove_permission.return_value = {
+            "ResponseMetadata": {"HTTPStatusCode": 200},
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"xxxxx"}]}',
+        }
+        zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
+        boto_mock.client().update_function_url_config.assert_called_with(
+            FunctionName=function_arn,
+            AuthType=function_url_config["authorizer"],
+            Cors={
+                "AllowCredentials": function_url_config["cors"]["allowCredentials"],
+                "AllowHeaders": function_url_config["cors"]["allowedHeaders"],
+                "AllowMethods": function_url_config["cors"]["allowedMethods"],
+                "AllowOrigins": function_url_config["cors"]["allowedOrigins"],
+                "ExposeHeaders": function_url_config["cors"]["exposedResponseHeaders"],
+                "MaxAge": function_url_config["cors"]["maxAge"],
+            },
+        )
+
+        boto_mock.client().get_policy.assert_called_with(
+            FunctionName=function_arn,
+        )
+        boto_mock.client().delete_policy.remove_permission(
+            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
+        )
+        boto_mock.client().add_permission.assert_not_called()
+        boto_mock.client().create_function_url_config.assert_not_called()
+
+    @mock.patch("botocore.client")
+    def test_delete_lambda_function_url(self, client):
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+        function_name = "abc"
+        function_arn = "arn:aws:lambda:ap-southeast-1:123456789:function:{}".format(function_name)
+
+        zappa_core.lambda_client.list_function_url_configs.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "FunctionUrlConfigs": [
+                {
+                    "FunctionUrl": "https://123456789.lambda-url.ap-southeast-1.on.aws/",
+                    "FunctionArn": function_arn,
+                }
+            ],
+        }
+        zappa_core.lambda_client.delete_function_url_config.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 204,
+            }
+        }
+        zappa_core.lambda_client.get_policy.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+            },
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+        }
+        zappa_core.lambda_client.remove_permission.return_value = {
+            "ResponseMetadata": {
+                "HTTPStatusCode": 204,
+                "RetryAttempts": 0,
+            }
+        }
+        zappa_core.delete_lambda_function_url(function_name=function_arn)
+        boto_mock.client().delete_function_url_config.assert_called_with(
+            FunctionName=function_arn,
+        )
+
+        boto_mock.client().get_policy.assert_called_with(
+            FunctionName=function_arn,
+        )
+        boto_mock.client().delete_policy.remove_permission(
+            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
+        )
+        boto_mock.client().add_permission.assert_not_called()
+        boto_mock.client().create_function_url_config.assert_not_called()
+        boto_mock.client().update_function_url_config.assert_not_called()
+
     @mock.patch("sys.version_info", new_callable=get_sys_versioninfo)
     def test_unsupported_version_error(self, *_):
         from importlib import reload
@@ -2596,7 +3062,7 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
 
     @mock.patch("os.getenv", return_value="True")
-    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 8))
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 9))
     def test_no_runtimeerror_when_in_docker(self, *_):
         from importlib import reload
 

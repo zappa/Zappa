@@ -1,9 +1,9 @@
 import json
 import os
 import re
-import shutil
 import tempfile
 import unittest
+from pathlib import Path
 from typing import Tuple
 from unittest import mock
 
@@ -44,60 +44,52 @@ class GeneralUtilitiesTestCase(unittest.TestCase):
             # Give the user their AWS region back, we're done testing with us-east-1.
             os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
 
-    @mock.patch("zappa.core.find_packages")
-    @mock.patch("os.remove")
-    def test_copy_editable_packages(self, mock_remove, mock_find_packages):
-        virtual_env = os.environ.get("VIRTUAL_ENV")
+    @mock.patch("zappa.core.find_packages", return_value=["package", "package.subpackage", "package.another"])
+    def test_copy_editable_packages(self, mock_find_packages):
+        virtual_env = Path(os.environ.get("VIRTUAL_ENV"))
         if not virtual_env:
             return self.skipTest("test_copy_editable_packages must be run in a virtualenv")
 
-        temp_package_dir = tempfile.mkdtemp()
-        try:
-            egg_links = [
-                os.path.join(
-                    virtual_env,
-                    "lib",
-                    get_venv_from_python_version(),
-                    "site-packages",
-                    "test-copy-editable-packages.egg-link",
-                )
-            ]
+        with tempfile.TemporaryDirectory() as temp_package_dir:
+            temp_package_dir = Path(temp_package_dir)
+
+            egg_link_filename = "test-copy-editable-packages.egg-link"
+            egg_link = virtual_env / "lib" / get_venv_from_python_version() / "site-packages" / egg_link_filename
             egg_path = "/some/other/directory/package"
-            mock_find_packages.return_value = [
-                "package",
-                "package.subpackage",
-                "package.another",
-            ]
-            temp_egg_link = os.path.join(temp_package_dir, "package-python.egg-link")
+            egg_link_open = mock.mock_open(
+                read_data=egg_path.encode("utf-8")
+            )  # content of "test-copy-editable-packages.egg-link"
 
-            z = Zappa()
-            mock_open = mock.mock_open(read_data=egg_path.encode("utf-8"))
-            with mock.patch("zappa.core.open", mock_open), mock.patch("glob.glob") as mock_glob, mock.patch(
-                "zappa.core.copytree"
-            ) as mock_copytree:
-                # we use glob.glob to get the egg-links in the temp packages
-                # directory
-                mock_glob.return_value = [temp_egg_link]
+            with mock.patch.object(Path, "open", egg_link_open), mock.patch.object(
+                Path, "unlink"
+            ) as mock_unlink, mock.patch.object(Path, "glob", return_value=[Path(egg_link_filename)]) as mock_glob:
+                egg_links = [egg_link]
+                z = Zappa()
+                with mock.patch("zappa.core.copytree") as mock_copytree:
+                    # Reads the first line of each egg-link file, which contains the path to the package,
+                    # copies the package contents to the temporary package path, then removes the egg-link files.
 
-                z.copy_editable_packages(egg_links, temp_package_dir)
+                    # - find_packages() mocked to provide the list of "packages" contained in the directory (egg_path) defined in the `egg_link` file
+                    # - copytree mocked to determine which files are copied
+                    # - temp_package_path.glob("*.egg-link") mocked to ignore unlink (delete) of egg-link files
+                    z.copy_editable_packages(egg_links, temp_package_dir)
 
-                # make sure we copied the right directories
-                mock_copytree.assert_called_with(
-                    os.path.join(egg_path, "package"),
-                    os.path.join(temp_package_dir, "package"),
-                    metadata=False,
-                    symlinks=False,
-                )
-                self.assertEqual(mock_copytree.call_count, 1)
+                    # confirm that the files/directories in the path defined in egg-link file (egg_path)
+                    # are copied to the temp package directory
+                    # find_packages() is called on the egg_path to find the packages
+                    mock_copytree.assert_called_with(
+                        Path(egg_path) / "package",
+                        temp_package_dir / "package",
+                        metadata=False,
+                        symlinks=False,
+                    )
+                    self.assertEqual(mock_copytree.call_count, 1)
 
-                # make sure it removes the egg-link from the temp packages
-                # directory
-                mock_remove.assert_called_with(temp_egg_link)
-                self.assertEqual(mock_remove.call_count, 1)
-        finally:
-            shutil.rmtree(temp_package_dir)
+                    # confirm that temp_package_path.glob() is called to find egg-link files
+                    self.assertEqual(mock_glob.call_count, 1)
 
-        return
+                    # confirm that the egg-link file unlinked (deleted) after copying the package
+                    self.assertEqual(mock_unlink.call_count, 1)
 
     def test_detect_dj(self):
         # Sanity
