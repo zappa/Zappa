@@ -578,6 +578,26 @@ class ZappaCLI:
         if self.vargs.get("app_function", None):
             self.app_function = self.vargs["app_function"]
 
+        # Check if we should create settings for manage command
+        if command == "manage" and self.vargs.get("create_settings"):
+            # Generate settings using environment variables and defaults
+            settings = self._generate_settings_dict(stage=self.api_stage)
+
+            # Write settings to zappa_settings.json
+            import json
+
+            settings_file_path = Path("zappa_settings.json")
+
+            with settings_file_path.open("w", encoding="utf8") as zappa_settings_file:
+                json_output = json.dumps(settings, sort_keys=True, indent=4)
+                zappa_settings_file.write(json_output)
+
+            click.echo(
+                click.style("Created ", fg="green", bold=True)
+                + click.style("zappa_settings.json", bold=True)
+                + " with environment variables and defaults."
+            )
+
         # Load our settings, based on api_stage.
         try:
             self.load_settings(self.vargs.get("settings_file"))
@@ -2070,7 +2090,7 @@ class ZappaCLI:
             for config_item in config_args:
                 if "=" in config_item:
                     key, value = config_item.split("=", 1)
-                    config[key] = self._parse_config_value(value)
+                    config[key.lower()] = self._parse_config_value(value)
                 else:
                     raise ValueError(f"Invalid config format '{config_item}'. Use key=value format.")
 
