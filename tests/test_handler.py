@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, Tuple
 
 from mock import Mock
 
@@ -8,35 +9,35 @@ from zappa.utilities import merge_headers
 from .utils import is_base64
 
 
-def no_args():
+def no_args() -> None:
     return
 
 
-def one_arg(first):
+def one_arg(first: Any) -> Any:
     return first
 
 
-def two_args(first, second):
+def two_args(first: Any, second: Any) -> Tuple[Any, Any]:
     return first, second
 
 
-def var_args(*args):
+def var_args(*args: Any) -> Tuple[Any, ...]:
     return args
 
 
-def var_args_with_one(first, *args):
+def var_args_with_one(first: Any, *args: Any) -> Tuple[Any, Any]:
     return first, args[0]
 
 
-def unsupported(first, second, third):
+def unsupported(first: Any, second: Any, third: Any) -> Tuple[Any, Any, Any]:
     return first, second, third
 
 
-def raises_exception(*args, **kwargs):
+def raises_exception(*args: Any, **kwargs: Any) -> None:
     raise Exception("app exception")
 
 
-def handle_bot_intent(event, context):
+def handle_bot_intent(event: Any, context: Any) -> str:
     return "Success"
 
 
@@ -285,7 +286,6 @@ class TestZappa(unittest.TestCase):
         """
         Ensure zappa response bodies are NOT base64 encoded when BINARY_SUPPORT is enabled and the mimetype is "application/json" or starts with "text/".
         """
-
         lh = LambdaHandler("tests.test_binary_support_settings")
 
         text_plain_event = {
@@ -320,7 +320,6 @@ class TestZappa(unittest.TestCase):
         """
         Ensure zappa response bodies are base64 encoded when BINARY_SUPPORT is enabled and Content-Encoding is absent.
         """
-
         lh = LambdaHandler("tests.test_binary_support_settings")
 
         text_plain_event = {
@@ -577,3 +576,35 @@ class TestZappa(unittest.TestCase):
         response = lh.handler(event, None)
 
         self.assertEqual(response, True)
+
+    def test_wsgi_script_name_on_v2_formatted_event(self):
+        """
+        Ensure that requests with payload format version 2.0 succeed
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/return/request/url",
+            "rawQueryString": "",
+            "headers": {
+                "host": "1234567890.execute-api.us-east-1.amazonaws.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+            },
+            "isBase64Encoded": False,
+            "body": "",
+            "cookies": ["Cookie_1=Value1; Expires=21 Oct 2021 07:48 GMT", "Cookie_2=Value2; Max-Age=78000"],
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(
+            response["body"],
+            "https://1234567890.execute-api.us-east-1.amazonaws.com/dev/return/request/url",
+        )

@@ -1,7 +1,9 @@
+from typing import Any, Generator
+
 from werkzeug.wsgi import ClosingIterator
 
 
-def all_casings(input_string):
+def all_casings(input_string: str) -> Generator[str, None, None]:
     """
     Permute all casings of a given string.
 
@@ -28,27 +30,27 @@ class ZappaWSGIMiddleware:
     Most hacks have now been remove except for Set-Cookie permutation.
     """
 
-    def __init__(self, application):
+    def __init__(self, application: Any) -> None:
         self.application = application
 
-    def __call__(self, environ, start_response):
+    def __call__(self, environ: Any, start_response: Any) -> Any:
         """
         We must case-mangle the Set-Cookie header name or AWS will use only a
         single one of these headers.
         """
 
-        def encode_response(status, headers, exc_info=None):
+        def encode_response(status: str, headers: Any, exc_info: Any = None) -> Any:
             """
             This makes the 'set-cookie' headers name lowercase,
             all the non-cookie headers should be sent unharmed.
             Related: https://github.com/Miserlou/Zappa/issues/1965
             """
 
-            new_headers = [header for header in headers if ((type(header[0]) != str) or (header[0].lower() != "set-cookie"))]
+            new_headers = [header for header in headers if isinstance(header[0], str) or header[0].lower() != "set-cookie"]
             cookie_headers = [
                 (header[0].lower(), header[1])
                 for header in headers
-                if ((type(header[0]) == str) and (header[0].lower() == "set-cookie"))
+                if isinstance(header[0], str) and header[0].lower() == "set-cookie"
             ]
             new_headers = new_headers + cookie_headers
 
