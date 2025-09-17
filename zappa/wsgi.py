@@ -126,8 +126,8 @@ def create_wsgi_request(
         environ["SCRIPT_NAME"] = script_name
         path_info = environ["PATH_INFO"]
 
-        if script_name in path_info:
-            environ["PATH_INFO"].replace(script_name, "")
+        if path_info.startswith(script_name):
+            environ["PATH_INFO"] = path_info[len(script_name):]
 
     if remote_user:
         environ["REMOTE_USER"] = remote_user
