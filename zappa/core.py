@@ -54,112 +54,15 @@ logger.setLevel(logging.INFO)
 ##
 # Policies And Template Mappings
 ##
+POLICIES_DIRECTORY = Path(__file__).parent / "policies"
 
-ASSUME_POLICY = """{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "",
-      "Effect": "Allow",
-      "Principal": {
-        "Service": [
-          "apigateway.amazonaws.com",
-          "lambda.amazonaws.com",
-          "events.amazonaws.com"
-        ]
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}"""
+assume_policy_filepath = POLICIES_DIRECTORY / "assume_policy.json"
+assert assume_policy_filepath.exists(), f"Missing policy file: {assume_policy_filepath}"
+ASSUME_POLICY = assume_policy_filepath.read_text()
 
-ATTACH_POLICY = """{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "logs:*"
-            ],
-            "Resource": "arn:aws:logs:*:*:*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "lambda:InvokeFunction"
-            ],
-            "Resource": [
-                "*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "xray:PutTraceSegments",
-                "xray:PutTelemetryRecords"
-            ],
-            "Resource": [
-                "*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ec2:AttachNetworkInterface",
-                "ec2:CreateNetworkInterface",
-                "ec2:DeleteNetworkInterface",
-                "ec2:DescribeInstances",
-                "ec2:DescribeNetworkInterfaces",
-                "ec2:DetachNetworkInterface",
-                "ec2:ModifyNetworkInterfaceAttribute",
-                "ec2:ResetNetworkInterfaceAttribute"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:*"
-            ],
-            "Resource": "arn:aws:s3:::*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "kinesis:*"
-            ],
-            "Resource": "arn:aws:kinesis:*:*:*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "sns:*"
-            ],
-            "Resource": "arn:aws:sns:*:*:*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "sqs:*"
-            ],
-            "Resource": "arn:aws:sqs:*:*:*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "dynamodb:*"
-            ],
-            "Resource": "arn:aws:dynamodb:*:*:*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "route53:*"
-            ],
-            "Resource": "*"
-        }
-    ]
-}"""
+attach_policy_filepath = POLICIES_DIRECTORY / "attach_policy.json"
+assert attach_policy_filepath.exists(), f"Missing policy file: {attach_policy_filepath}"
+ATTACH_POLICY = assume_policy_filepath.read_text()
 
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
 API_GATEWAY_REGIONS = [
@@ -187,6 +90,8 @@ API_GATEWAY_REGIONS = [
     "us-gov-east-1",
     "us-gov-west-1",
 ]
+
+DEFAULT_APIGATEWAY_VERSION = "v1"
 
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#lambda_region
 LAMBDA_REGIONS = [
@@ -1918,21 +1823,122 @@ class Zappa:
     # API Gateway
     ##
 
-    def create_api_gateway_routes(
+    def create_api_gateway_v2_routes(  # type: ignore[no-untyped-def]
         self,
-        lambda_arn,
-        api_name=None,
-        api_key_required=False,
-        authorization_type="NONE",
-        authorizer=None,
-        cors_options=None,
-        description=None,
-        endpoint_configuration=None,
+        lambda_arn: str,
+        api_name: Optional[str] = None,
+        api_key_required: bool = False,
+        authorization_type: str = "NONE",
+        authorizer: Optional[dict[str, str]] = None,
+        cors_options: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
+    ):
+        """
+        Create the API Gateway v2 (HTTP API) for this Zappa deployment.
+        Returns the new Api CF resource.
+        """
+        import troposphere.apigatewayv2 as apigwv2
+
+        # Create the HTTP API
+        http_api = apigwv2.Api("ApiV2")
+        http_api.Name = api_name or lambda_arn.split(":")[-1]
+        if not description:
+            description = "Created automatically by Zappa."
+        http_api.Description = description
+        http_api.ProtocolType = "HTTP"
+
+        # Add CORS if specified
+        if cors_options:
+            cors_config = apigwv2.Cors()
+            cors_config.AllowOrigins = cors_options.get("allowed_origins", ["*"])
+            cors_config.AllowMethods = cors_options.get("allowed_methods", ["*"])
+            cors_config.AllowHeaders = cors_options.get("allowed_headers", ["*"])
+            cors_config.MaxAge = cors_options.get("max_age", 0)
+            if cors_options.get("allow_credentials"):
+                cors_config.AllowCredentials = True
+            if cors_options.get("expose_headers"):
+                cors_config.ExposeHeaders = cors_options["expose_headers"]
+            http_api.CorsConfiguration = cors_config
+
+        self.cf_template.add_resource(http_api)
+
+        # Create the Integration
+        integration = apigwv2.Integration("IntegrationV2")
+        integration.ApiId = troposphere.Ref(http_api)
+        integration.IntegrationType = "AWS_PROXY"
+        integration.IntegrationUri = lambda_arn
+        integration.PayloadFormatVersion = "2.0"
+        self.cf_template.add_resource(integration)
+
+        # Create the default route ($default catches all requests)
+        route = apigwv2.Route("RouteV2")
+        route.ApiId = troposphere.Ref(http_api)
+        route.RouteKey = "$default"
+        route.Target = troposphere.Join("", ["integrations/", troposphere.Ref(integration)])
+        if authorization_type == "AWS_IAM":
+            route.AuthorizationType = "AWS_IAM"
+        elif authorization_type != "NONE":
+            logger.warning("HTTP API v2 currently only supports AWS_IAM and NONE authorization types. Using NONE.")
+            route.AuthorizationType = "NONE"
+        else:
+            route.AuthorizationType = "NONE"
+        self.cf_template.add_resource(route)
+
+        # Create the stage (HTTP APIs require explicit stage)
+        stage = apigwv2.Stage("StageV2")
+        stage.ApiId = troposphere.Ref(http_api)
+        stage.StageName = "$default"
+        stage.AutoDeploy = True
+        self.cf_template.add_resource(stage)
+
+        # Add Lambda permission for API Gateway v2 to invoke the function
+        permission = troposphere.awslambda.Permission("ApiInvokePermissionV2")
+        permission.FunctionName = lambda_arn
+        permission.Action = "lambda:InvokeFunction"
+        permission.Principal = "apigateway.amazonaws.com"
+        permission.SourceArn = troposphere.Join(
+            "",
+            [
+                "arn:aws:execute-api:",
+                troposphere.Ref("AWS::Region"),
+                ":",
+                troposphere.Ref("AWS::AccountId"),
+                ":",
+                troposphere.Ref(http_api),
+                "/*",
+            ],
+        )
+        self.cf_template.add_resource(permission)
+
+        return http_api
+
+    def create_api_gateway_routes(  # type: ignore[no-untyped-def]
+        self,
+        lambda_arn: str,
+        api_name: Optional[str] = None,
+        api_key_required: bool = False,
+        authorization_type: str = "NONE",
+        authorizer: Optional[dict[str, str]] = None,
+        cors_options: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
+        endpoint_configuration: Optional[list[str]] = None,
+        apigateway_version: str = DEFAULT_APIGATEWAY_VERSION,
     ):
         """
         Create the API Gateway for this Zappa deployment.
-        Returns the new RestAPI CF resource.
+        Returns the new RestAPI CF resource (v1) or Api CF resource (v2).
         """
+
+        if apigateway_version == "v2":
+            return self.create_api_gateway_v2_routes(
+                lambda_arn=lambda_arn,
+                api_name=api_name,
+                api_key_required=api_key_required,
+                authorization_type=authorization_type,
+                authorizer=authorizer,
+                cors_options=cors_options,
+                description=description,
+            )
 
         restapi = troposphere.apigateway.RestApi("Api")
         restapi.Name = api_name or lambda_arn.split(":")[-1]
@@ -2482,6 +2488,7 @@ class Zappa:
         cors_options=None,
         description=None,
         endpoint_configuration=None,
+        apigateway_version=DEFAULT_APIGATEWAY_VERSION,
     ):
         """
         Build the entire CF stack.
@@ -2516,6 +2523,7 @@ class Zappa:
             cors_options=cors_options,
             description=description,
             endpoint_configuration=endpoint_configuration,
+            apigateway_version=apigateway_version,
         )
         return self.cf_template
 

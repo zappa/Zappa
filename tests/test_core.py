@@ -619,6 +619,124 @@ class TestZappa(unittest.TestCase):
             parsable_template["Resources"]["Authorizer"]["Properties"]["AuthorizerUri"],
         )
 
+    def test_create_api_gateway_v2_routes(self):
+        """Test API Gateway v2 (HTTP API) creation"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        # Test basic v2 API Gateway creation
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify HTTP API resource exists
+        self.assertIn("ApiV2", parsable_template["Resources"])
+        api_resource = parsable_template["Resources"]["ApiV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Api", api_resource["Type"])
+        self.assertEqual("HTTP", api_resource["Properties"]["ProtocolType"])
+        self.assertEqual("helloworld", api_resource["Properties"]["Name"])
+
+        # Verify Integration exists
+        self.assertIn("IntegrationV2", parsable_template["Resources"])
+        integration_resource = parsable_template["Resources"]["IntegrationV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Integration", integration_resource["Type"])
+        self.assertEqual("AWS_PROXY", integration_resource["Properties"]["IntegrationType"])
+        self.assertEqual("2.0", integration_resource["Properties"]["PayloadFormatVersion"])
+
+        # Verify Route exists
+        self.assertIn("RouteV2", parsable_template["Resources"])
+        route_resource = parsable_template["Resources"]["RouteV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Route", route_resource["Type"])
+        self.assertEqual("$default", route_resource["Properties"]["RouteKey"])
+        self.assertEqual("NONE", route_resource["Properties"]["AuthorizationType"])
+
+        # Verify Stage exists
+        self.assertIn("StageV2", parsable_template["Resources"])
+        stage_resource = parsable_template["Resources"]["StageV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Stage", stage_resource["Type"])
+        self.assertEqual("$default", stage_resource["Properties"]["StageName"])
+        self.assertTrue(stage_resource["Properties"]["AutoDeploy"])
+
+        # Verify Lambda permission exists
+        self.assertIn("ApiInvokePermissionV2", parsable_template["Resources"])
+        permission_resource = parsable_template["Resources"]["ApiInvokePermissionV2"]
+        self.assertEqual("AWS::Lambda::Permission", permission_resource["Type"])
+        self.assertEqual("lambda:InvokeFunction", permission_resource["Properties"]["Action"])
+
+    def test_create_api_gateway_v2_with_iam_auth(self):
+        """Test API Gateway v2 with IAM authorization"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        # Test v2 with IAM auth
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=True,
+            authorizer=None,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify Route has IAM authorization
+        route_resource = parsable_template["Resources"]["RouteV2"]
+        self.assertEqual("AWS_IAM", route_resource["Properties"]["AuthorizationType"])
+
+    def test_create_api_gateway_v2_with_cors(self):
+        """Test API Gateway v2 with CORS configuration"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        cors_options = {
+            "allowed_origins": ["https://example.com"],
+            "allowed_methods": ["GET", "POST"],
+            "allowed_headers": ["Content-Type"],
+            "max_age": 3600,
+        }
+
+        # Test v2 with CORS
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            cors_options=cors_options,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify CORS configuration
+        api_resource = parsable_template["Resources"]["ApiV2"]
+        self.assertIn("CorsConfiguration", api_resource["Properties"])
+        cors_config = api_resource["Properties"]["CorsConfiguration"]
+        self.assertEqual(["https://example.com"], cors_config["AllowOrigins"])
+        self.assertEqual(["GET", "POST"], cors_config["AllowMethods"])
+        self.assertEqual(["Content-Type"], cors_config["AllowHeaders"])
+        self.assertEqual(3600, cors_config["MaxAge"])
+
     def test_policy_json(self):
         # ensure the policy docs are valid JSON
         json.loads(ASSUME_POLICY)
@@ -1492,6 +1610,13 @@ class TestZappa(unittest.TestCase):
         zappa_cli.api_stage = "function_url_enabled"
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(True, zappa_cli.stage_config["function_url_enabled"])
+
+    def test_load_settings__apigateway_version_v2(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "apigateway_v2"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual("v2", zappa_cli.stage_config["apigateway_version"])
+        self.assertEqual("v2", zappa_cli.apigateway_version)
 
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()

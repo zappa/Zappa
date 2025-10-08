@@ -700,6 +700,7 @@ class ZappaCLI:
             cors_options=self.cors,
             description=self.apigateway_description,
             endpoint_configuration=self.endpoint_configuration,
+            apigateway_version=self.apigateway_version,
         )
 
         if not output:
@@ -874,6 +875,7 @@ class ZappaCLI:
                 cors_options=self.cors,
                 description=self.apigateway_description,
                 endpoint_configuration=self.endpoint_configuration,
+                apigateway_version=self.apigateway_version,
             )
 
             self.zappa.update_stack(
@@ -1092,6 +1094,7 @@ class ZappaCLI:
                 cors_options=self.cors,
                 description=self.apigateway_description,
                 endpoint_configuration=self.endpoint_configuration,
+                apigateway_version=self.apigateway_version,
             )
             self.zappa.update_stack(
                 self.lambda_name,
@@ -1898,7 +1901,7 @@ class ZappaCLI:
             django_settings = django_settings.replace("'", "")
             django_settings = django_settings.replace('"', "")
         else:
-            matches = None
+            matches = []
             if has_flask:
                 click.echo("It looks like this is a " + click.style("Flask", bold=True) + " application.")
                 matches = detect_flask_apps()
@@ -2336,6 +2339,7 @@ class ZappaCLI:
         if self.use_apigateway:
             self.use_apigateway = self.stage_config.get("apigateway_enabled", True)
         self.apigateway_description = self.stage_config.get("apigateway_description", None)
+        self.apigateway_version = self.stage_config.get("apigateway_version", "v1")
 
         self.lambda_handler = self.stage_config.get("lambda_handler", "handler.lambda_handler")
         # DEPRECATED. https://github.com/Miserlou/Zappa/issues/456

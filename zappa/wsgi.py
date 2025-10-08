@@ -68,7 +68,7 @@ def create_wsgi_request(
     headers = titlecase_keys(headers)
 
     if base_path:
-        script_name = "/" + base_path
+        script_name = f"/{base_path}"
 
         if path.startswith(script_name):
             path = path[len(script_name) :]
