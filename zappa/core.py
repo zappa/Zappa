@@ -62,7 +62,7 @@ ASSUME_POLICY = assume_policy_filepath.read_text()
 
 attach_policy_filepath = POLICIES_DIRECTORY / "attach_policy.json"
 assert attach_policy_filepath.exists(), f"Missing policy file: {attach_policy_filepath}"
-ATTACH_POLICY = assume_policy_filepath.read_text()
+ATTACH_POLICY = attach_policy_filepath.read_text()
 
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
 API_GATEWAY_REGIONS = [
@@ -1832,6 +1832,7 @@ class Zappa:
         authorizer: Optional[dict[str, str]] = None,
         cors_options: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
+        stage_name: Optional[str] = None,
     ):
         """
         Create the API Gateway v2 (HTTP API) for this Zappa deployment.
@@ -1887,7 +1888,8 @@ class Zappa:
         # Create the stage (HTTP APIs require explicit stage)
         stage = apigwv2.Stage("StageV2")
         stage.ApiId = troposphere.Ref(http_api)
-        stage.StageName = "$default"
+        # Use provided stage_name, default to "$default" for backward compatibility
+        stage.StageName = stage_name if stage_name else "$default"
         stage.AutoDeploy = True
         self.cf_template.add_resource(stage)
 
@@ -1923,6 +1925,7 @@ class Zappa:
         description: Optional[str] = None,
         endpoint_configuration: Optional[list[str]] = None,
         apigateway_version: str = DEFAULT_APIGATEWAY_VERSION,
+        stage_name: Optional[str] = None,
     ):
         """
         Create the API Gateway for this Zappa deployment.
@@ -1938,6 +1941,7 @@ class Zappa:
                 authorizer=authorizer,
                 cors_options=cors_options,
                 description=description,
+                stage_name=stage_name,
             )
 
         restapi = troposphere.apigateway.RestApi("Api")
@@ -2489,6 +2493,7 @@ class Zappa:
         description=None,
         endpoint_configuration=None,
         apigateway_version=DEFAULT_APIGATEWAY_VERSION,
+        stage_name=None,
     ):
         """
         Build the entire CF stack.
@@ -2524,6 +2529,7 @@ class Zappa:
             description=description,
             endpoint_configuration=endpoint_configuration,
             apigateway_version=apigateway_version,
+            stage_name=stage_name,
         )
         return self.cf_template
 
@@ -2648,26 +2654,32 @@ class Zappa:
         except botocore.client.ClientError:
             return {}
 
-    def get_api_url(self, lambda_name, stage_name):
+    def get_api_url(self, lambda_name, stage_name, apigateway_version=DEFAULT_APIGATEWAY_VERSION):
         """
         Given a lambda_name and stage_name, return a valid API URL.
         """
-        api_id = self.get_api_id(lambda_name)
+        api_id = self.get_api_id(lambda_name, apigateway_version=apigateway_version)
         if api_id:
+            # For all versions, include the stage name in the URL
             return "https://{}.execute-api.{}.amazonaws.com/{}".format(api_id, self.boto_session.region_name, stage_name)
         else:
             return None
 
-    def get_api_id(self, lambda_name):
+    def get_api_id(self, lambda_name: str, apigateway_version: str = DEFAULT_APIGATEWAY_VERSION):
         """
         Given a lambda_name, return the API id.
         """
+        # Try v2 resource name first if v2, otherwise try v1 resource name
+        resource_name = "Api"
+        if apigateway_version != "v1":
+            resource_name = "ApiV2"
+
         try:
-            response = self.cf_client.describe_stack_resource(StackName=lambda_name, LogicalResourceId="Api")
+            response = self.cf_client.describe_stack_resource(StackName=lambda_name, LogicalResourceId=resource_name)
             return response["StackResourceDetail"].get("PhysicalResourceId", None)
         except Exception:  # pragma: no cover
+            # Try the old method (project was probably made on an older, non CF version)
             try:
-                # Try the old method (project was probably made on an older, non CF version)
                 response = self.apigateway_client.get_rest_apis(limit=500)
 
                 for item in response["items"]:

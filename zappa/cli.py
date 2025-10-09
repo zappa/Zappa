@@ -701,6 +701,7 @@ class ZappaCLI:
             description=self.apigateway_description,
             endpoint_configuration=self.endpoint_configuration,
             apigateway_version=self.apigateway_version,
+            stage_name=self.api_stage,
         )
 
         if not output:
@@ -876,6 +877,7 @@ class ZappaCLI:
                 description=self.apigateway_description,
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
+                stage_name=self.api_stage,
             )
 
             self.zappa.update_stack(
@@ -885,21 +887,27 @@ class ZappaCLI:
                 disable_progress=self.disable_progress,
             )
 
-            api_id = self.zappa.get_api_id(self.lambda_name)
+            api_id = self.zappa.get_api_id(self.lambda_name, apigateway_version=self.apigateway_version)
 
-            # Add binary support
-            if self.binary_support:
+            # Add binary support (v1 only - v2 handles binary automatically)
+            if self.binary_support and self.apigateway_version == "v1":
                 self.zappa.add_binary_support(api_id=api_id, cors=self.cors)
 
-            # Add payload compression
-            if self.stage_config.get("payload_compression", True):
+            # Add payload compression (v1 only)
+            if self.stage_config.get("payload_compression", True) and self.apigateway_version == "v1":
                 self.zappa.add_api_compression(
                     api_id=api_id,
                     min_compression_size=self.stage_config.get("payload_minimum_compression_size", 0),
                 )
 
             # Deploy the API!
-            endpoint_url = self.deploy_api_gateway(api_id)
+            if self.apigateway_version == "v1":
+                endpoint_url = self.deploy_api_gateway(api_id)
+            else:
+                # API Gateway v2 uses AutoDeploy, no need to call deploy
+                endpoint_url = self.zappa.get_api_url(
+                    self.lambda_name, self.api_stage, apigateway_version=self.apigateway_version
+                )
             deployment_string = deployment_string + ": {}".format(endpoint_url)
 
             # Create/link API key
@@ -1095,6 +1103,7 @@ class ZappaCLI:
                 description=self.apigateway_description,
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
+                stage_name=self.api_stage,
             )
             self.zappa.update_stack(
                 self.lambda_name,
@@ -1104,25 +1113,33 @@ class ZappaCLI:
                 disable_progress=self.disable_progress,
             )
 
-            api_id = self.zappa.get_api_id(self.lambda_name)
+            api_id = self.zappa.get_api_id(self.lambda_name, apigateway_version=self.apigateway_version)
 
-            # Update binary support
-            if self.binary_support:
-                self.zappa.add_binary_support(api_id=api_id, cors=self.cors)
-            else:
-                self.zappa.remove_binary_support(api_id=api_id, cors=self.cors)
+            # Update binary support (v1 only - v2 handles binary automatically)
+            if self.apigateway_version == "v1":
+                if self.binary_support:
+                    self.zappa.add_binary_support(api_id=api_id, cors=self.cors)
+                else:
+                    self.zappa.remove_binary_support(api_id=api_id, cors=self.cors)
 
-            if self.stage_config.get("payload_compression", True):
-                self.zappa.add_api_compression(
-                    api_id=api_id,
-                    min_compression_size=self.stage_config.get("payload_minimum_compression_size", 0),
-                )
-            else:
-                self.zappa.remove_api_compression(api_id=api_id)
+                if self.stage_config.get("payload_compression", True):
+                    self.zappa.add_api_compression(
+                        api_id=api_id,
+                        min_compression_size=self.stage_config.get("payload_minimum_compression_size", 0),
+                    )
+                else:
+                    self.zappa.remove_api_compression(api_id=api_id)
 
             # It looks a bit like we might actually be using this just to get the URL,
             # but we're also updating a few of the APIGW settings.
-            endpoint_url = self.deploy_api_gateway(api_id)
+            if self.apigateway_version == "v1":
+                endpoint_url = self.deploy_api_gateway(api_id)
+            else:
+                # API Gateway v2 uses AutoDeploy, no need to call deploy
+                # Get the URL directly
+                endpoint_url = self.zappa.get_api_url(
+                    self.lambda_name, self.api_stage, apigateway_version=self.apigateway_version
+                )
 
             if self.stage_config.get("domain", None):
                 endpoint_url = self.stage_config.get("domain")
@@ -1585,14 +1602,15 @@ class ZappaCLI:
 
         # URLs
         if self.use_apigateway:
-            api_url = self.zappa.get_api_url(self.lambda_name, self.api_stage)
+            api_url = self.zappa.get_api_url(self.lambda_name, self.api_stage, apigateway_version=self.apigateway_version)
 
             status_dict["API Gateway URL"] = api_url
 
-            # Api Keys
-            api_id = self.zappa.get_api_id(self.lambda_name)
-            for api_key in self.zappa.get_api_keys(api_id, self.api_stage):
-                status_dict["API Gateway x-api-key"] = api_key
+            # Api Keys (v1 only - v2 doesn't support API keys in the same way)
+            if self.apigateway_version == "v1":
+                api_id = self.zappa.get_api_id(self.lambda_name, apigateway_version=self.apigateway_version)
+                for api_key in self.zappa.get_api_keys(api_id, self.api_stage):
+                    status_dict["API Gateway x-api-key"] = api_key
 
             # There literally isn't a better way to do this.
             # AWS provides no way to tie a APIGW domain name to its Lambda function.
@@ -1604,6 +1622,17 @@ class ZappaCLI:
                     status_dict["Domain URL"] += "/" + base_path
             else:
                 status_dict["Domain URL"] = "None Supplied"
+
+        # Function URL
+        if self.use_function_url:
+            try:
+                response = self.zappa.lambda_client.list_function_url_configs(FunctionName=self.lambda_name, MaxItems=50)
+                if response.get("FunctionUrlConfigs"):
+                    status_dict["Function URL"] = response["FunctionUrlConfigs"][0]["FunctionUrl"]
+                else:
+                    status_dict["Function URL"] = "Not configured"
+            except Exception:
+                status_dict["Function URL"] = "Error retrieving"
 
         # Scheduled Events
         event_rules = self.zappa.get_event_rules_for_lambda(lambda_arn=self.lambda_arn)

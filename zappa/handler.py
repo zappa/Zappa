@@ -521,9 +521,21 @@ class LambdaHandler:
             try:
                 time_start = datetime.datetime.now()
 
-                # API Gateway v2's rawPath already includes the stage
-                # - Not necessary to add the settigns.API_STAGE to the 'script_name'.
-                script_name = ""
+                # Determine if this is API Gateway v2 (has stage) or Function URL (no stage)
+                # API Gateway v2 includes stage in requestContext
+                request_context = event.get("requestContext", {})
+                stage = request_context.get("stage")
+
+                # For API Gateway v2, the stage is included in rawPath and we need to
+                # set script_name so it can be stripped from PATH_INFO
+                # For Function URLs (no stage), leave script_name empty
+                if stage:
+                    # API Gateway v2 with named stage - rawPath includes the stage
+                    script_name = f"/{stage}"
+                else:
+                    # Function URL - no stage
+                    script_name = ""
+
                 base_path = getattr(settings, "BASE_PATH", None)
                 environ = create_wsgi_request(
                     event,
