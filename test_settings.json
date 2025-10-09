@@ -141,8 +141,11 @@
         "function_url_enabled": true
      },
     "apigateway_v2": {
-        "extends": "ttt888",
-        "apigateway_version": "v2"
+        "s3_bucket": "lmbda",
+        "app_function": "tests.test_app.hello_world",
+        "apigateway_version": "v2",
+        "delete_local_zip": true,
+        "debug": true
      },
     "addtextmimetypes": {
        "s3_bucket": "lmbda",

@@ -521,27 +521,9 @@ class LambdaHandler:
             try:
                 time_start = datetime.datetime.now()
 
+                # API Gateway v2's rawPath already includes the stage
+                # - Not necessary to add the settigns.API_STAGE to the 'script_name'.
                 script_name = ""
-                host = event.get("headers", {}).get("host")
-                if host:
-                    if "amazonaws.com" in host:
-                        logger.debug("amazonaws found in host")
-                        # The path provided in th event doesn't include the
-                        # stage, so we must tell Flask to include the API
-                        # stage in the url it calculates. See https://github.com/Miserlou/Zappa/issues/1014
-                        script_name = f"/{settings.API_STAGE}"
-                else:
-                    # This is a test request sent from the AWS console
-                    if settings.DOMAIN:
-                        # Assume the requests received will be on the specified
-                        # domain. No special handling is required
-                        pass
-                    else:
-                        # Assume the requests received will be to the
-                        # amazonaws.com endpoint, so tell Flask to include the
-                        # API stage
-                        script_name = f"/{settings.API_STAGE}"
-
                 base_path = getattr(settings, "BASE_PATH", None)
                 environ = create_wsgi_request(
                     event,
@@ -661,7 +643,7 @@ class LambdaHandler:
                             # The path provided in th event doesn't include the
                             # stage, so we must tell Flask to include the API
                             # stage in the url it calculates. See https://github.com/Miserlou/Zappa/issues/1014
-                            script_name = "/" + settings.API_STAGE
+                            script_name = f"/{settings.API_STAGE}"
                         # fix function url domain
                         if host.find("lambda-url") > -1 and event.get("headers", {}).get("cloudfront-host"):
                             # https://stackoverflow.com/questions/73024633/cloudfront-forward-host-header-to-lambda-function-url-origin
@@ -676,7 +658,7 @@ class LambdaHandler:
                             # Assume the requests received will be to the
                             # amazonaws.com endpoint, so tell Flask to include the
                             # API stage
-                            script_name = "/" + settings.API_STAGE
+                            script_name = f"/{settings.API_STAGE}"
 
                 base_path = getattr(settings, "BASE_PATH", None)
 
