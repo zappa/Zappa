@@ -577,9 +577,9 @@ class TestZappa(unittest.TestCase):
 
         self.assertEqual(response, True)
 
-    def test_wsgi_script_name_on_v2_formatted_event(self):
+    def test_wsgi_script_name_on_v2_formatted_event_function_url(self):
         """
-        Ensure that requests with payload format version 2.0 succeed
+        Ensure that requests with payload format version 2.0 succeed (Function URL case - no stage)
         """
         lh = LambdaHandler("tests.test_wsgi_script_name_settings")
 
@@ -596,6 +596,7 @@ class TestZappa(unittest.TestCase):
                     "method": "GET",
                     "path": "/return/request/url",
                 },
+                # No "stage" key - this is a Function URL, not API Gateway v2
             },
             "isBase64Encoded": False,
             "body": "",
@@ -604,9 +605,10 @@ class TestZappa(unittest.TestCase):
         response = lh.handler(event, None)
 
         self.assertEqual(response["statusCode"], 200)
+        # Function URL has no stage, so URL should not include /dev
         self.assertEqual(
             response["body"],
-            "https://1234567890.execute-api.us-east-1.amazonaws.com/dev/return/request/url",
+            "https://1234567890.execute-api.us-east-1.amazonaws.com/return/request/url",
         )
 
     def test_wsgi_script_name_on_v2_formatted_event_with_stage_in_path(self):
@@ -645,14 +647,15 @@ class TestZappa(unittest.TestCase):
             "https://1234567890.execute-api.us-east-1.amazonaws.com/dev/return/request/url",
         )
 
-    def test_wsgi_environ_shows_double_prefix_bug(self):
+    def test_wsgi_environ_fixes_double_prefix_bug(self):
         """
-        Debug test to show the exact WSGI environ values causing the double prefix bug.
+        Test that verifies the fix for issue #1389 (double prefix bug).
         This test calls the /debug/wsgi/environ endpoint to inspect SCRIPT_NAME and PATH_INFO.
 
-        Issue #1389: With API Gateway v2, rawPath="/dev/debug/wsgi/environ" but the stage
-        stripping code doesn't work, so PATH_INFO still contains "/dev/debug/wsgi/environ".
-        When combined with SCRIPT_NAME="/dev", Flask builds: /dev + /dev/debug/wsgi/environ
+        Issue #1389: With API Gateway v2, rawPath="/dev/debug/wsgi/environ" includes the stage.
+        The fix correctly strips the stage prefix from PATH_INFO.
+        SCRIPT_NAME="/dev" and PATH_INFO="/debug/wsgi/environ" (stage stripped)
+        Flask correctly builds: /dev + /debug/wsgi/environ = /dev/debug/wsgi/environ
         """
         lh = LambdaHandler("tests.test_wsgi_script_name_settings")
 
@@ -678,11 +681,11 @@ class TestZappa(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 200)
         # The response body shows the WSGI environ values
-        # BUGGY behavior: SCRIPT_NAME='/dev' PATH_INFO='/dev/debug/wsgi/environ'
-        # This causes Flask to build URL: /dev + /dev/debug/wsgi/environ = /dev/dev/debug/wsgi/environ
+        # FIXED behavior: SCRIPT_NAME='/dev' PATH_INFO='/debug/wsgi/environ' (stage stripped correctly)
+        # Flask correctly builds URL: /dev + /debug/wsgi/environ = /dev/debug/wsgi/environ
         print(f"\nDEBUG - Response body: {response['body']}")
 
-        # The bug causes the double prefix
+        # Verify the fix: stage is stripped from PATH_INFO
         self.assertIn("SCRIPT_NAME='/dev'", response["body"])
-        self.assertIn("PATH_INFO='/dev/debug/wsgi/environ'", response["body"])  # BUG: should be '/debug/wsgi/environ'
-        self.assertIn("/dev/dev/debug/wsgi/environ", response["body"])  # Double prefix!
+        self.assertIn("PATH_INFO='/debug/wsgi/environ'", response["body"])  # FIXED: stage stripped
+        self.assertIn("/dev/debug/wsgi/environ", response["body"])  # Correct single prefix!
