@@ -1343,7 +1343,7 @@ the `profile_name` setting, which will correspond to a profile in your AWS crede
 
 The default IAM policy created by Zappa for executing the Lambda is very permissive.
 It grants access to all actions for
-all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction
+all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction and lambda:InvokeFunctionUrl
 for all Lambda resources; Put to all X-Ray resources; and all Network Interface operations to all EC2
 resources. While this allows most Lambdas to work correctly with no extra permissions, it is
 generally not an acceptable set of permissions for most continuous integration pipelines or
