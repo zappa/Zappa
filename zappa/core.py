@@ -63,6 +63,119 @@ ASSUME_POLICY = assume_policy_filepath.read_text()
 attach_policy_filepath = POLICIES_DIRECTORY / "attach_policy.json"
 assert attach_policy_filepath.exists(), f"Missing policy file: {attach_policy_filepath}"
 ATTACH_POLICY = attach_policy_filepath.read_text()
+ASSUME_POLICY = """{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": [
+          "apigateway.amazonaws.com",
+          "lambda.amazonaws.com",
+          "events.amazonaws.com"
+        ]
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}"""
+
+ATTACH_POLICY = """{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:*"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeFunction",
+                "lambda:InvokeFunctionUrl"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "xray:PutTraceSegments",
+                "xray:PutTelemetryRecords"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:AttachNetworkInterface",
+                "ec2:CreateNetworkInterface",
+                "ec2:DeleteNetworkInterface",
+                "ec2:DescribeInstances",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DetachNetworkInterface",
+                "ec2:ModifyNetworkInterfaceAttribute",
+                "ec2:ResetNetworkInterfaceAttribute"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:*"
+            ],
+            "Resource": "arn:aws:s3:::*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "kinesis:*"
+            ],
+            "Resource": "arn:aws:kinesis:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sns:*"
+            ],
+            "Resource": "arn:aws:sns:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sqs:*"
+            ],
+            "Resource": "arn:aws:sqs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:*"
+            ],
+            "Resource": "arn:aws:dynamodb:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "route53:*"
+            ],
+            "Resource": "*"
+        }
+    ]
+}"""
+
+FUNCTION_URL_PUBLIC_PERMISSION_RULES = (
+    ("FunctionURLAllowPublicAccess", "lambda:InvokeFunctionUrl", True),
+    ("FunctionURLAllowPublicAccessInvoke", "lambda:InvokeFunction", False),
+)
+
+FUNCTION_URL_PUBLIC_PERMISSION_SIDS = {rule[0] for rule in FUNCTION_URL_PUBLIC_PERMISSION_RULES}
 
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
 API_GATEWAY_REGIONS = [
@@ -1407,7 +1520,7 @@ class Zappa:
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    if s["Sid"] in ["FunctionURLAllowPublicAccess"]:
+                    if s["Sid"] in FUNCTION_URL_PUBLIC_PERMISSION_SIDS:
                         results.append(s)
             else:
                 logger.debug("Failed to load Lambda function policy: {}".format(policy_response))
@@ -1427,16 +1540,21 @@ class Zappa:
 
     def update_function_url_policy(self, function_name, function_url_config):
         statements = self.list_function_url_policy(function_name)
+        existing_statement_ids = {statement["Sid"] for statement in statements}
 
         if function_url_config["authorizer"] == "NONE":
-            if not statements:
-                self.lambda_client.add_permission(
-                    FunctionName=function_name,
-                    StatementId="FunctionURLAllowPublicAccess",
-                    Action="lambda:InvokeFunctionUrl",
-                    Principal="*",
-                    FunctionUrlAuthType=function_url_config["authorizer"],
-                )
+            for sid, action, requires_auth_type in FUNCTION_URL_PUBLIC_PERMISSION_RULES:
+                if sid in existing_statement_ids:
+                    continue
+                permission_kwargs = {
+                    "FunctionName": function_name,
+                    "StatementId": sid,
+                    "Action": action,
+                    "Principal": "*",
+                }
+                if requires_auth_type:
+                    permission_kwargs["FunctionUrlAuthType"] = function_url_config["authorizer"]
+                self.lambda_client.add_permission(**permission_kwargs)
         elif function_url_config["authorizer"] == "AWS_IAM":
             if statements:
                 self.delete_function_url_policy(function_name)

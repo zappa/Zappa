@@ -2964,13 +2964,23 @@ class TestZappa(unittest.TestCase):
             },
         )
 
-        boto_mock.client().add_permission.assert_called_with(
-            FunctionName=function_name,
-            StatementId="FunctionURLAllowPublicAccess",
-            Action="lambda:InvokeFunctionUrl",
-            Principal="*",
-            FunctionUrlAuthType=function_url_config["authorizer"],
-        )
+        expected_permission_calls = [
+            mock.call(
+                FunctionName=function_name,
+                StatementId="FunctionURLAllowPublicAccess",
+                Action="lambda:InvokeFunctionUrl",
+                Principal="*",
+                FunctionUrlAuthType=function_url_config["authorizer"],
+            ),
+            mock.call(
+                FunctionName=function_name,
+                StatementId="FunctionURLAllowPublicAccessInvoke",
+                Action="lambda:InvokeFunction",
+                Principal="*",
+            ),
+        ]
+        boto_mock.client().add_permission.assert_has_calls(expected_permission_calls)
+        self.assertEqual(boto_mock.client().add_permission.call_count, 2)
 
     @mock.patch("botocore.client")
     def test_update_lambda_function_url(self, client):
@@ -3016,7 +3026,9 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
 
         zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
@@ -3083,11 +3095,15 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
         zappa_core.lambda_client.remove_permission.return_value = {
             "ResponseMetadata": {"HTTPStatusCode": 200},
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"xxxxx"}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":"xxxxx"},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"xxxxx"}]}',
         }
         zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
         boto_mock.client().update_function_url_config.assert_called_with(
@@ -3106,9 +3122,12 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().get_policy.assert_called_with(
             FunctionName=function_arn,
         )
-        boto_mock.client().delete_policy.remove_permission(
-            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
-        )
+        expected_remove_calls = [
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+        ]
+        boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
+        self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
         boto_mock.client().add_permission.assert_not_called()
         boto_mock.client().create_function_url_config.assert_not_called()
 
@@ -3144,7 +3163,9 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
         zappa_core.lambda_client.remove_permission.return_value = {
             "ResponseMetadata": {
@@ -3160,9 +3181,12 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().get_policy.assert_called_with(
             FunctionName=function_arn,
         )
-        boto_mock.client().delete_policy.remove_permission(
-            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
-        )
+        expected_remove_calls = [
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+        ]
+        boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
+        self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
         boto_mock.client().add_permission.assert_not_called()
         boto_mock.client().create_function_url_config.assert_not_called()
         boto_mock.client().update_function_url_config.assert_not_called()
