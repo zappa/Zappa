@@ -259,6 +259,8 @@ ALB_LAMBDA_ALIAS = "current-alb-version"
 X86_ARCHITECTURE = "x86_64"
 ARM_ARCHITECTURE = "arm64"
 VALID_ARCHITECTURES = (X86_ARCHITECTURE, ARM_ARCHITECTURE)
+DEFAULT_AWS_REGION = "us-east-1"
+ACM_CERTIFICATE_REGION = "us-east-1"
 
 
 def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) -> re.Pattern:
@@ -392,7 +394,7 @@ class Zappa:
             self.events_client = self.boto_client("events")
             self.apigateway_client = self.boto_client("apigateway")
             # AWS ACM certificates need to be created from us-east-1 to be used by API gateway
-            east_config = botocore.client.Config(region_name="us-east-1")
+            east_config = botocore.client.Config(region_name=ACM_CERTIFICATE_REGION)
             self.acm_client = self.boto_client("acm", config=east_config)
             self.logs_client = self.boto_client("logs")
             self.iam_client = self.boto_client("iam")
@@ -3017,20 +3019,6 @@ class Zappa:
 
         except Exception:
             return None
-
-        ##
-        # Old, automatic logic.
-        # If re-introduced, should be moved to a new function.
-        # Related ticket: https://github.com/Miserlou/Zappa/pull/458
-        ##
-
-        # We may be in a position where Route53 doesn't have a domain, but the API Gateway does.
-        # We need to delete this before we can create the new Route53.
-        # try:
-        #     api_gateway_domain = self.apigateway_client.get_domain_name(domainName=domain_name)
-        #     self.apigateway_client.delete_domain_name(domainName=domain_name)
-        # except Exception:
-        #     pass
 
         return None
 
