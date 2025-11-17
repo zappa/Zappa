@@ -54,7 +54,15 @@ logger.setLevel(logging.INFO)
 ##
 # Policies And Template Mappings
 ##
+POLICIES_DIRECTORY = Path(__file__).parent / "policies"
 
+assume_policy_filepath = POLICIES_DIRECTORY / "assume_policy.json"
+assert assume_policy_filepath.exists(), f"Missing policy file: {assume_policy_filepath}"
+ASSUME_POLICY = assume_policy_filepath.read_text()
+
+attach_policy_filepath = POLICIES_DIRECTORY / "attach_policy.json"
+assert attach_policy_filepath.exists(), f"Missing policy file: {attach_policy_filepath}"
+ATTACH_POLICY = attach_policy_filepath.read_text()
 ASSUME_POLICY = """{
   "Version": "2012-10-17",
   "Statement": [
@@ -86,7 +94,8 @@ ATTACH_POLICY = """{
         {
             "Effect": "Allow",
             "Action": [
-                "lambda:InvokeFunction"
+                "lambda:InvokeFunction",
+                "lambda:InvokeFunctionUrl"
             ],
             "Resource": [
                 "*"
@@ -161,6 +170,13 @@ ATTACH_POLICY = """{
     ]
 }"""
 
+FUNCTION_URL_PUBLIC_PERMISSION_RULES = (
+    ("FunctionURLAllowPublicAccess", "lambda:InvokeFunctionUrl", True),
+    ("FunctionURLAllowPublicAccessInvoke", "lambda:InvokeFunction", False),
+)
+
+FUNCTION_URL_PUBLIC_PERMISSION_SIDS = {rule[0] for rule in FUNCTION_URL_PUBLIC_PERMISSION_RULES}
+
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
 API_GATEWAY_REGIONS = [
     "us-east-1",
@@ -187,6 +203,8 @@ API_GATEWAY_REGIONS = [
     "us-gov-east-1",
     "us-gov-west-1",
 ]
+
+DEFAULT_APIGATEWAY_VERSION = "v1"
 
 # Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#lambda_region
 LAMBDA_REGIONS = [
@@ -241,6 +259,8 @@ ALB_LAMBDA_ALIAS = "current-alb-version"
 X86_ARCHITECTURE = "x86_64"
 ARM_ARCHITECTURE = "arm64"
 VALID_ARCHITECTURES = (X86_ARCHITECTURE, ARM_ARCHITECTURE)
+DEFAULT_AWS_REGION = "us-east-1"
+ACM_CERTIFICATE_REGION = "us-east-1"
 
 
 def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) -> re.Pattern:
@@ -374,7 +394,7 @@ class Zappa:
             self.events_client = self.boto_client("events")
             self.apigateway_client = self.boto_client("apigateway")
             # AWS ACM certificates need to be created from us-east-1 to be used by API gateway
-            east_config = botocore.client.Config(region_name="us-east-1")
+            east_config = botocore.client.Config(region_name=ACM_CERTIFICATE_REGION)
             self.acm_client = self.boto_client("acm", config=east_config)
             self.logs_client = self.boto_client("logs")
             self.iam_client = self.boto_client("iam")
@@ -1508,7 +1528,7 @@ class Zappa:
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    if s["Sid"] in ["FunctionURLAllowPublicAccess"]:
+                    if s["Sid"] in FUNCTION_URL_PUBLIC_PERMISSION_SIDS:
                         results.append(s)
             else:
                 logger.debug("Failed to load Lambda function policy: {}".format(policy_response))
@@ -1528,16 +1548,21 @@ class Zappa:
 
     def update_function_url_policy(self, function_name, function_url_config):
         statements = self.list_function_url_policy(function_name)
+        existing_statement_ids = {statement["Sid"] for statement in statements}
 
         if function_url_config["authorizer"] == "NONE":
-            if not statements:
-                self.lambda_client.add_permission(
-                    FunctionName=function_name,
-                    StatementId="FunctionURLAllowPublicAccess",
-                    Action="lambda:InvokeFunctionUrl",
-                    Principal="*",
-                    FunctionUrlAuthType=function_url_config["authorizer"],
-                )
+            for sid, action, requires_auth_type in FUNCTION_URL_PUBLIC_PERMISSION_RULES:
+                if sid in existing_statement_ids:
+                    continue
+                permission_kwargs = {
+                    "FunctionName": function_name,
+                    "StatementId": sid,
+                    "Action": action,
+                    "Principal": "*",
+                }
+                if requires_auth_type:
+                    permission_kwargs["FunctionUrlAuthType"] = function_url_config["authorizer"]
+                self.lambda_client.add_permission(**permission_kwargs)
         elif function_url_config["authorizer"] == "AWS_IAM":
             if statements:
                 self.delete_function_url_policy(function_name)
@@ -1924,21 +1949,126 @@ class Zappa:
     # API Gateway
     ##
 
-    def create_api_gateway_routes(
+    def create_api_gateway_v2_routes(  # type: ignore[no-untyped-def]
         self,
-        lambda_arn,
-        api_name=None,
-        api_key_required=False,
-        authorization_type="NONE",
-        authorizer=None,
-        cors_options=None,
-        description=None,
-        endpoint_configuration=None,
+        lambda_arn: str,
+        api_name: Optional[str] = None,
+        api_key_required: bool = False,
+        authorization_type: str = "NONE",
+        authorizer: Optional[dict[str, str]] = None,
+        cors_options: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
+        stage_name: Optional[str] = None,
+    ):
+        """
+        Create the API Gateway v2 (HTTP API) for this Zappa deployment.
+        Returns the new Api CF resource.
+        """
+        import troposphere.apigatewayv2 as apigwv2
+
+        # Create the HTTP API
+        http_api = apigwv2.Api("ApiV2")
+        http_api.Name = api_name or lambda_arn.split(":")[-1]
+        if not description:
+            description = "Created automatically by Zappa."
+        http_api.Description = description
+        http_api.ProtocolType = "HTTP"
+
+        # Add CORS if specified
+        if cors_options:
+            cors_config = apigwv2.Cors()
+            cors_config.AllowOrigins = cors_options.get("allowed_origins", ["*"])
+            cors_config.AllowMethods = cors_options.get("allowed_methods", ["*"])
+            cors_config.AllowHeaders = cors_options.get("allowed_headers", ["*"])
+            cors_config.MaxAge = cors_options.get("max_age", 0)
+            if cors_options.get("allow_credentials"):
+                cors_config.AllowCredentials = True
+            if cors_options.get("expose_headers"):
+                cors_config.ExposeHeaders = cors_options["expose_headers"]
+            http_api.CorsConfiguration = cors_config
+
+        self.cf_template.add_resource(http_api)
+
+        # Create the Integration
+        integration = apigwv2.Integration("IntegrationV2")
+        integration.ApiId = troposphere.Ref(http_api)
+        integration.IntegrationType = "AWS_PROXY"
+        integration.IntegrationUri = lambda_arn
+        integration.PayloadFormatVersion = "2.0"
+        self.cf_template.add_resource(integration)
+
+        # Create the default route ($default catches all requests)
+        route = apigwv2.Route("RouteV2")
+        route.ApiId = troposphere.Ref(http_api)
+        route.RouteKey = "$default"
+        route.Target = troposphere.Join("", ["integrations/", troposphere.Ref(integration)])
+        if authorization_type == "AWS_IAM":
+            route.AuthorizationType = "AWS_IAM"
+        elif authorization_type != "NONE":
+            logger.warning("HTTP API v2 currently only supports AWS_IAM and NONE authorization types. Using NONE.")
+            route.AuthorizationType = "NONE"
+        else:
+            route.AuthorizationType = "NONE"
+        self.cf_template.add_resource(route)
+
+        # Create the stage (HTTP APIs require explicit stage)
+        stage = apigwv2.Stage("StageV2")
+        stage.ApiId = troposphere.Ref(http_api)
+        # Use provided stage_name, default to "$default" for backward compatibility
+        stage.StageName = stage_name if stage_name else "$default"
+        stage.AutoDeploy = True
+        self.cf_template.add_resource(stage)
+
+        # Add Lambda permission for API Gateway v2 to invoke the function
+        permission = troposphere.awslambda.Permission("ApiInvokePermissionV2")
+        permission.FunctionName = lambda_arn
+        permission.Action = "lambda:InvokeFunction"
+        permission.Principal = "apigateway.amazonaws.com"
+        permission.SourceArn = troposphere.Join(
+            "",
+            [
+                "arn:aws:execute-api:",
+                troposphere.Ref("AWS::Region"),
+                ":",
+                troposphere.Ref("AWS::AccountId"),
+                ":",
+                troposphere.Ref(http_api),
+                "/*",
+            ],
+        )
+        self.cf_template.add_resource(permission)
+
+        return http_api
+
+    def create_api_gateway_routes(  # type: ignore[no-untyped-def]
+        self,
+        lambda_arn: str,
+        api_name: Optional[str] = None,
+        api_key_required: bool = False,
+        authorization_type: str = "NONE",
+        authorizer: Optional[dict[str, str]] = None,
+        cors_options: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
+        endpoint_configuration: Optional[list[str]] = None,
+        apigateway_version: str = DEFAULT_APIGATEWAY_VERSION,
+        stage_name: Optional[str] = None,
     ):
         """
         Create the API Gateway for this Zappa deployment.
-        Returns the new RestAPI CF resource.
+        Returns the new RestAPI CF resource (v1) or Api CF resource (v2).
         """
+
+        if apigateway_version == "v2":
+            return self.create_api_gateway_v2_routes(
+                lambda_arn=lambda_arn,
+                api_name=api_name,
+                api_key_required=api_key_required,
+                authorization_type=authorization_type,
+                authorizer=authorizer,
+                cors_options=cors_options,
+                description=description,
+                stage_name=stage_name,
+            )
 
         restapi = troposphere.apigateway.RestApi("Api")
         restapi.Name = api_name or lambda_arn.split(":")[-1]
@@ -2488,6 +2618,8 @@ class Zappa:
         cors_options=None,
         description=None,
         endpoint_configuration=None,
+        apigateway_version=DEFAULT_APIGATEWAY_VERSION,
+        stage_name=None,
     ):
         """
         Build the entire CF stack.
@@ -2522,6 +2654,8 @@ class Zappa:
             cors_options=cors_options,
             description=description,
             endpoint_configuration=endpoint_configuration,
+            apigateway_version=apigateway_version,
+            stage_name=stage_name,
         )
         return self.cf_template
 
@@ -2646,26 +2780,32 @@ class Zappa:
         except botocore.client.ClientError:
             return {}
 
-    def get_api_url(self, lambda_name, stage_name):
+    def get_api_url(self, lambda_name, stage_name, apigateway_version=DEFAULT_APIGATEWAY_VERSION):
         """
         Given a lambda_name and stage_name, return a valid API URL.
         """
-        api_id = self.get_api_id(lambda_name)
+        api_id = self.get_api_id(lambda_name, apigateway_version=apigateway_version)
         if api_id:
+            # For all versions, include the stage name in the URL
             return "https://{}.execute-api.{}.amazonaws.com/{}".format(api_id, self.boto_session.region_name, stage_name)
         else:
             return None
 
-    def get_api_id(self, lambda_name):
+    def get_api_id(self, lambda_name: str, apigateway_version: str = DEFAULT_APIGATEWAY_VERSION):
         """
         Given a lambda_name, return the API id.
         """
+        # Try v2 resource name first if v2, otherwise try v1 resource name
+        resource_name = "Api"
+        if apigateway_version != "v1":
+            resource_name = "ApiV2"
+
         try:
-            response = self.cf_client.describe_stack_resource(StackName=lambda_name, LogicalResourceId="Api")
+            response = self.cf_client.describe_stack_resource(StackName=lambda_name, LogicalResourceId=resource_name)
             return response["StackResourceDetail"].get("PhysicalResourceId", None)
         except Exception:  # pragma: no cover
+            # Try the old method (project was probably made on an older, non CF version)
             try:
-                # Try the old method (project was probably made on an older, non CF version)
                 response = self.apigateway_client.get_rest_apis(limit=500)
 
                 for item in response["items"]:
@@ -2885,20 +3025,6 @@ class Zappa:
 
         except Exception:
             return None
-
-        ##
-        # Old, automatic logic.
-        # If re-introduced, should be moved to a new function.
-        # Related ticket: https://github.com/Miserlou/Zappa/pull/458
-        ##
-
-        # We may be in a position where Route53 doesn't have a domain, but the API Gateway does.
-        # We need to delete this before we can create the new Route53.
-        # try:
-        #     api_gateway_domain = self.apigateway_client.get_domain_name(domainName=domain_name)
-        #     self.apigateway_client.delete_domain_name(domainName=domain_name)
-        # except Exception:
-        #     pass
 
         return None
 

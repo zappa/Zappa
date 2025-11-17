@@ -68,7 +68,7 @@ def create_wsgi_request(
     headers = titlecase_keys(headers)
 
     if base_path:
-        script_name = "/" + base_path
+        script_name = f"/{base_path}"
 
         if path.startswith(script_name):
             path = path[len(script_name) :]
@@ -124,10 +124,13 @@ def create_wsgi_request(
 
     if script_name:
         environ["SCRIPT_NAME"] = script_name
+        # Strip the stage prefix from PATH_INFO if it exists.
+        # This is required for API Gateway v2 where rawPath includes the stage (e.g., /stage/path).
+        # For v1, this is a no-op since AWS already strips the stage from event["path"].
+        # Note: This fixes a bug in master where .replace() was called without assignment.
         path_info = environ["PATH_INFO"]
-
-        if script_name in path_info:
-            environ["PATH_INFO"].replace(script_name, "")
+        if path_info.startswith(script_name):
+            environ["PATH_INFO"] = path_info[len(script_name) :]
 
     if remote_user:
         environ["REMOTE_USER"] = remote_user

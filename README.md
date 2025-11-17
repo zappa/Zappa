@@ -920,6 +920,10 @@ to change Zappa's behavior. Use these at your own risk!
               "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
             }
         },
+        // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
+        // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
+        // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
+        "apigateway_version": "v1", // optional, API Gateway version to use. Can be "v1" or "v2". Default "v1".
         "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
@@ -1354,7 +1358,7 @@ the `profile_name` setting, which will correspond to a profile in your AWS crede
 
 The default IAM policy created by Zappa for executing the Lambda is very permissive.
 It grants access to all actions for
-all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction
+all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction and lambda:InvokeFunctionUrl
 for all Lambda resources; Put to all X-Ray resources; and all Network Interface operations to all EC2
 resources. While this allows most Lambdas to work correctly with no extra permissions, it is
 generally not an acceptable set of permissions for most continuous integration pipelines or
