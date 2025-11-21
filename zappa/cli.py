@@ -318,11 +318,11 @@ class ZappaCLI:
         invoke_parser.add_argument("--no-color", action="store_true", help=("Don't color the output"))
         invoke_parser.add_argument(
             "--client-context",
-            help=("The ClientContext to send to the Lambda function. Must be valid JSON."),
+            help="The ClientContext to send to the Lambda function. Must be valid JSON.",
         )
         invoke_parser.add_argument(
             "--qualifier",
-            help=("The qualifier (version or alias) of the lambda version to invoke. $LATEST if omitted."),
+            help="The qualifier (version or alias) of the lambda version to invoke. $LATEST if omitted.",
         )
         invoke_parser.add_argument("command_rest")
 
@@ -336,11 +336,11 @@ class ZappaCLI:
         manage_parser.add_argument("--no-color", action="store_true", help=("Don't color the output"))
         manage_parser.add_argument(
             "--client-context",
-            help=("The ClientContext to send to the Lambda function. Must be valid JSON."),
+            help="The ClientContext to send to the Lambda function. Must be valid JSON.",
         )
         manage_parser.add_argument(
             "--qualifier",
-            help=("The qualifier (version or alias) of the lambda version to execute the command on. $LATEST if omitted."),
+            help="The qualifier (version or alias) of the lambda version to execute the command on. $LATEST if omitted.",
         )
 
         # This is explicitly added here because this is the only subcommand that doesn't inherit from env_parser
