@@ -1420,12 +1420,18 @@ class Zappa:
         Directly invoke a named Lambda function with a payload.
         Returns the response.
         """
-        return self.lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType=invocation_type,
-            LogType=log_type,
-            Payload=payload,
-        )
+        invoke_kwargs = {
+            "FunctionName": function_name,
+            "InvocationType": invocation_type,
+            "LogType": log_type,
+            "Payload": payload,
+        }
+        if client_context:
+            invoke_kwargs["ClientContext"] = client_context
+        if qualifier:
+            invoke_kwargs["Qualifier"] = qualifier
+
+        return self.lambda_client.invoke(**invoke_kwargs)
 
     def rollback_lambda_function_version(self, function_name, versions_back=1, publish=True):
         """
@@ -2063,6 +2069,9 @@ class Zappa:
                 description=description,
                 stage_name=stage_name,
             )
+
+        # Ensure boto_session is initialized
+        assert self.boto_session is not None, "boto_session must be initialized before creating API Gateway routes"
 
         restapi = troposphere.apigateway.RestApi("Api")
         restapi.Name = api_name or lambda_arn.split(":")[-1]
