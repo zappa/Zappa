@@ -1,5 +1,42 @@
 # Zappa Changelog
 
+## 0.61.0
+
+* Add API Gateway v2 (HTTP API) support (#1391, #851, #1389)
+* Add Lambda function URL support (#1183, #1121)
+* Add `settings` command for generating zappa_settings.json via CLI/ENVARS (#1385, #988)
+* Add Lambda invocation --qualifier and --client-context options for invoke and manage commands (#1394, #1368)
+* Fix cloudwatch logging - restore root log level functionality (#1347, #1336)
+* Update Lambda function URL permissions to include InvokeFunction action (#1393)
+* Remove kappa dependency, internalize components (#1386, #954)
+* Remove deprecated pkg_resources usage, migrate to importlib (#1384)
+* Migrate from os.path to pathlib.Path (#1384, #1386)
+* Replace deprecated datetime.utcnow() with datetime.now(timezone.utc) (#1384)
+* Replace deprecated click.BaseCommand with click.Command (#1384)
+* Move IAM policies to external JSON files for better maintainability (#1391)
+
+## 0.60.2
+
+* Fix infinite redirects issue (#1382, #1380)
+* Add arm64 architecture support (#1379)
+
+## 0.60.1
+
+* Fix conflict in V2 Event handling (#1377, #1182)
+
+## 0.60.0
+
+* Add Python 3.13 support (#1364)
+* Add Lambda SnapStart support (#1367)
+* Remove deprecated Python 3.8 runtime support (#1374)
+* Fix incorrect error messaging in CLI (#1314)
+* Remove usage of copytree from distutils (#1352)
+* Fix create_handler_venv win32 case where stderror_result is None (#1353)
+* Replace invalid website links with GitHub links (#1371)
+* Add note about character limit of function path in events (#1189)
+* Add note about AWS Lambda Test Console available commands (#1375)
+* Resolve warnings in regex library (#1376)
+
 ## 0.59.0
 
 See [release notes](https://github.com/zappa/Zappa/releases/tag/0.59.0)
