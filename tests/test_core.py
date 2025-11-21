@@ -619,6 +619,124 @@ class TestZappa(unittest.TestCase):
             parsable_template["Resources"]["Authorizer"]["Properties"]["AuthorizerUri"],
         )
 
+    def test_create_api_gateway_v2_routes(self):
+        """Test API Gateway v2 (HTTP API) creation"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        # Test basic v2 API Gateway creation
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify HTTP API resource exists
+        self.assertIn("ApiV2", parsable_template["Resources"])
+        api_resource = parsable_template["Resources"]["ApiV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Api", api_resource["Type"])
+        self.assertEqual("HTTP", api_resource["Properties"]["ProtocolType"])
+        self.assertEqual("helloworld", api_resource["Properties"]["Name"])
+
+        # Verify Integration exists
+        self.assertIn("IntegrationV2", parsable_template["Resources"])
+        integration_resource = parsable_template["Resources"]["IntegrationV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Integration", integration_resource["Type"])
+        self.assertEqual("AWS_PROXY", integration_resource["Properties"]["IntegrationType"])
+        self.assertEqual("2.0", integration_resource["Properties"]["PayloadFormatVersion"])
+
+        # Verify Route exists
+        self.assertIn("RouteV2", parsable_template["Resources"])
+        route_resource = parsable_template["Resources"]["RouteV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Route", route_resource["Type"])
+        self.assertEqual("$default", route_resource["Properties"]["RouteKey"])
+        self.assertEqual("NONE", route_resource["Properties"]["AuthorizationType"])
+
+        # Verify Stage exists
+        self.assertIn("StageV2", parsable_template["Resources"])
+        stage_resource = parsable_template["Resources"]["StageV2"]
+        self.assertEqual("AWS::ApiGatewayV2::Stage", stage_resource["Type"])
+        self.assertEqual("$default", stage_resource["Properties"]["StageName"])
+        self.assertTrue(stage_resource["Properties"]["AutoDeploy"])
+
+        # Verify Lambda permission exists
+        self.assertIn("ApiInvokePermissionV2", parsable_template["Resources"])
+        permission_resource = parsable_template["Resources"]["ApiInvokePermissionV2"]
+        self.assertEqual("AWS::Lambda::Permission", permission_resource["Type"])
+        self.assertEqual("lambda:InvokeFunction", permission_resource["Properties"]["Action"])
+
+    def test_create_api_gateway_v2_with_iam_auth(self):
+        """Test API Gateway v2 with IAM authorization"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        # Test v2 with IAM auth
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=True,
+            authorizer=None,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify Route has IAM authorization
+        route_resource = parsable_template["Resources"]["RouteV2"]
+        self.assertEqual("AWS_IAM", route_resource["Properties"]["AuthorizationType"])
+
+    def test_create_api_gateway_v2_with_cors(self):
+        """Test API Gateway v2 with CORS configuration"""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        cors_options = {
+            "allowed_origins": ["https://example.com"],
+            "allowed_methods": ["GET", "POST"],
+            "allowed_headers": ["Content-Type"],
+            "max_age": 3600,
+        }
+
+        # Test v2 with CORS
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            cors_options=cors_options,
+            apigateway_version="v2",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+
+        # Verify CORS configuration
+        api_resource = parsable_template["Resources"]["ApiV2"]
+        self.assertIn("CorsConfiguration", api_resource["Properties"])
+        cors_config = api_resource["Properties"]["CorsConfiguration"]
+        self.assertEqual(["https://example.com"], cors_config["AllowOrigins"])
+        self.assertEqual(["GET", "POST"], cors_config["AllowMethods"])
+        self.assertEqual(["Content-Type"], cors_config["AllowHeaders"])
+        self.assertEqual(3600, cors_config["MaxAge"])
+
     def test_policy_json(self):
         # ensure the policy docs are valid JSON
         json.loads(ASSUME_POLICY)
@@ -1413,6 +1531,88 @@ class TestZappa(unittest.TestCase):
         zappa_cli = ZappaCLI()
         return
 
+    def test_zappacli_settings(self):
+        """
+        Test the settings command functionality.
+        """
+        # Save original environment and clear all ZAPPA_* variables
+        original_env = os.environ.copy()
+        zappa_vars = [var for var in os.environ.keys() if var.startswith("ZAPPA_")]
+        for var in zappa_vars:
+            del os.environ[var]
+
+        try:
+            zappa_cli = ZappaCLI()
+
+            # Test basic settings command with default stage (no ZAPPA_* env vars)
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings"])
+                output = f.getvalue()
+
+            # Parse JSON output and verify structure
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["app_function"], "app.app")
+            self.assertEqual(settings["dev"]["aws_region"], "us-east-1")
+
+            # Test settings command with custom stage (no ZAPPA_* env vars)
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings", "--stage", "production"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("production", settings)
+            self.assertEqual(settings["production"]["app_function"], "app.app")
+            self.assertEqual(settings["production"]["aws_region"], "us-east-1")
+
+            # Test settings command with config arguments (no ZAPPA_* env vars)
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings", "--config", "binary_support=true", "--config", "memory_size=512"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["binary_support"], True)
+            self.assertEqual(settings["dev"]["memory_size"], 512)
+
+            # Test settings command with environment variables
+            # Clear any remaining ZAPPA_* vars and set specific test values
+            for var in [v for v in os.environ.keys() if v.startswith("ZAPPA_")]:
+                del os.environ[var]
+
+            os.environ["ZAPPA_DEBUG"] = "true"
+            os.environ["ZAPPA_TIMEOUT_SECONDS"] = "30"
+
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["debug"], True)
+            self.assertEqual(settings["dev"]["timeout_seconds"], 30)
+
+            # Test CLI arguments take precedence over environment variables
+            # Clear all ZAPPA_* vars and set specific test value
+            for var in [v for v in os.environ.keys() if v.startswith("ZAPPA_")]:
+                del os.environ[var]
+
+            os.environ["ZAPPA_BINARY_SUPPORT"] = "false"
+
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings", "--config", "binary_support=true"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            # CLI argument should override environment variable
+            self.assertEqual(settings["dev"]["binary_support"], True)
+
+        finally:
+            # Restore original environment completely
+            os.environ.clear()
+            os.environ.update(original_env)
+
     def test_load_settings(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
@@ -1493,6 +1693,13 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("test_settings.json")
         self.assertEqual(True, zappa_cli.stage_config["function_url_enabled"])
 
+    def test_load_settings__apigateway_version_v2(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "apigateway_v2"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual("v2", zappa_cli.stage_config["apigateway_version"])
+        self.assertEqual("v2", zappa_cli.apigateway_version)
+
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
@@ -1536,6 +1743,101 @@ class TestZappa(unittest.TestCase):
         expected_additional_text_mimetypes = ["application/custommimetype"]
         self.assertEqual(expected_additional_text_mimetypes, zappa_cli.stage_config["additional_text_mimetypes"])
         self.assertEqual(True, zappa_cli.stage_config["binary_support"])
+
+    def test_load_settings_from_environment_variables(self):
+        """Test loading settings from environment variables when no settings file exists."""
+        # Store original environment variables
+        original_env = {}
+        env_vars_to_test = ["ZAPPA_APP_FUNCTION", "ZAPPA_AWS_REGION", "ZAPPA_MEMORY_SIZE", "ZAPPA_TIMEOUT"]
+        for var in env_vars_to_test:
+            if var in os.environ:
+                original_env[var] = os.environ[var]
+
+        try:
+            # Set test environment variables
+            os.environ["ZAPPA_APP_FUNCTION"] = "myapp.handler"
+            os.environ["ZAPPA_AWS_REGION"] = "us-west-2"
+            os.environ["ZAPPA_MEMORY_SIZE"] = "256"
+            os.environ["ZAPPA_TIMEOUT"] = "30"
+
+            zappa_cli = ZappaCLI()
+            zappa_cli.api_stage = "dev"
+
+            # Test _generate_settings_dict directly
+            settings = zappa_cli._generate_settings_dict(stage="dev")
+
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["app_function"], "myapp.handler")
+            self.assertEqual(settings["dev"]["aws_region"], "us-west-2")
+            self.assertEqual(settings["dev"]["memory_size"], 256)
+            self.assertEqual(settings["dev"]["timeout"], 30)
+
+        finally:
+            # Restore original environment
+            for var in env_vars_to_test:
+                if var in original_env:
+                    os.environ[var] = original_env[var]
+                elif var in os.environ:
+                    del os.environ[var]
+
+    def test_load_settings_file_fallback_to_environment(self):
+        """Test that load_settings_file falls back to environment variables when no file exists."""
+        # Store original environment variables
+        original_env = {}
+        env_vars_to_test = ["ZAPPA_APP_FUNCTION", "ZAPPA_AWS_REGION"]
+        for var in env_vars_to_test:
+            if var in os.environ:
+                original_env[var] = os.environ[var]
+
+        try:
+            # Set minimal environment variables
+            os.environ["ZAPPA_APP_FUNCTION"] = "testapp.handler"
+            os.environ["ZAPPA_AWS_REGION"] = "eu-west-1"
+
+            zappa_cli = ZappaCLI()
+
+            # Mock get_json_or_yaml_settings to return None (no file found)
+            with mock.patch.object(zappa_cli, "get_json_or_yaml_settings", return_value=None):
+                zappa_cli.load_settings_file()
+
+                # Verify settings were loaded from environment
+                self.assertIsNotNone(zappa_cli.zappa_settings)
+                self.assertIn("dev", zappa_cli.zappa_settings)  # default stage
+                self.assertEqual(zappa_cli.zappa_settings["dev"]["app_function"], "testapp.handler")
+                self.assertEqual(zappa_cli.zappa_settings["dev"]["aws_region"], "eu-west-1")
+
+        finally:
+            # Restore original environment
+            for var in env_vars_to_test:
+                if var in original_env:
+                    os.environ[var] = original_env[var]
+                elif var in os.environ:
+                    del os.environ[var]
+
+    def test_load_settings_file_no_file_no_environment(self):
+        """Test that load_settings_file raises exception when no file and no environment variables exist."""
+        # Store and clear relevant environment variables
+        original_env = {}
+        zappa_env_vars = [var for var in os.environ.keys() if var.startswith("ZAPPA_")]
+        for var in zappa_env_vars:
+            original_env[var] = os.environ[var]
+            del os.environ[var]
+
+        try:
+            zappa_cli = ZappaCLI()
+
+            # Mock get_json_or_yaml_settings to return None (no file found)
+            with mock.patch.object(zappa_cli, "get_json_or_yaml_settings", return_value=None):
+                with self.assertRaises(ClickException) as cm:
+                    zappa_cli.load_settings_file()
+
+                self.assertIn("No zappa_settings file found", str(cm.exception))
+                self.assertIn("no ZAPPA_ environment variables", str(cm.exception))
+
+        finally:
+            # Restore original environment
+            for var, value in original_env.items():
+                os.environ[var] = value
 
     def test_settings_extension(self):
         """
@@ -2839,13 +3141,23 @@ class TestZappa(unittest.TestCase):
             },
         )
 
-        boto_mock.client().add_permission.assert_called_with(
-            FunctionName=function_name,
-            StatementId="FunctionURLAllowPublicAccess",
-            Action="lambda:InvokeFunctionUrl",
-            Principal="*",
-            FunctionUrlAuthType=function_url_config["authorizer"],
-        )
+        expected_permission_calls = [
+            mock.call(
+                FunctionName=function_name,
+                StatementId="FunctionURLAllowPublicAccess",
+                Action="lambda:InvokeFunctionUrl",
+                Principal="*",
+                FunctionUrlAuthType=function_url_config["authorizer"],
+            ),
+            mock.call(
+                FunctionName=function_name,
+                StatementId="FunctionURLAllowPublicAccessInvoke",
+                Action="lambda:InvokeFunction",
+                Principal="*",
+            ),
+        ]
+        boto_mock.client().add_permission.assert_has_calls(expected_permission_calls)
+        self.assertEqual(boto_mock.client().add_permission.call_count, 2)
 
     @mock.patch("botocore.client")
     def test_update_lambda_function_url(self, client):
@@ -2891,7 +3203,9 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
 
         zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
@@ -2958,11 +3272,15 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
         zappa_core.lambda_client.remove_permission.return_value = {
             "ResponseMetadata": {"HTTPStatusCode": 200},
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"xxxxx"}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":"xxxxx"},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":"xxxxx"}]}',
         }
         zappa_core.update_lambda_function_url(function_name="abc", function_url_config=function_url_config)
         boto_mock.client().update_function_url_config.assert_called_with(
@@ -2981,9 +3299,12 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().get_policy.assert_called_with(
             FunctionName=function_arn,
         )
-        boto_mock.client().delete_policy.remove_permission(
-            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
-        )
+        expected_remove_calls = [
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+        ]
+        boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
+        self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
         boto_mock.client().add_permission.assert_not_called()
         boto_mock.client().create_function_url_config.assert_not_called()
 
@@ -3019,7 +3340,9 @@ class TestZappa(unittest.TestCase):
             "ResponseMetadata": {
                 "HTTPStatusCode": 200,
             },
-            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":[{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
+            "Policy": '{"Version":"2012-10-17","Id":"default","Statement":['
+            '{"Sid":"FunctionURLAllowPublicAccess","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunctionUrl","Resource":""},'
+            '{"Sid":"FunctionURLAllowPublicAccessInvoke","Effect":"Allow","Principal":"*","Action":"lambda:InvokeFunction","Resource":""}]}',
         }
         zappa_core.lambda_client.remove_permission.return_value = {
             "ResponseMetadata": {
@@ -3035,9 +3358,12 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().get_policy.assert_called_with(
             FunctionName=function_arn,
         )
-        boto_mock.client().delete_policy.remove_permission(
-            FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"
-        )
+        expected_remove_calls = [
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
+            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+        ]
+        boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
+        self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
         boto_mock.client().add_permission.assert_not_called()
         boto_mock.client().create_function_url_config.assert_not_called()
         boto_mock.client().update_function_url_config.assert_not_called()

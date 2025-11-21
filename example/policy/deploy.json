@@ -37,6 +37,7 @@
                 "lambda:GetFunctionConfiguration",
                 "lambda:GetPolicy",
                 "lambda:InvokeFunction",
+                "lambda:InvokeFunctionUrl",
                 "lambda:ListVersionsByFunction",
                 "lambda:RemovePermission",
                 "lambda:UpdateFunctionCode",
