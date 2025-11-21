@@ -455,6 +455,12 @@ For instance, it can come in handy if you want to create your first `superuser` 
 
     $ zappa invoke staging "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('username', 'email', 'password')" --raw
 
+If you need to invoke a specific version of your function, you can use the --qualifier option to specify it.
+
+    $ zappa invoke production my_app.my_function --qualifier 123
+
+[Function aliases](https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html) are also supported as qualifiers.
+
 ### Django Management Commands
 
 As a convenience, Zappa can also invoke remote Django 'manage.py' commands with the `manage` command. For instance, to perform the basic Django status check:
@@ -466,6 +472,11 @@ Obviously, this only works for Django projects which have their settings properl
 For commands which have their own arguments, you can also pass the command in as a string, like so:
 
     $ zappa manage production "shell --version"
+
+As with `invoke`, a qualifier can be added to specify the version of your function that's used to execute the command.
+This can be particularly important when running certain commands such as `migrate` directly after a new deployment:
+
+    $ zappa manage production migrate admin --qualifier 123
 
 Commands which require direct user input, such as `createsuperuser`, should be [replaced by commands](http://stackoverflow.com/a/26091252) which use `zappa invoke <env> --raw`.
 
@@ -909,6 +920,10 @@ to change Zappa's behavior. Use these at your own risk!
               "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
             }
         },
+        // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
+        // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
+        // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
+        "apigateway_version": "v1", // optional, API Gateway version to use. Can be "v1" or "v2". Default "v1".
         "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
@@ -1343,7 +1358,7 @@ the `profile_name` setting, which will correspond to a profile in your AWS crede
 
 The default IAM policy created by Zappa for executing the Lambda is very permissive.
 It grants access to all actions for
-all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction
+all resources for types CloudWatch, S3, Kinesis, SNS, SQS, DynamoDB, and Route53; lambda:InvokeFunction and lambda:InvokeFunctionUrl
 for all Lambda resources; Put to all X-Ray resources; and all Network Interface operations to all EC2
 resources. While this allows most Lambdas to work correctly with no extra permissions, it is
 generally not an acceptable set of permissions for most continuous integration pipelines or

@@ -1,2 +1,4 @@
 include README.md LICENSE Pipfile
 recursive-include zappa *.py
+include zappa/policies/assume_policy.json
+include zappa/policies/attach_policy.json
