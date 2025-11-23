@@ -1,5 +1,13 @@
 # Zappa Changelog
 
+## 0.61.1
+
+* Add support for nested JSON configurations in `settings` command (#1397)
+  - CLI arguments and environment variables now support complex nested objects and arrays
+  - Enhanced `--config` argument parsing to handle JSON structures like `cors_options`, `vpc_config`, `environment_variables`
+  - Type annotations updated throughout configuration pipeline for dict and list types
+  - Comprehensive test coverage for nested configuration scenarios
+
 ## 0.61.0
 
 * Add API Gateway v2 (HTTP API) support (#1391, #851, #1389)
