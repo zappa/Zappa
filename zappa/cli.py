@@ -2045,7 +2045,9 @@ class ZappaCLI:
 
             for region in additional_regions:
                 env_name = env + "_" + region.replace("-", "_")
-                g_env: Dict[str, Dict[str, Union[bool, int, str]]] = {env_name: {"extends": env, "aws_region": region}}
+                g_env: Dict[str, Dict[str, Union[bool, int, str, dict, list]]] = {
+                    env_name: {"extends": env, "aws_region": region}
+                }
                 zappa_settings.update(g_env)
 
         import json as json  # hjson is fine for loading, not fine for writing.
@@ -2106,22 +2108,35 @@ class ZappaCLI:
 
         return
 
-    def _parse_config_value(self, value: str) -> Union[bool, int, str]:
+    def _parse_config_value(self, value: str) -> Union[bool, int, str, dict, list]:
         """
         Parse a configuration value string into the appropriate type.
-        Converts 'true'/'false' to boolean, numeric strings to integers,
+        Attempts to parse as JSON first (for dicts/arrays), then converts
+        'true'/'false' to boolean, numeric strings to integers,
         and returns other values as strings.
         """
+        # Try JSON parsing first (handles dicts, arrays, and JSON primitives)
+        if value.startswith("{") or value.startswith("["):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                pass  # Fall through to other parsing
+
+        # Handle booleans
         if value.lower() in {"true", "false"}:
             return value.lower() == "true"
+
+        # Handle integers
         elif value.isdigit():
             return int(value)
+
+        # Default to string
         else:
             return value
 
     def _get_config_from_environment_and_args(
         self, env_prefix: str = "ZAPPA_", config_args: Optional[List[str]] = None
-    ) -> Dict[str, Union[bool, int, str]]:
+    ) -> Dict[str, Union[bool, int, str, dict, list]]:
         """
         Common method to extract and parse configuration from environment variables
         and command-line config arguments.
@@ -2133,7 +2148,7 @@ class ZappaCLI:
         Returns:
             dict: Configuration dictionary with parsed values
         """
-        config: Dict[str, Union[bool, int, str]] = {}
+        config: Dict[str, Union[bool, int, str, dict, list]] = {}
 
         # Read environment variables with specified prefix
         for key, value in os.environ.items():
@@ -2154,7 +2169,7 @@ class ZappaCLI:
 
     def _generate_settings_dict(
         self, stage: Optional[str] = None, config_args: Optional[List[str]] = None
-    ) -> Dict[str, Dict[str, Union[bool, int, str]]]:
+    ) -> Dict[str, Dict[str, Union[bool, int, str, dict, list]]]:
         """
         Generate settings dictionary with optional command-line arguments and environment variables.
         This method is used by both the settings command and load_settings_file.

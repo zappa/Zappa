@@ -276,7 +276,8 @@ class TestZappa(unittest.TestCase):
 
             self.assertEqual(file_name, expected_filename)
             mock_get.assert_called_once_with(
-                "https://pypi.python.org/pypi/markupsafe/json", timeout=float(os.environ.get("PIP_TIMEOUT", 1.5))
+                "https://pypi.python.org/pypi/markupsafe/json",
+                timeout=float(os.environ.get("PIP_TIMEOUT", 1.5)),
             )
 
         # Clean the generated files
@@ -298,7 +299,10 @@ class TestZappa(unittest.TestCase):
                 return_value=mock_installed_packages,
             ):
                 z = Zappa(runtime="python3.11")
-                path = z.create_lambda_zip(handler_file=os.path.realpath(__file__), exclude_glob=[str(file_to_not_delete)])
+                path = z.create_lambda_zip(
+                    handler_file=os.path.realpath(__file__),
+                    exclude_glob=[str(file_to_not_delete)],
+                )
                 self.assertTrue(os.path.isfile(path))
                 self.assertTrue(file_to_not_delete.exists())
                 os.remove(file_to_not_delete)
@@ -318,7 +322,10 @@ class TestZappa(unittest.TestCase):
 
         mock_pip_installed_packages = [sample_package]
         with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
-            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"super_package": "0.1"})
+            self.assertDictEqual(
+                z.get_installed_packages(site_packages=site_packages),
+                {"super_package": "0.1"},
+            )
 
     def test_get_current_venv(self, *args):
         z = Zappa()
@@ -344,7 +351,11 @@ class TestZappa(unittest.TestCase):
         z = Zappa(runtime="python3.8")
 
         mock_pip_installed_packages = []
-        for package_name, version, location in ("SuperPackage", "0.1", "/Venv/site-packages"), (
+        for package_name, version, location in (
+            "SuperPackage",
+            "0.1",
+            "/Venv/site-packages",
+        ), (
             "SuperPackage64",
             "0.1",
             "/Venv/site-packages64",
@@ -388,7 +399,10 @@ class TestZappa(unittest.TestCase):
 
         mock_pip_installed_packages = [sample_package]
         with mock.patch("importlib.metadata.distributions", return_value=mock_pip_installed_packages):
-            self.assertDictEqual(z.get_installed_packages(site_packages=site_packages), {"superpackage": "0.1"})
+            self.assertDictEqual(
+                z.get_installed_packages(site_packages=site_packages),
+                {"superpackage": "0.1"},
+            )
 
     def test_load_credentials(self):
         z = Zappa()
@@ -1370,7 +1384,14 @@ class TestZappa(unittest.TestCase):
 
     def test_wsgi_from_v2_event_with_lambda_authorizer(self):
         principal_id = "user|a1b2c3d4"
-        authorizer = {"lambda": {"bool": True, "key": "value", "number": 1, "principalId": principal_id}}
+        authorizer = {
+            "lambda": {
+                "bool": True,
+                "key": "value",
+                "number": 1,
+                "principalId": principal_id,
+            }
+        }
         event = {
             "version": "2.0",
             "routeKey": "ANY /{proxy+}",
@@ -1500,11 +1521,17 @@ class TestZappa(unittest.TestCase):
 
                 zappa_cli = ZappaCLI()
                 with mock.patch("zappa.cli.ZappaCLI._get_init_env", return_value="dev"), mock.patch(
-                    "zappa.cli.ZappaCLI._get_init_profile", return_value=("default", {"region": "us-west-2"})
-                ), mock.patch("zappa.cli.ZappaCLI._get_init_bucket", return_value="my-zappa-bucket"), mock.patch(
-                    "zappa.cli.ZappaCLI._get_init_django_settings", return_value="test_settings"
+                    "zappa.cli.ZappaCLI._get_init_profile",
+                    return_value=("default", {"region": "us-west-2"}),
                 ), mock.patch(
-                    "zappa.cli.ZappaCLI._get_init_global_settings", return_value=["n", False]
+                    "zappa.cli.ZappaCLI._get_init_bucket",
+                    return_value="my-zappa-bucket",
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_django_settings",
+                    return_value="test_settings",
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_global_settings",
+                    return_value=["n", False],
                 ), mock.patch(
                     "zappa.cli.ZappaCLI._get_init_confirm", return_value="y"
                 ):
@@ -1518,7 +1545,8 @@ class TestZappa(unittest.TestCase):
                     self.assertEqual(zappa_settings["dev"]["s3_bucket"], "my-zappa-bucket")
                     self.assertEqual(zappa_settings["dev"]["django_settings"], "test_settings")
                     self.assertEqual(
-                        zappa_settings["dev"]["exclude"], ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+                        zappa_settings["dev"]["exclude"],
+                        ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"],
                     )
 
                 # delete the file
@@ -1567,7 +1595,15 @@ class TestZappa(unittest.TestCase):
 
             # Test settings command with config arguments (no ZAPPA_* env vars)
             with redirect_stdout(io.StringIO()) as f:
-                zappa_cli.handle(["settings", "--config", "binary_support=true", "--config", "memory_size=512"])
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        "binary_support=true",
+                        "--config",
+                        "memory_size=512",
+                    ]
+                )
                 output = f.getvalue()
 
             settings = json.loads(output)
@@ -1607,6 +1643,214 @@ class TestZappa(unittest.TestCase):
             self.assertIn("dev", settings)
             # CLI argument should override environment variable
             self.assertEqual(settings["dev"]["binary_support"], True)
+
+        finally:
+            # Restore original environment completely
+            os.environ.clear()
+            os.environ.update(original_env)
+
+    def test_zappacli_settings_nested_config(self):
+        """
+        Test the settings command with nested JSON configurations (dicts and arrays).
+        Verifies that complex nested structures are properly parsed from command-line arguments.
+        """
+        # Save original environment and clear all ZAPPA_* variables
+        original_env = os.environ.copy()
+        zappa_vars = [var for var in os.environ.keys() if var.startswith("ZAPPA_")]
+        for var in zappa_vars:
+            del os.environ[var]
+
+        try:
+            zappa_cli = ZappaCLI()
+
+            # Test 1: environment_variables as dict
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'environment_variables={"OLLAMA_MODEL":"tinyllama","OLLAMA_URL":"http://localhost:11434","DEBUG":"true"}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertIsInstance(settings["dev"]["environment_variables"], dict)
+            self.assertEqual(settings["dev"]["environment_variables"]["OLLAMA_MODEL"], "tinyllama")
+            self.assertEqual(
+                settings["dev"]["environment_variables"]["OLLAMA_URL"],
+                "http://localhost:11434",
+            )
+            self.assertEqual(settings["dev"]["environment_variables"]["DEBUG"], "true")
+
+            # Test 2: authorizer as dict
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'authorizer={"function":"authorizer.lambda_handler","token_header":"X-API-Key","result_ttl":300}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["authorizer"], dict)
+            self.assertEqual(settings["dev"]["authorizer"]["function"], "authorizer.lambda_handler")
+            self.assertEqual(settings["dev"]["authorizer"]["token_header"], "X-API-Key")
+            self.assertEqual(settings["dev"]["authorizer"]["result_ttl"], 300)
+
+            # Test 3: ephemeral_storage as dict
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'ephemeral_storage={"Size":5120}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["ephemeral_storage"], dict)
+            self.assertEqual(settings["dev"]["ephemeral_storage"]["Size"], 5120)
+
+            # Test 4: cors_allow_headers as array
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'cors_allow_headers=["Content-Type","X-API-Key","Authorization"]',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["cors_allow_headers"], list)
+            self.assertEqual(len(settings["dev"]["cors_allow_headers"]), 3)
+            self.assertIn("Content-Type", settings["dev"]["cors_allow_headers"])
+            self.assertIn("X-API-Key", settings["dev"]["cors_allow_headers"])
+            self.assertIn("Authorization", settings["dev"]["cors_allow_headers"])
+
+            # Test 5: tags as dict
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'tags={"Environment":"dev","Project":"MyApp","Owner":"DevTeam"}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["tags"], dict)
+            self.assertEqual(settings["dev"]["tags"]["Environment"], "dev")
+            self.assertEqual(settings["dev"]["tags"]["Project"], "MyApp")
+            self.assertEqual(settings["dev"]["tags"]["Owner"], "DevTeam")
+
+            # Test 6: additional_text_mimetypes as array
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'additional_text_mimetypes=["application/custommimetype","text/custom"]',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["additional_text_mimetypes"], list)
+            self.assertEqual(len(settings["dev"]["additional_text_mimetypes"]), 2)
+            self.assertIn(
+                "application/custommimetype",
+                settings["dev"]["additional_text_mimetypes"],
+            )
+            self.assertIn("text/custom", settings["dev"]["additional_text_mimetypes"])
+
+            # Test 7: callbacks as dict
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'callbacks={"settings":"app.callback_settings","post":"app.callback_post"}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["callbacks"], dict)
+            self.assertEqual(settings["dev"]["callbacks"]["settings"], "app.callback_settings")
+            self.assertEqual(settings["dev"]["callbacks"]["post"], "app.callback_post")
+
+            # Test 8: Multiple nested configs combined
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'environment_variables={"VAR1":"value1","VAR2":"value2"}',
+                        "--config",
+                        'tags={"Environment":"production"}',
+                        "--config",
+                        'cors_allow_headers=["Content-Type"]',
+                        "--config",
+                        "memory_size=512",
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["environment_variables"], dict)
+            self.assertEqual(settings["dev"]["environment_variables"]["VAR1"], "value1")
+            self.assertEqual(settings["dev"]["environment_variables"]["VAR2"], "value2")
+            self.assertIsInstance(settings["dev"]["tags"], dict)
+            self.assertEqual(settings["dev"]["tags"]["Environment"], "production")
+            self.assertIsInstance(settings["dev"]["cors_allow_headers"], list)
+            self.assertIn("Content-Type", settings["dev"]["cors_allow_headers"])
+            self.assertEqual(settings["dev"]["memory_size"], 512)
+
+            # Test 9: Nested dict with mixed types (strings, numbers, booleans)
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'context_header_mappings={"CognitoIdentityId":"identity.cognitoIdentityId","APIStage":"stage"}',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["context_header_mappings"], dict)
+            self.assertEqual(
+                settings["dev"]["context_header_mappings"]["CognitoIdentityId"],
+                "identity.cognitoIdentityId",
+            )
+            self.assertEqual(settings["dev"]["context_header_mappings"]["APIStage"], "stage")
+
+            # Test 10: Array of objects (complex nested structure)
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(
+                    [
+                        "settings",
+                        "--config",
+                        'events=[{"function":"app.schedule_me","expression":"rate(1 minute)"},{"function":"app.daily_task","expression":"cron(0 12 * * ? *)"}]',
+                    ]
+                )
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIsInstance(settings["dev"]["events"], list)
+            self.assertEqual(len(settings["dev"]["events"]), 2)
+            self.assertEqual(settings["dev"]["events"][0]["function"], "app.schedule_me")
+            self.assertEqual(settings["dev"]["events"][0]["expression"], "rate(1 minute)")
+            self.assertEqual(settings["dev"]["events"][1]["function"], "app.daily_task")
+            self.assertEqual(settings["dev"]["events"][1]["expression"], "cron(0 12 * * ? *)")
 
         finally:
             # Restore original environment completely
@@ -1741,14 +1985,22 @@ class TestZappa(unittest.TestCase):
         zappa_cli.api_stage = "addtextmimetypes"
         zappa_cli.load_settings("test_settings.json")
         expected_additional_text_mimetypes = ["application/custommimetype"]
-        self.assertEqual(expected_additional_text_mimetypes, zappa_cli.stage_config["additional_text_mimetypes"])
+        self.assertEqual(
+            expected_additional_text_mimetypes,
+            zappa_cli.stage_config["additional_text_mimetypes"],
+        )
         self.assertEqual(True, zappa_cli.stage_config["binary_support"])
 
     def test_load_settings_from_environment_variables(self):
         """Test loading settings from environment variables when no settings file exists."""
         # Store original environment variables
         original_env = {}
-        env_vars_to_test = ["ZAPPA_APP_FUNCTION", "ZAPPA_AWS_REGION", "ZAPPA_MEMORY_SIZE", "ZAPPA_TIMEOUT"]
+        env_vars_to_test = [
+            "ZAPPA_APP_FUNCTION",
+            "ZAPPA_AWS_REGION",
+            "ZAPPA_MEMORY_SIZE",
+            "ZAPPA_TIMEOUT",
+        ]
         for var in env_vars_to_test:
             if var in os.environ:
                 original_env[var] = os.environ[var]
@@ -3301,7 +3553,10 @@ class TestZappa(unittest.TestCase):
         )
         expected_remove_calls = [
             mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
-            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+            mock.call(
+                FunctionName=function_arn,
+                StatementId="FunctionURLAllowPublicAccessInvoke",
+            ),
         ]
         boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
         self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
@@ -3360,7 +3615,10 @@ class TestZappa(unittest.TestCase):
         )
         expected_remove_calls = [
             mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccess"),
-            mock.call(FunctionName=function_arn, StatementId="FunctionURLAllowPublicAccessInvoke"),
+            mock.call(
+                FunctionName=function_arn,
+                StatementId="FunctionURLAllowPublicAccessInvoke",
+            ),
         ]
         boto_mock.client().remove_permission.assert_has_calls(expected_remove_calls, any_order=True)
         self.assertEqual(boto_mock.client().remove_permission.call_count, 2)
@@ -3435,7 +3693,11 @@ class TestZappa(unittest.TestCase):
             "pathParameters": {},
             "path": "/path/path1",
             "httpMethod": "GET",
-            "queryStringParameters": {"query": "Jane&John", "otherquery": "B", "test": "hello+m.te&how&are&you"},
+            "queryStringParameters": {
+                "query": "Jane&John",
+                "otherquery": "B",
+                "test": "hello+m.te&how&are&you",
+            },
             "requestContext": {},
         }
         request = create_wsgi_request(event)
