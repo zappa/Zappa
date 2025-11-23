@@ -189,6 +189,72 @@ _Psst: If you're deploying a Django application with Zappa for the first time, y
 
 You can define as many stages as your like - we recommend having _dev_, _staging_, and _production_.
 
+### Alternative: Generating Settings via CLI
+
+Instead of using the interactive `init` command, you can also generate your `zappa_settings.json` programmatically using the `settings` command with environment variables and command-line arguments:
+
+    $ zappa settings --stage dev
+
+This generates a basic settings file with defaults. You can customize it using `--config` arguments or `ZAPPA_` environment variables:
+
+```bash
+# Using command-line arguments
+$ zappa settings --stage production \
+    --config project_name=myapp \
+    --config memory_size=1024 \
+    --config timeout_seconds=60
+
+# Using environment variables
+$ export ZAPPA_PROJECT_NAME=myapp
+$ export ZAPPA_MEMORY_SIZE=1024
+$ zappa settings --stage production
+
+# Command-line arguments override environment variables
+$ export ZAPPA_MEMORY_SIZE=512
+$ zappa settings --config memory_size=2048  # Uses 2048, not 512
+```
+
+#### Nested JSON Configurations
+
+The `settings` command supports complex nested JSON structures for advanced configurations like CORS options, VPC settings, and environment variables:
+
+```bash
+# Configure CORS with nested JSON
+$ zappa settings --stage production \
+    --config 'cors_options={"allowedOrigins":["*"],"allowedMethods":["GET","POST","PUT"]}'
+
+# Configure VPC settings
+$ zappa settings --stage production \
+    --config 'vpc_config={"SubnetIds":["subnet-123","subnet-456"],"SecurityGroupIds":["sg-789"]}'
+
+# Configure environment variables
+$ zappa settings --stage production \
+    --config 'environment_variables={"DATABASE_URL":"postgres://...","API_KEY":"secret"}'
+
+# Configure Lambda layers
+$ zappa settings --stage production \
+    --config 'layers=["arn:aws:lambda:us-east-1:123:layer:mylayer:1","arn:aws:lambda:us-east-1:123:layer:another:2"]'
+```
+
+You can mix primitive values with complex nested structures:
+
+```bash
+$ zappa settings --stage production \
+    --config project_name=myapp \
+    --config memory_size=1024 \
+    --config binary_support=true \
+    --config 'cors_options={"allowedOrigins":["https://example.com"]}' \
+    --config 'environment_variables={"DB_HOST":"localhost","DB_PORT":"5432"}'
+```
+
+The same nested JSON syntax works with environment variables:
+
+```bash
+$ export ZAPPA_CORS_OPTIONS='{"allowedOrigins":["*"],"allowedMethods":["GET","POST"]}'
+$ export ZAPPA_VPC_CONFIG='{"SubnetIds":["subnet-1","subnet-2"],"SecurityGroupIds":["sg-1"]}'
+$ zappa settings --stage production
+```
+
 Now, you're ready to deploy!
 
 ## Basic Usage
