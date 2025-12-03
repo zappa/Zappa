@@ -145,7 +145,7 @@ And finally, Zappa is **super easy to use**. You can deploy your application wit
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.8/3.9/3.10/3.11/3.12/3.13 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.9/3.10/3.11/3.12/3.13/3.14 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -522,7 +522,7 @@ For instance, suppose you have a basic application in a file called "my_app.py",
 
 Any remote print statements made and the value the function returned will then be printed to your local console. **Nifty!**
 
-You can also invoke interpretable Python 3.8/3.9/3.10/3.11/3.12/3.13 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.9/3.10/3.11/3.12/3.13/3.14 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -1100,7 +1100,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.13", // Python runtime to use on Lambda. Can be one of: "python3.8", "python3.9", "python3.10", "python3.11", "python3.12", or "python3.13". Defaults to whatever the current Python being used is.
+        "runtime": "python3.14", // Python runtime to use on Lambda. Can be one of: "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", or "python3.14". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None".
