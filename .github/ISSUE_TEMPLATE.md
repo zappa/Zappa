@@ -3,7 +3,7 @@
 ## Context
 
 <!--- Provide a more detailed introduction to the issue itself, and why you consider it to be a bug -->
-<!--- Also, please make sure that you are running Zappa _from a virtual environment_ and are using Python 3.8/3.9/3.10/3.11/3.12/3.13/3.14 -->
+<!--- Also, please make sure that you are running Zappa _from a virtual environment_ and are using Python 3.9/3.10/3.11/3.12/3.13/3.14 -->
 
 ## Expected Behavior
 
