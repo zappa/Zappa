@@ -235,6 +235,56 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_get_manylinux_python314(self):
+        z = Zappa(runtime="python3.14")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.3.1"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg-binary": "3.3.1"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.14")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "46.0.3"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.14")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+    def test_manylinux_wheel_platform_tag_sort_order(self):
+        """Test that wheel filename matching supports both sorted and unsorted platform tag orders.
+
+        Per PEP 425, compressed platform tags should be dot-separated and sorted.
+        Alphabetically sorted order puts legacy tags (manylinux2014) before PEP 600
+        tags (manylinux_2_17). We support both orderings for compatibility.
+        """
+        from zappa.core import build_manylinux_wheel_file_match_pattern
+
+        pattern = build_manylinux_wheel_file_match_pattern("python3.13", "x86_64")
+
+        # Sorted format (legacy first) - per PEP 425
+        sorted_filename = "psycopg_binary-3.3.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        self.assertIsNotNone(pattern.match(sorted_filename))
+
+        # Unsorted format (PEP 600 first) - for backwards compatibility
+        unsorted_filename = "psycopg_binary-3.2.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        self.assertIsNotNone(pattern.match(unsorted_filename))
+
+        # Legacy only format
+        legacy_only_filename = "somepackage-1.0.0-cp313-cp313-manylinux2014_x86_64.whl"
+        self.assertIsNotNone(pattern.match(legacy_only_filename))
+
     def test_verify_downloaded_manylinux_wheel(self):
         z = Zappa(runtime="python3.10")
         cached_wheels_dir = Path(tempfile.gettempdir()) / "cached_wheels"
