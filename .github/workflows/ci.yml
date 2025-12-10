@@ -55,5 +55,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
           format: cobertura
-          carryforward: "run-3.9,run-3.10,run-3.11,run-3.12,run-3.13"
+          carryforward: "run-3.9,run-3.10,run-3.11,run-3.12,run-3.13,run-3.14"
           debug: true
