@@ -1,5 +1,17 @@
 # Zappa Changelog
 
+## 0.61.2
+
+* Add support for Python 3.14 runtime (#1398)
+  - Updated `SUPPORTED_VERSIONS` to include Python 3.14
+  - Added Python 3.14 to `get_runtime_from_python_version()`
+  - Updated CI pipeline to test against Python 3.14
+  - Added `test_get_manylinux_python314` test case
+  - Updated documentation and templates to reflect Python 3.14 support
+* Fix manylinux wheel matching for PEP 425 sorted platform tags (#1401)
+  - Wheel filename matching now supports both sorted (legacy first) and unsorted platform tag orders
+  - Added `test_manylinux_wheel_platform_tag_sort_order` test for tag ordering compatibility
+
 ## 0.61.1
 
 * Add support for nested JSON configurations in `settings` command (#1397)
