@@ -1953,6 +1953,7 @@ class Zappa:
         description: Optional[str] = None,
         endpoint_configuration: Optional[list[str]] = None,
         apigateway_version: str = DEFAULT_APIGATEWAY_VERSION,
+        gateway_responses: Optional[dict] = None,
         stage_name: Optional[str] = None,
     ):
         """
@@ -1990,6 +1991,25 @@ class Zappa:
         if self.apigateway_policy:
             restapi.Policy = json.loads(self.apigateway_policy)
         self.cf_template.add_resource(restapi)
+
+        # Implement https://github.com/zappa/Zappa/issues/1402
+        if gateway_responses:
+            for response_type, response_config in gateway_responses.items():
+                response = troposphere.apigateway.GatewayResponse(
+                    f"GatewayResponse{re.sub(r'[^a-zA-Z0-9]', '', response_type.upper())}",
+                    RestApiId=troposphere.Ref(restapi),
+                    ResponseType=response_type.upper(),
+                )
+                if "statusCode" in response_config:
+                    response.StatusCode = str(response_config["statusCode"])
+                if "responseParameters" in response_config:
+                    response.ResponseParameters = response_config["responseParameters"]
+                if "responseTemplates" in response_config:
+                    response.ResponseTemplates = response_config["responseTemplates"]
+
+                self.cf_template.add_resource(response)
+                self.cf_api_resources.append(response.title)
+
 
         root_id = troposphere.GetAtt(restapi, "RootResourceId")
         invocation_prefix = "aws" if self.boto_session.region_name != "us-gov-west-1" else "aws-us-gov"
@@ -2315,6 +2335,34 @@ class Zappa:
             ],
         )
 
+    def update_gateway_responses(self, api_id, gateway_responses):
+        """
+        Create or update gateway responses for the REST API.
+        """
+        if not gateway_responses:
+            return
+
+        logger.info("Updating gateway responses..")
+
+        for response_type, response_config in gateway_responses.items():
+            params = {
+                "restApiId": api_id,
+                "responseType": response_type.upper(),
+            }
+            if "statusCode" in response_config:
+                params["statusCode"] = str(response_config["statusCode"])
+            if "responseParameters" in response_config:
+                params["responseParameters"] = response_config["responseParameters"]
+            if "responseTemplates" in response_config:
+                params["responseTemplates"] = response_config["responseTemplates"]
+
+            try:
+                self.apigateway_client.put_gateway_response(**params)
+                logger.info(f"Successfully configured gateway response for {response_type}")
+            except Exception as e:
+                logger.error(f"Failed to configure gateway response for {response_type}: {e}")
+                raise
+
     def get_api_keys(self, api_id, stage_name):
         """
         Generator that allows to iterate per API keys associated to an api_id and a stage_name.
@@ -2524,6 +2572,7 @@ class Zappa:
         description=None,
         endpoint_configuration=None,
         apigateway_version=DEFAULT_APIGATEWAY_VERSION,
+        gateway_responses=None,
         stage_name=None,
     ):
         """
@@ -2542,7 +2591,10 @@ class Zappa:
         elif iam_authorization:
             auth_type = "AWS_IAM"
         elif authorizer:
-            auth_type = authorizer.get("type", "CUSTOM")
+            if authorizer.get("type") == "COGNITO_USER_POOLS":
+                auth_type = "COGNITO_USER_POOLS"
+            else:
+                auth_type = "CUSTOM"
 
         # build a fresh template
         self.cf_template = troposphere.Template()
@@ -2559,6 +2611,7 @@ class Zappa:
             cors_options=cors_options,
             description=description,
             endpoint_configuration=endpoint_configuration,
+                gateway_responses=gateway_responses,
             apigateway_version=apigateway_version,
             stage_name=stage_name,
         )

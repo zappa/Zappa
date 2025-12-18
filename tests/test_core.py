@@ -3776,6 +3776,50 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(EnvironmentError):
             zappa_core.create_handler_venv()
 
+    def test_create_stack_template_with_gateway_responses(self):
+        """
+        Ensure that gateway responses are added to the CloudFormation template correctly.
+        """
+        zappa = Zappa()
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+
+        gateway_responses = {
+            "DEFAULT_4XX": {
+                "statusCode": "400",
+                "responseParameters": {"gatewayresponse.header.Access-Control-Allow-Origin": "'*'"},
+                "responseTemplates": {"application/json": '{"message": "A custom 4XX response from Zappa!"}'},
+            },
+            "UNAUTHORIZED": {"statusCode": "401", "responseParameters": {"gatewayresponse.header.WWW-Authenticate": "'Basic'"}},
+        }
+
+        # Create the template
+        zappa.create_stack_template(
+            lambda_arn=lambda_arn,
+            lambda_name="helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            gateway_responses=gateway_responses,
+        )
+
+        template_dict = json.loads(zappa.cf_template.to_json())
+        resources = template_dict["Resources"]
+
+        # Check for the DEFAULT_4XX response
+        self.assertIn("GatewayResponseDEFAULT4XX", resources)
+        response_4xx = resources["GatewayResponseDEFAULT4XX"]
+        self.assertEqual(response_4xx["Type"], "AWS::ApiGateway::GatewayResponse")
+        self.assertEqual(response_4xx["Properties"]["ResponseType"], "DEFAULT_4XX")
+        self.assertEqual(response_4xx["Properties"]["StatusCode"], "400")
+
+        # Check for the UNAUTHORIZED response
+        self.assertIn("GatewayResponseUNAUTHORIZED", resources)
+        response_unauthorized = resources["GatewayResponseUNAUTHORIZED"]
+        self.assertEqual(response_unauthorized["Type"], "AWS::ApiGateway::GatewayResponse")
+        self.assertEqual(response_unauthorized["Properties"]["ResponseType"], "UNAUTHORIZED")
+        self.assertEqual(response_unauthorized["Properties"]["StatusCode"], "401")
+        self.assertEqual(response_unauthorized["Properties"]["ResponseParameters"]["gatewayresponse.header.WWW-Authenticate"], "'Basic'")
+
 
 if __name__ == "__main__":
     unittest.main()

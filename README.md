@@ -997,6 +997,23 @@ to change Zappa's behavior. Use these at your own risk!
               "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
             }
         },
+        "gateway_responses": { // Customize gateway responses for your REST API (v1 only).
+            "DEFAULT_4XX": {
+                "statusCode": "400",
+                "responseParameters": {
+                    "gatewayresponse.header.Access-Control-Allow-Origin": "'*'"
+                },
+                "responseTemplates": {
+                    "application/json": "{\"message\": \"A custom 4XX response from Zappa!\"}"
+                }
+            },
+            "UNAUTHORIZED": {
+                "statusCode": "401",
+                "responseParameters": {
+                    "gatewayresponse.header.Access-Control-Allow-Origin": "'*'"
+                }
+            }
+        }, // A dictionary where keys are valid API Gateway response types and values define the custom response. This allows you to override the default responses that API Gateway generates for things like 4XX errors or invalid API keys. For a full list of customizable response types, see the [AWS Documentation](https://docs.aws.amazon.com/apigateway/latest/developerguide/supported-gateway-response-types.html). This feature is only available for REST APIs (`apigateway_version: "v1"`). [2]
         // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
         // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
         // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
