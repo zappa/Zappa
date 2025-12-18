@@ -3780,7 +3780,7 @@ class TestZappa(unittest.TestCase):
         """
         Ensure that gateway responses are added to the CloudFormation template correctly.
         """
-        zappa = Zappa()
+        zappa = Zappa(load_credentials=False)
         lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
 
         gateway_responses = {
