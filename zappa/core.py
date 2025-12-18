@@ -1992,7 +1992,6 @@ class Zappa:
             restapi.Policy = json.loads(self.apigateway_policy)
         self.cf_template.add_resource(restapi)
 
-        # Implement https://github.com/zappa/Zappa/issues/1402
         if gateway_responses:
             for response_type, response_config in gateway_responses.items():
                 response = troposphere.apigateway.GatewayResponse(
@@ -2334,34 +2333,6 @@ class Zappa:
                 }
             ],
         )
-
-    def update_gateway_responses(self, api_id, gateway_responses):
-        """
-        Create or update gateway responses for the REST API.
-        """
-        if not gateway_responses:
-            return
-
-        logger.info("Updating gateway responses..")
-
-        for response_type, response_config in gateway_responses.items():
-            params = {
-                "restApiId": api_id,
-                "responseType": response_type.upper(),
-            }
-            if "statusCode" in response_config:
-                params["statusCode"] = str(response_config["statusCode"])
-            if "responseParameters" in response_config:
-                params["responseParameters"] = response_config["responseParameters"]
-            if "responseTemplates" in response_config:
-                params["responseTemplates"] = response_config["responseTemplates"]
-
-            try:
-                self.apigateway_client.put_gateway_response(**params)
-                logger.info(f"Successfully configured gateway response for {response_type}")
-            except Exception as e:
-                logger.error(f"Failed to configure gateway response for {response_type}: {e}")
-                raise
 
     def get_api_keys(self, api_id, stage_name):
         """
