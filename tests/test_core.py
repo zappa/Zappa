@@ -3780,9 +3780,16 @@ class TestZappa(unittest.TestCase):
         """
         Ensure that gateway responses are added to the CloudFormation template correctly.
         """
-        zappa = Zappa(load_credentials=False)
+        boto_mock = mock.MagicMock()
+        boto_mock.region_name = "us-east-1"
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            load_credentials=False,
+        )
         lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
 
+        # We need to manually set this for the test, as we aren't loading real credentials.
+        zappa_core.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
         gateway_responses = {
             "DEFAULT_4XX": {
                 "statusCode": "400",
@@ -3793,7 +3800,7 @@ class TestZappa(unittest.TestCase):
         }
 
         # Create the template
-        zappa.create_stack_template(
+        zappa_core.create_stack_template(
             lambda_arn=lambda_arn,
             lambda_name="helloworld",
             api_key_required=False,
@@ -3802,7 +3809,7 @@ class TestZappa(unittest.TestCase):
             gateway_responses=gateway_responses,
         )
 
-        template_dict = json.loads(zappa.cf_template.to_json())
+        template_dict = json.loads(zappa_core.cf_template.to_json())
         resources = template_dict["Resources"]
 
         # Check for the DEFAULT_4XX response
