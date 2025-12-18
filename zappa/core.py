@@ -272,6 +272,13 @@ class Zappa:
         self.endpoint_urls = endpoint_urls
         self.xray_tracing = xray_tracing
 
+        # This is the earliest we can set the boto_session.
+        # It is used by ZappaCLI to load settings, so we must configure it
+        # before we load any other credentials.
+        if boto_session:
+            logger.debug("Using provided boto session: %s", boto_session)
+            self.boto_session = boto_session
+
         # Some common invocations, such as DB migrations,
         # can take longer than the default.
 
