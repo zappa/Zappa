@@ -2049,6 +2049,65 @@ class TestZappa(unittest.TestCase):
         self.assertEqual("v2", zappa_cli.stage_config["apigateway_version"])
         self.assertEqual("v2", zappa_cli.apigateway_version)
 
+    def test_load_settings__efs_config_true(self):
+        """Test efs_config: true normalizes to list with default mount path."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_true"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual([{"LocalMountPath": "/mnt/"}], zappa_cli.efs_config)
+        self.assertIsNotNone(zappa_cli.vpc_config)
+
+    def test_load_settings__efs_config_dict(self):
+        """Test efs_config as dict normalizes to list."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_dict"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual([{"LocalMountPath": "/mnt/data"}], zappa_cli.efs_config)
+
+    def test_load_settings__efs_config_dict_with_arn(self):
+        """Test efs_config with existing ARN."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_dict_with_arn"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(1, len(zappa_cli.efs_config))
+        self.assertEqual("/mnt/models", zappa_cli.efs_config[0]["LocalMountPath"])
+        self.assertIn("Arn", zappa_cli.efs_config[0])
+
+    def test_load_settings__efs_config_list(self):
+        """Test efs_config as list with multiple mounts."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_list"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(2, len(zappa_cli.efs_config))
+        self.assertEqual("/mnt/data", zappa_cli.efs_config[0]["LocalMountPath"])
+        self.assertEqual("/mnt/models", zappa_cli.efs_config[1]["LocalMountPath"])
+        self.assertNotIn("Arn", zappa_cli.efs_config[0])
+        self.assertIn("Arn", zappa_cli.efs_config[1])
+
+    def test_load_settings__efs_config_no_vpc(self):
+        """Test efs_config without vpc_config raises error."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_no_vpc"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("vpc_config", str(context.exception))
+
+    def test_load_settings__efs_config_invalid_mount_path(self):
+        """Test efs_config with invalid mount path raises error."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_invalid_mount_path"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("/mnt/", str(context.exception))
+
+    def test_load_settings__efs_config_duplicate_mount_path(self):
+        """Test efs_config with duplicate mount paths raises error."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "efs_config_duplicate_mount_path"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("not unique", str(context.exception))
+
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"

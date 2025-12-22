@@ -308,6 +308,7 @@ class Zappa:
             self.dynamodb_client = self.boto_client("dynamodb")
             self.cognito_client = self.boto_client("cognito-idp")
             self.sts_client = self.boto_client("sts")
+            self.efs_client = self.boto_client("efs")
 
         self.tags = tags
         self.cf_template = troposphere.Template()
@@ -1035,6 +1036,145 @@ class Zappa:
             return False
 
     ##
+    # EFS
+    ##
+
+    def create_efs(
+        self,
+        lambda_name: str,
+        vpc_config: dict,
+        mount_path: str = "/mnt/",
+        throughput_mode: str = "bursting",
+        performance_mode: str = "generalPurpose",
+    ) -> str:
+        """
+        Create EFS file system, mount targets, and access point for Lambda.
+        Returns the access point ARN.
+        """
+        # Generate unique name based on mount path (e.g., /mnt/data -> data, /mnt/ -> default)
+        mount_suffix = mount_path.replace("/mnt/", "").rstrip("/") or "default"
+        efs_name = f"{lambda_name}-efs-{mount_suffix}"
+
+        # Check if EFS already exists (by name tag)
+        existing = self.efs_client.describe_file_systems()
+        file_system_id = None
+        for fs in existing["FileSystems"]:
+            tags = {t["Key"]: t["Value"] for t in fs.get("Tags", [])}
+            if tags.get("Name") == efs_name:
+                file_system_id = fs["FileSystemId"]
+                logger.info(f"Using existing EFS: {file_system_id}")
+                break
+
+        if file_system_id is None:
+            # Create new file system
+            logger.info(f"Creating EFS file system: {efs_name}")
+            response = self.efs_client.create_file_system(
+                CreationToken=efs_name,
+                PerformanceMode=performance_mode,
+                ThroughputMode=throughput_mode,
+                Encrypted=True,
+                Tags=[
+                    {"Key": "Name", "Value": efs_name},
+                    {"Key": "CreatedBy", "Value": "Zappa"},
+                ],
+            )
+            file_system_id = response["FileSystemId"]
+
+            # Wait for file system to be available
+            waiter = self.efs_client.get_waiter("file_system_available")
+            waiter.wait(FileSystemId=file_system_id)
+
+        # Create mount targets for each subnet
+        security_group_ids = vpc_config.get("SecurityGroupIds", [])
+        for subnet_id in vpc_config.get("SubnetIds", []):
+            try:
+                self.efs_client.create_mount_target(
+                    FileSystemId=file_system_id,
+                    SubnetId=subnet_id,
+                    SecurityGroups=security_group_ids,
+                )
+                logger.info(f"Created mount target in subnet: {subnet_id}")
+            except self.efs_client.exceptions.MountTargetConflict:
+                logger.info(f"Mount target already exists in subnet: {subnet_id}")
+
+        # Wait for mount targets to be available
+        while True:
+            targets = self.efs_client.describe_mount_targets(FileSystemId=file_system_id)
+            if all(t["LifeCycleState"] == "available" for t in targets["MountTargets"]):
+                break
+            time.sleep(5)
+
+        # Create or get access point
+        access_point_name = f"{lambda_name}-ap-{mount_suffix}"
+        access_points = self.efs_client.describe_access_points(FileSystemId=file_system_id)
+        for ap in access_points["AccessPoints"]:
+            tags = {t["Key"]: t["Value"] for t in ap.get("Tags", [])}
+            if tags.get("Name") == access_point_name:
+                logger.info(f"Using existing access point: {ap['AccessPointId']}")
+                return ap["AccessPointArn"]
+
+        # Create new access point
+        logger.info(f"Creating EFS access point: {access_point_name}")
+        response = self.efs_client.create_access_point(
+            FileSystemId=file_system_id,
+            PosixUser={
+                "Uid": 1000,
+                "Gid": 1000,
+            },
+            RootDirectory={
+                "Path": "/lambda",
+                "CreationInfo": {
+                    "OwnerUid": 1000,
+                    "OwnerGid": 1000,
+                    "Permissions": "755",
+                },
+            },
+            Tags=[
+                {"Key": "Name", "Value": access_point_name},
+                {"Key": "CreatedBy", "Value": "Zappa"},
+            ],
+        )
+
+        return response["AccessPointArn"]
+
+    def delete_efs(self, lambda_name: str):
+        """
+        Delete all EFS resources created by Zappa for this Lambda.
+        Finds and deletes all EFS file systems with names matching the pattern.
+        """
+        # Find all file systems created by Zappa for this Lambda
+        file_systems = self.efs_client.describe_file_systems()
+        for fs in file_systems["FileSystems"]:
+            tags = {t["Key"]: t["Value"] for t in fs.get("Tags", [])}
+            fs_name = tags.get("Name", "")
+            # Match pattern: {lambda_name}-efs-{suffix}
+            if fs_name.startswith(f"{lambda_name}-efs-") and tags.get("CreatedBy") == "Zappa":
+                file_system_id = fs["FileSystemId"]
+
+                # Delete access points
+                access_points = self.efs_client.describe_access_points(FileSystemId=file_system_id)
+                for ap in access_points["AccessPoints"]:
+                    logger.info(f"Deleting access point: {ap['AccessPointId']}")
+                    self.efs_client.delete_access_point(AccessPointId=ap["AccessPointId"])
+
+                # Delete mount targets
+                mount_targets = self.efs_client.describe_mount_targets(FileSystemId=file_system_id)
+                for mt in mount_targets["MountTargets"]:
+                    logger.info(f"Deleting mount target: {mt['MountTargetId']}")
+                    self.efs_client.delete_mount_target(MountTargetId=mt["MountTargetId"])
+
+                # Wait for mount targets to be deleted
+                while True:
+                    targets = self.efs_client.describe_mount_targets(FileSystemId=file_system_id)
+                    if len(targets["MountTargets"]) == 0:
+                        break
+                    time.sleep(5)
+
+                # Delete file system
+                logger.info(f"Deleting EFS file system: {file_system_id}")
+                self.efs_client.delete_file_system(FileSystemId=file_system_id)
+
+    ##
     # Lambda
     ##
 
@@ -1051,6 +1191,7 @@ class Zappa:
         publish=True,
         vpc_config=None,
         dead_letter_config=None,
+        efs_config=None,
         runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
@@ -1070,6 +1211,8 @@ class Zappa:
             vpc_config = {}
         if not dead_letter_config:
             dead_letter_config = {}
+        if not efs_config:
+            efs_config = []
         if not self.credentials_arn:
             self.get_credentials_arn()
         if not aws_environment_variables:
@@ -1089,6 +1232,7 @@ class Zappa:
             Publish=publish,
             VpcConfig=vpc_config,
             DeadLetterConfig=dead_letter_config,
+            FileSystemConfigs=efs_config,
             Environment={"Variables": aws_environment_variables},
             KMSKeyArn=aws_kms_key_arn,
             TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
@@ -1240,6 +1384,7 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
+        efs_config=None,
         runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
@@ -1254,6 +1399,8 @@ class Zappa:
 
         if not vpc_config:
             vpc_config = {}
+        if not efs_config:
+            efs_config = []
         if not self.credentials_arn:
             self.get_credentials_arn()
         if not aws_kms_key_arn:
@@ -1285,6 +1432,7 @@ class Zappa:
             "MemorySize": memory_size,
             "EphemeralStorage": ephemeral_storage,
             "VpcConfig": vpc_config,
+            "FileSystemConfigs": efs_config,
             "Environment": {"Variables": aws_environment_variables},
             "KMSKeyArn": aws_kms_key_arn,
             "TracingConfig": {"Mode": "Active" if self.xray_tracing else "PassThrough"},

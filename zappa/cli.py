@@ -111,6 +111,7 @@ class ZappaCLI:
     zip_path = None
     handler_path = None
     vpc_config = None
+    efs_config = None  # List of EFS configurations
     memory_size = None
     ephemeral_storage = None
     use_apigateway = None
@@ -816,6 +817,19 @@ class ZappaCLI:
                         + "\n"
                     )
 
+        # Create or resolve EFS configurations
+        if self.efs_config:
+            for efs in self.efs_config:
+                if "Arn" not in efs:
+                    # Auto-create EFS resources for entries without an ARN
+                    efs["Arn"] = self.zappa.create_efs(
+                        lambda_name=self.lambda_name,
+                        vpc_config=self.vpc_config,
+                        mount_path=efs["LocalMountPath"],
+                        throughput_mode=efs.get("ThroughputMode", "bursting"),
+                        performance_mode=efs.get("PerformanceMode", "generalPurpose"),
+                    )
+
         # Make sure this isn't already deployed.
         deployed_versions = self.zappa.get_lambda_function_versions(self.lambda_name)
         if len(deployed_versions) > 0:
@@ -879,11 +893,19 @@ class ZappaCLI:
         except botocore.client.ClientError:
             # Register the Lambda function with that zip as the source
             # You'll also need to define the path to your lambda_handler code.
+            # Prepare EFS config for Lambda API (list of {Arn, LocalMountPath})
+            lambda_efs_config = (
+                [{"Arn": efs["Arn"], "LocalMountPath": efs["LocalMountPath"]} for efs in self.efs_config]
+                if self.efs_config
+                else []
+            )
+
             kwargs = dict(
                 handler=self.lambda_handler,
                 description=self.lambda_description,
                 vpc_config=self.vpc_config,
                 dead_letter_config=self.dead_letter_config,
+                efs_config=lambda_efs_config,
                 timeout=self.timeout_seconds,
                 memory_size=self.memory_size,
                 ephemeral_storage=self.ephemeral_storage,
@@ -1068,6 +1090,19 @@ class ZappaCLI:
                     )
                     sys.exit(-1)
 
+            # Create or resolve EFS configurations
+            if self.efs_config:
+                for efs in self.efs_config:
+                    if "Arn" not in efs:
+                        # Auto-create EFS resources for entries without an ARN
+                        efs["Arn"] = self.zappa.create_efs(
+                            lambda_name=self.lambda_name,
+                            vpc_config=self.vpc_config,
+                            mount_path=efs["LocalMountPath"],
+                            throughput_mode=efs.get("ThroughputMode", "bursting"),
+                            performance_mode=efs.get("PerformanceMode", "generalPurpose"),
+                        )
+
             # Create the Lambda Zip,
             if not no_upload:
                 self.create_package()
@@ -1137,6 +1172,13 @@ class ZappaCLI:
         if not source_zip and not no_upload and not docker_image_uri:
             self.remove_uploaded_zip()
 
+        # Prepare EFS config for Lambda API (list of {Arn, LocalMountPath})
+        lambda_efs_config = (
+            [{"Arn": efs["Arn"], "LocalMountPath": efs["LocalMountPath"]} for efs in self.efs_config]
+            if self.efs_config
+            else []
+        )
+
         # Update the configuration, in case there are changes.
         self.lambda_arn = self.zappa.update_lambda_configuration(
             lambda_arn=self.lambda_arn,
@@ -1144,6 +1186,7 @@ class ZappaCLI:
             handler=self.lambda_handler,
             description=self.lambda_description,
             vpc_config=self.vpc_config,
+            efs_config=lambda_efs_config,
             timeout=self.timeout_seconds,
             memory_size=self.memory_size,
             ephemeral_storage=self.ephemeral_storage,
@@ -1343,6 +1386,24 @@ class ZappaCLI:
         self.zappa.delete_lambda_function(self.lambda_name)
         if remove_logs:
             self.zappa.remove_lambda_function_logs(self.lambda_name)
+
+        # Delete auto-created EFS resources
+        # Check if any EFS entries were auto-created (no Arn in original config)
+        raw_efs_config = self.stage_config.get("efs_config", None)
+        if raw_efs_config:
+            # Normalize to list to check for auto-created entries
+            if raw_efs_config is True:
+                has_auto_created = True
+            elif isinstance(raw_efs_config, dict):
+                has_auto_created = "Arn" not in raw_efs_config
+            elif isinstance(raw_efs_config, list):
+                has_auto_created = any("Arn" not in efs for efs in raw_efs_config)
+            else:
+                has_auto_created = False
+
+            if has_auto_created:
+                click.echo("Deleting auto-created EFS resources...")
+                self.zappa.delete_efs(self.lambda_name)
 
         click.echo(click.style("Done", fg="green", bold=True) + "!")
 
@@ -2517,6 +2578,41 @@ class ZappaCLI:
             "zappa-" + "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(9)),
         )
         self.vpc_config = self.stage_config.get("vpc_config", {})
+
+        # Load and validate EFS configuration
+        raw_efs_config = self.stage_config.get("efs_config", None)
+        self.efs_config = []
+
+        if raw_efs_config:
+            if not self.vpc_config:
+                raise ClickException("efs_config requires vpc_config to be set")
+
+            # Normalize configuration to list format
+            if raw_efs_config is True:
+                # Minimal config: efs_config: true -> single mount at /mnt/
+                self.efs_config = [{"LocalMountPath": "/mnt/"}]
+            elif isinstance(raw_efs_config, dict):
+                # Single dict config -> wrap in list
+                self.efs_config = [raw_efs_config]
+            elif isinstance(raw_efs_config, list):
+                self.efs_config = raw_efs_config
+
+            # Validate each EFS entry
+            mount_paths = set()
+            for idx, efs in enumerate(self.efs_config):
+                # Default LocalMountPath
+                if "LocalMountPath" not in efs:
+                    efs["LocalMountPath"] = "/mnt/"
+
+                # Validate LocalMountPath format
+                if not efs["LocalMountPath"].startswith("/mnt/"):
+                    raise ClickException(f"efs_config[{idx}] LocalMountPath must start with '/mnt/'")
+
+                # Ensure unique mount paths
+                if efs["LocalMountPath"] in mount_paths:
+                    raise ClickException(f"efs_config[{idx}] LocalMountPath '{efs['LocalMountPath']}' is not unique")
+                mount_paths.add(efs["LocalMountPath"])
+
         self.memory_size = self.stage_config.get("memory_size", 512)
         self.ephemeral_storage = self.stage_config.get("ephemeral_storage", {"Size": 512})
 
@@ -2641,6 +2737,22 @@ class ZappaCLI:
                     with open(setting_val, "r") as f:
                         setting_val = f.read()
                 setattr(self.zappa, setting, setting_val)
+
+        # Automatically add EFS permissions when efs_config is provided
+        if self.efs_config and self.manage_roles:
+            efs_permission = {
+                "Effect": "Allow",
+                "Action": [
+                    "elasticfilesystem:ClientMount",
+                    "elasticfilesystem:ClientWrite",
+                    "elasticfilesystem:DescribeMountTargets",
+                ],
+                "Resource": "*",
+            }
+            if self.zappa.extra_permissions:
+                self.zappa.extra_permissions.append(efs_permission)
+            else:
+                self.zappa.extra_permissions = [efs_permission]
 
         if self.app_function:
             self.collision_warning(self.app_function)
