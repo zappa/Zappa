@@ -167,5 +167,73 @@
         "delete_local_zip": true,
         "debug": true,
         "architecture": "invalid_architecture"
+     },
+     "efs_config_true": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": true
+     },
+     "efs_config_dict": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": {
+            "LocalMountPath": "/mnt/data"
+        }
+     },
+     "efs_config_dict_with_arn": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": {
+            "Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-12345678",
+            "LocalMountPath": "/mnt/models"
+        }
+     },
+     "efs_config_list": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": [
+            {"LocalMountPath": "/mnt/data"},
+            {
+                "Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-12345678",
+                "LocalMountPath": "/mnt/models"
+            }
+        ]
+     },
+     "efs_config_no_vpc": {
+        "extends": "ttt888",
+        "efs_config": true
+     },
+     "efs_config_invalid_mount_path": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": {
+            "LocalMountPath": "/data"
+        }
+     },
+     "efs_config_duplicate_mount_path": {
+        "extends": "ttt888",
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": [
+            {"LocalMountPath": "/mnt/data"},
+            {"LocalMountPath": "/mnt/data"}
+        ]
      }
 }
