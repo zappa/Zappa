@@ -2263,6 +2263,11 @@ class ZappaCLI:
         # Apply configuration to settings (will override defaults)
         settings[stage].update(config)
 
+        # django_settings and app_function are mutually exclusive
+        # If django_settings is provided, remove app_function from the settings
+        if "django_settings" in settings[stage]:
+            settings[stage].pop("app_function", None)
+
         return settings
 
     def settings(self):

@@ -1907,6 +1907,61 @@ class TestZappa(unittest.TestCase):
             os.environ.clear()
             os.environ.update(original_env)
 
+    def test_zappacli_settings_django_excludes_app_function(self):
+        """
+        Test that when django_settings is provided, app_function is excluded from generated settings.
+        Django projects use django_settings, not app_function - they are mutually exclusive.
+        Regression test for issue #1404.
+        """
+        # Save original environment and clear all ZAPPA_* variables
+        original_env = os.environ.copy()
+        zappa_vars = [var for var in os.environ.keys() if var.startswith("ZAPPA_")]
+        for var in zappa_vars:
+            del os.environ[var]
+
+        try:
+            zappa_cli = ZappaCLI()
+
+            # Test 1: django_settings via environment variable
+            os.environ["ZAPPA_DJANGO_SETTINGS"] = "myproject.settings"
+
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["django_settings"], "myproject.settings")
+            self.assertNotIn("app_function", settings["dev"])
+
+            # Clear env vars for next test
+            del os.environ["ZAPPA_DJANGO_SETTINGS"]
+
+            # Test 2: django_settings via --config argument
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings", "--config", "django_settings=myapp.settings"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertEqual(settings["dev"]["django_settings"], "myapp.settings")
+            self.assertNotIn("app_function", settings["dev"])
+
+            # Test 3: Verify app_function is still present when django_settings is NOT set
+            with redirect_stdout(io.StringIO()) as f:
+                zappa_cli.handle(["settings"])
+                output = f.getvalue()
+
+            settings = json.loads(output)
+            self.assertIn("dev", settings)
+            self.assertIn("app_function", settings["dev"])
+            self.assertNotIn("django_settings", settings["dev"])
+
+        finally:
+            # Restore original environment completely
+            os.environ.clear()
+            os.environ.update(original_env)
+
     def test_load_settings(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
