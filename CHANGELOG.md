@@ -1,5 +1,12 @@
 # Zappa Changelog
 
+## 0.61.3
+
+* Fix `settings` command generating invalid config for Django projects (#1404)
+  - `django_settings` and `app_function` are mutually exclusive
+  - When `django_settings` is provided via environment variable or CLI, `app_function` is now excluded from generated settings
+  - Added regression test `test_zappacli_settings_django_excludes_app_function`
+
 ## 0.61.2
 
 * Add support for Python 3.14 runtime (#1398)
