@@ -3790,6 +3790,326 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().create_function_url_config.assert_not_called()
         boto_mock.client().update_function_url_config.assert_not_called()
 
+    # Issue #1407: API Gateway v2 update returns 500 on status check
+    # https://github.com/zappa/Zappa/issues/1407
+    @mock.patch("botocore.client")
+    def test_get_api_id_v1(self, client):
+        """Test get_api_id returns correct ID for API Gateway v1 (REST API)."""
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        # Mock the CloudFormation response for v1 (uses "Api" resource name)
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "abc123xyz",
+            }
+        }
+
+        api_id = zappa_core.get_api_id("my-lambda", apigateway_version="v1")
+
+        self.assertEqual(api_id, "abc123xyz")
+        zappa_core.cf_client.describe_stack_resource.assert_called_once_with(
+            StackName="my-lambda",
+            LogicalResourceId="Api",
+        )
+
+    @mock.patch("botocore.client")
+    def test_get_api_id_v2(self, client):
+        """Test get_api_id returns correct ID for API Gateway v2 (HTTP API).
+
+        Issue #1407: Verifies that v2 correctly uses 'ApiV2' resource name.
+        """
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        # Mock the CloudFormation response for v2 (uses "ApiV2" resource name)
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "v2api456",
+            }
+        }
+
+        api_id = zappa_core.get_api_id("my-lambda-v2", apigateway_version="v2")
+
+        self.assertEqual(api_id, "v2api456")
+        zappa_core.cf_client.describe_stack_resource.assert_called_once_with(
+            StackName="my-lambda-v2",
+            LogicalResourceId="ApiV2",
+        )
+
+    @mock.patch("botocore.client")
+    def test_get_api_id_v2_fallback_to_rest_api(self, client):
+        """Test get_api_id falls back to REST API lookup when CF fails.
+
+        Issue #1407: When CF describe_stack_resource fails for v2, it should
+        fall back to querying rest APIs directly.
+        """
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        # Simulate CF failure (e.g., older project without CF stack)
+        zappa_core.cf_client.describe_stack_resource.side_effect = Exception("Stack not found")
+
+        # Mock the REST API fallback
+        zappa_core.apigateway_client.get_rest_apis.return_value = {
+            "items": [
+                {"name": "other-lambda", "id": "other123"},
+                {"name": "my-lambda-v2", "id": "fallback789"},
+            ]
+        }
+
+        api_id = zappa_core.get_api_id("my-lambda-v2", apigateway_version="v2")
+
+        self.assertEqual(api_id, "fallback789")
+
+    @mock.patch("botocore.client")
+    def test_get_api_url_v1(self, client):
+        """Test get_api_url returns correct URL for API Gateway v1."""
+        boto_mock = mock.MagicMock()
+        boto_mock.region_name = "us-east-1"
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "abc123",
+            }
+        }
+
+        url = zappa_core.get_api_url("my-lambda", "dev", apigateway_version="v1")
+
+        self.assertEqual(url, "https://abc123.execute-api.us-east-1.amazonaws.com/dev")
+
+    @mock.patch("botocore.client")
+    def test_get_api_url_v2(self, client):
+        """Test get_api_url returns correct URL for API Gateway v2.
+
+        Issue #1407: Ensures the URL is correctly constructed for HTTP APIs.
+        """
+        boto_mock = mock.MagicMock()
+        boto_mock.region_name = "us-east-1"
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "v2abc456",
+            }
+        }
+
+        url = zappa_core.get_api_url("my-lambda-v2", "dev", apigateway_version="v2")
+
+        self.assertEqual(url, "https://v2abc456.execute-api.us-east-1.amazonaws.com/dev")
+        # Verify it used the correct resource name
+        zappa_core.cf_client.describe_stack_resource.assert_called_with(
+            StackName="my-lambda-v2",
+            LogicalResourceId="ApiV2",
+        )
+
+    @mock.patch("botocore.client")
+    def test_get_api_url_v2_with_default_stage(self, client):
+        """Test get_api_url with $default stage for API Gateway v2.
+
+        Issue #1407: For HTTP APIs using $default stage, URL should still
+        include the stage name.
+        """
+        boto_mock = mock.MagicMock()
+        boto_mock.region_name = "us-east-1"
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "v2default789",
+            }
+        }
+
+        url = zappa_core.get_api_url("my-lambda-v2", "$default", apigateway_version="v2")
+
+        self.assertEqual(url, "https://v2default789.execute-api.us-east-1.amazonaws.com/$default")
+
+    @mock.patch("botocore.client")
+    def test_get_api_url_v2_no_api_found(self, client):
+        """Test get_api_url returns None when no API is found.
+
+        Issue #1407: If CF and REST API lookup both fail, get_api_url should
+        return None rather than crashing.
+        """
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="us-east-1",
+            load_credentials=True,
+        )
+
+        # Simulate CF failure
+        zappa_core.cf_client.describe_stack_resource.side_effect = Exception("Stack not found")
+        # Simulate REST API lookup returning no matching API
+        zappa_core.apigateway_client.get_rest_apis.return_value = {
+            "items": [
+                {"name": "other-lambda", "id": "other123"},
+            ]
+        }
+
+        url = zappa_core.get_api_url("my-lambda-v2", "dev", apigateway_version="v2")
+
+        self.assertIsNone(url)
+
+    @mock.patch("botocore.client")
+    def test_get_api_url_v2_different_region(self, client):
+        """Test get_api_url uses the correct region in URL for v2.
+
+        Issue #1407: The user reported issue in sa-east-1 region.
+        """
+        boto_mock = mock.MagicMock()
+        boto_mock.region_name = "sa-east-1"
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="sa-east-1",  # Same region as reported in issue
+            load_credentials=True,
+        )
+
+        zappa_core.cf_client.describe_stack_resource.return_value = {
+            "StackResourceDetail": {
+                "PhysicalResourceId": "v2sa123",
+            }
+        }
+
+        url = zappa_core.get_api_url("my-lambda-v2", "dev", apigateway_version="v2")
+
+        self.assertEqual(url, "https://v2sa123.execute-api.sa-east-1.amazonaws.com/dev")
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_success(self, mock_get):
+        """Test touch_endpoint succeeds with 200 status code."""
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_get.return_value = mock_response
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {}}
+
+        # Should not raise an exception
+        zappa_cli.touch_endpoint("https://example.execute-api.us-east-1.amazonaws.com/dev")
+        mock_get.assert_called_once_with("https://example.execute-api.us-east-1.amazonaws.com/dev/")
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_500_error(self, mock_get):
+        """Test touch_endpoint raises exception on 500 status code.
+
+        Issue #1407: Simulates the scenario where update status check fails
+        with HTTP 500.
+        """
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 500
+        mock_get.return_value = mock_response
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {}}
+
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.touch_endpoint("https://example.execute-api.us-east-1.amazonaws.com/dev")
+
+        self.assertIn("Status check on the deployed lambda failed", str(context.exception))
+        self.assertIn("500", str(context.exception))
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_504_retry(self, mock_get):
+        """Test touch_endpoint retries on 504 timeout errors.
+
+        Issue #1407: Large packages may take time to initialize, causing
+        initial 504 errors that should be retried.
+        """
+        mock_response_504 = mock.MagicMock()
+        mock_response_504.status_code = 504
+        mock_response_200 = mock.MagicMock()
+        mock_response_200.status_code = 200
+
+        # First call returns 504, second call returns 200
+        mock_get.side_effect = [mock_response_504, mock_response_200]
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {}}
+
+        # Should succeed after retry
+        zappa_cli.touch_endpoint("https://example.execute-api.us-east-1.amazonaws.com/dev")
+        self.assertEqual(mock_get.call_count, 2)
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_custom_touch_path(self, mock_get):
+        """Test touch_endpoint uses custom touch_path from config."""
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_get.return_value = mock_response
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {"touch_path": "/health"}}
+
+        zappa_cli.touch_endpoint("https://example.execute-api.us-east-1.amazonaws.com/dev")
+        mock_get.assert_called_once_with("https://example.execute-api.us-east-1.amazonaws.com/dev/health")
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_private_api_skipped(self, mock_get):
+        """Test touch_endpoint is skipped for private API Gateway endpoints."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {"endpoint_configuration": ["PRIVATE"]}}
+
+        # Should not make any HTTP request for private endpoints
+        zappa_cli.touch_endpoint("https://example.execute-api.us-east-1.amazonaws.com/dev")
+        mock_get.assert_not_called()
+
+    @mock.patch("requests.get")
+    def test_touch_endpoint_v2_url_format(self, mock_get):
+        """Test touch_endpoint works with API Gateway v2 URL format.
+
+        Issue #1407: Verifies the URL format is correct for HTTP APIs.
+        """
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_get.return_value = mock_response
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "test"
+        zappa_cli.zappa_settings = {"test": {"apigateway_version": "v2"}}
+
+        # API Gateway v2 URL with stage name
+        zappa_cli.touch_endpoint("https://v2api123.execute-api.sa-east-1.amazonaws.com/dev")
+        mock_get.assert_called_once_with("https://v2api123.execute-api.sa-east-1.amazonaws.com/dev/")
+
     @mock.patch("sys.version_info", new_callable=get_sys_versioninfo)
     def test_unsupported_version_error(self, *_):
         from importlib import reload
