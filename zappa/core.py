@@ -3144,18 +3144,23 @@ class Zappa:
 
     def _clear_policy(self, lambda_name):
         """
-        Remove obsolete policy statements to prevent policy from bloating over the limit after repeated updates.
+        Remove obsolete CloudWatch Events policy statements to prevent policy from bloating
+        over the limit after repeated updates.
+
+        Only removes permissions for events.amazonaws.com (created by schedule_events).
+        Preserves permissions for API Gateway, Function URLs, and other services.
         """
         try:
             policy_response = self.lambda_client.get_policy(FunctionName=lambda_name)
             if policy_response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 statement = json.loads(policy_response["Policy"])["Statement"]
                 for s in statement:
-                    if s["Sid"] in ["FunctionURLAllowPublicAccess"]:
-                        continue
-                    delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=s["Sid"])
-                    if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
-                        logger.error("Failed to delete an obsolete policy statement: {}".format(policy_response))
+                    # Only remove CloudWatch Events permissions (created by schedule_events)
+                    principal = s.get("Principal", {})
+                    if isinstance(principal, dict) and principal.get("Service") == "events.amazonaws.com":
+                        delete_response = self.lambda_client.remove_permission(FunctionName=lambda_name, StatementId=s["Sid"])
+                        if delete_response["ResponseMetadata"]["HTTPStatusCode"] != 204:
+                            logger.error("Failed to delete an obsolete policy statement: {}".format(policy_response))
             else:
                 logger.debug("Failed to load Lambda function policy: {}".format(policy_response))
         except ClientError as e:
