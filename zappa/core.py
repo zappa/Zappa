@@ -170,18 +170,28 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
     else:
         raise ValueError(f"Invalid 'architecture', must be one of {VALID_ARCHITECTURES}, got: {architecture}")
 
-    # Support compressed platform tags per PEP 425 (dot-separated, sorted).
-    # Properly sorted order puts legacy tags (manylinux2014) before PEP 600 tags (manylinux_2_17)
-    # alphabetically. We also support the reverse order for backwards compatibility.
+    # Support compressed platform tags as defined by PEP 425 and PEP 600.
+    #
+    # The platform tag portion of a wheel filename may consist of one or more
+    # platform tags separated by dots, representing a logical OR of supported
+    # platforms.
+    #
+    # Supported forms include:
+    #   - legacy manylinux tags (manylinux2014, manylinux2010, manylinux1)
+    #   - PEP 600 manylinux tags (manylinux_2_x)
+    #   - any combination of the above, in any order
+    #
+    # Ordering of platform tags is not strictly validated, as real-world wheels
+    # may not follow a canonical sort order.
     # Examples:
     #   - manylinux2014_x86_64.whl (legacy only)
     #   - manylinux2014_x86_64.manylinux_2_17_x86_64.whl (sorted: legacy first)
     #   - manylinux_2_17_x86_64.manylinux2014_x86_64.whl (unsorted: PEP 600 first)
     legacy_tag = rf'({"|".join(manylinux_legacy_tags)})_({"|".join(valid_platform_tags)})'
     pep600_tag = rf'manylinux_\d+_\d+_({"|".join(valid_platform_tags)})'
-    manylinux_wheel_file_match = (
-        rf"^.*{python_tag}-{python_tag}-" rf"({legacy_tag}[.]{pep600_tag}|{pep600_tag}[.]{legacy_tag}|{legacy_tag})[.]whl$"
-    )
+    single_platform_tag = rf"({legacy_tag}|{pep600_tag})"
+    platform_tags = rf"{single_platform_tag}(\.{single_platform_tag})*"
+    manylinux_wheel_file_match = rf"^.*{python_tag}-{python_tag}-{platform_tags}\.whl$"
 
     # The 'abi3' tag is a compiled distribution format designed for compatibility across multiple Python 3 versions.
     # An abi3 wheel is built against the stable ABI (Application Binary Interface) of a minimum supported Python version.
@@ -193,7 +203,7 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
     manylinux_wheel_abi3_file_match = (
         # rf'^.*cp3.-abi3-manylinux({"|".join(manylinux_suffixes)})_({"|".join(valid_platform_tags)}).whl$'
         rf'^.*cp3({"|".join(abi_valid_python_minor_versions)})-abi3-'
-        rf'manylinux(({"|".join(manylinux_suffixes)})_({"".join(valid_platform_tags)})(\.|))+.whl$'
+        rf'manylinux(({"|".join(manylinux_suffixes)})_({"|".join(valid_platform_tags)})(\.|))+.whl$'
     )
     combined_match_pattern = rf"({manylinux_wheel_file_match})|({manylinux_wheel_abi3_file_match})"
     manylinux_wheel_file_match_pattern = re.compile(combined_match_pattern)
