@@ -17,14 +17,7 @@
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
   - [Alternative: Generating Settings via CLI](#alternative-generating-settings-via-cli)
-- [Using command-line arguments](#using-command-line-arguments)
-- [Using environment variables](#using-environment-variables)
-- [Command-line arguments override environment variables](#command-line-arguments-override-environment-variables)
     - [Nested JSON Configurations](#nested-json-configurations)
-- [Configure CORS with nested JSON](#configure-cors-with-nested-json)
-- [Configure VPC settings](#configure-vpc-settings)
-- [Configure environment variables](#configure-environment-variables)
-- [Configure Lambda layers](#configure-lambda-layers)
 - [Basic Usage](#basic-usage)
   - [Initial Deployments](#initial-deployments)
   - [Updates](#updates)
@@ -85,6 +78,11 @@
   - [Raising AWS Service Limits](#raising-aws-service-limits)
   - [Dead Letter Queues](#dead-letter-queues)
   - [Elastic File System (EFS)](#elastic-file-system-efs)
+    - [Basic Configuration](#basic-configuration)
+    - [Configuration Options](#configuration-options)
+    - [Security Group Configuration](#security-group-configuration)
+    - [Accessing EFS in Your Code](#accessing-efs-in-your-code)
+    - [Notes](#notes)
   - [Unique Package ID](#unique-package-id)
   - [Application Load Balancer Event Source](#application-load-balancer-event-source)
   - [Endpoint Configuration](#endpoint-configuration)
@@ -207,19 +205,26 @@ Instead of using the interactive `init` command, you can also generate your `zap
 
 This generates a basic settings file with defaults. You can customize it using `--config` arguments or `ZAPPA_` environment variables:
 
+> Using command-line arguments
+
 ```bash
-# Using command-line arguments
 $ zappa settings --stage production \
     --config project_name=myapp \
     --config memory_size=1024 \
     --config timeout_seconds=60
+```
 
-# Using environment variables
+> Using environment variables
+
+```bash
 $ export ZAPPA_PROJECT_NAME=myapp
 $ export ZAPPA_MEMORY_SIZE=1024
 $ zappa settings --stage production
+```
 
-# Command-line arguments override environment variables
+> Command-line arguments override environment variables
+
+```bash
 $ export ZAPPA_MEMORY_SIZE=512
 $ zappa settings --config memory_size=2048  # Uses 2048, not 512
 ```
@@ -228,20 +233,30 @@ $ zappa settings --config memory_size=2048  # Uses 2048, not 512
 
 The `settings` command supports complex nested JSON structures for advanced configurations like CORS options, VPC settings, and environment variables:
 
+> Configure CORS with nested JSON
+
 ```bash
-# Configure CORS with nested JSON
 $ zappa settings --stage production \
     --config 'cors_options={"allowedOrigins":["*"],"allowedMethods":["GET","POST","PUT"]}'
+```
 
-# Configure VPC settings
+> Configure VPC settings
+
+```bash
 $ zappa settings --stage production \
     --config 'vpc_config={"SubnetIds":["subnet-123","subnet-456"],"SecurityGroupIds":["sg-789"]}'
+```
 
-# Configure environment variables
+> Configure environment variables
+
+```bash
 $ zappa settings --stage production \
     --config 'environment_variables={"DATABASE_URL":"postgres://...","API_KEY":"secret"}'
+```
 
-# Configure Lambda layers
+> Configure Lambda layers
+
+```bash
 $ zappa settings --stage production \
     --config 'layers=["arn:aws:lambda:us-east-1:123:layer:mylayer:1","arn:aws:lambda:us-east-1:123:layer:another:2"]'
 ```
@@ -1623,8 +1638,10 @@ aws ec2 authorize-security-group-ingress \
 ```
 
 **CloudFormation/Terraform:**
+
+> CloudFormation example
+
 ```yaml
-# CloudFormation example
 LambdaSecurityGroupNfsIngress:
   Type: AWS::EC2::SecurityGroupIngress
   Properties:

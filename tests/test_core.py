@@ -41,6 +41,7 @@ from zappa.letsencrypt import (
     register_account,
     sign_certificate,
 )
+from zappa.utilities import DEFAULT_EFS_MOUNT_POINT
 from zappa.wsgi import common_log, create_wsgi_request
 
 from .utils import get_sys_versioninfo
@@ -2054,7 +2055,7 @@ class TestZappa(unittest.TestCase):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "efs_config_true"
         zappa_cli.load_settings("test_settings.json")
-        self.assertEqual([{"LocalMountPath": "/mnt/"}], zappa_cli.efs_config)
+        self.assertEqual([{"LocalMountPath": DEFAULT_EFS_MOUNT_POINT}], zappa_cli.efs_config)
         self.assertIsNotNone(zappa_cli.vpc_config)
 
     def test_load_settings__efs_config_dict(self):
