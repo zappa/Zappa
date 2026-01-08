@@ -41,6 +41,9 @@ DEFAULT_TEXT_MIMETYPES = (
     "image/svg+xml",  # RFC 3023
 )
 
+# Default EFS mount point for Lambda (no trailing slash - AWS requires /mnt/[a-zA-Z0-9-_.]+)
+DEFAULT_EFS_MOUNT_POINT = "/mnt/efs"
+
 
 def copytree(
     src: Path,

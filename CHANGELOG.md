@@ -1,5 +1,18 @@
 # Zappa Changelog
 
+## 0.61.4
+
+* Fix manylinux wheel matching to support multiple PEP 600 platform tags (#1411)
+  - Wheels with multiple PEP 600 manylinux tags (e.g. manylinux_2_27 + manylinux_2_28) are now correctly matched
+  - Supports legacy and PEP 600 tags in any order
+  - Fixes issues with wheels like cryptography and psycopg on newer Python versions
+* Add initial EFS (Elastic File System) support (#1405)
+  - Lambda functions can now mount EFS file systems for persistent storage
+  - Configure via `efs_config` setting in zappa_settings.json
+* Fix `_clear_policy` removing API Gateway v2 permissions (#1408)
+  - Policy clearing now correctly preserves HTTP API (API Gateway v2) permissions
+  - Prevents unintended permission removal during deployments
+
 ## 0.61.3
 
 * Fix `settings` command generating invalid config for Django projects (#1404)

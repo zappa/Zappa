@@ -40,6 +40,7 @@ from dateutil import parser
 from . import __version__
 from .core import API_GATEWAY_REGIONS, DEFAULT_AWS_REGION, Zappa
 from .utilities import (
+    DEFAULT_EFS_MOUNT_POINT,
     check_new_version_available,
     detect_django_settings,
     detect_flask_apps,
@@ -2589,8 +2590,8 @@ class ZappaCLI:
 
             # Normalize configuration to list format
             if raw_efs_config is True:
-                # Minimal config: efs_config: true -> single mount at /mnt/
-                self.efs_config = [{"LocalMountPath": "/mnt/"}]
+                # Minimal config: efs_config: true -> single mount at default path
+                self.efs_config = [{"LocalMountPath": DEFAULT_EFS_MOUNT_POINT}]
             elif isinstance(raw_efs_config, dict):
                 # Single dict config -> wrap in list
                 self.efs_config = [raw_efs_config]
@@ -2602,7 +2603,7 @@ class ZappaCLI:
             for idx, efs in enumerate(self.efs_config):
                 # Default LocalMountPath
                 if "LocalMountPath" not in efs:
-                    efs["LocalMountPath"] = "/mnt/"
+                    efs["LocalMountPath"] = DEFAULT_EFS_MOUNT_POINT
 
                 # Validate LocalMountPath format
                 if not efs["LocalMountPath"].startswith("/mnt/"):

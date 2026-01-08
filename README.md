@@ -84,6 +84,7 @@
   - [Globally Available Server-less Architectures](#globally-available-server-less-architectures)
   - [Raising AWS Service Limits](#raising-aws-service-limits)
   - [Dead Letter Queues](#dead-letter-queues)
+  - [Elastic File System (EFS)](#elastic-file-system-efs)
   - [Unique Package ID](#unique-package-id)
   - [Application Load Balancer Event Source](#application-load-balancer-event-source)
   - [Endpoint Configuration](#endpoint-configuration)
@@ -1090,6 +1091,7 @@ to change Zappa's behavior. Use these at your own risk!
         "manage_roles": true, // Have Zappa automatically create and define IAM execution roles and policies. Default true. If false, you must define your own IAM Role and role_name setting.
         "memory_size": 512, // Lambda function memory in MB. Default 512.
         "ephemeral_storage": { "Size": 512 }, // Lambda function ephemeral_storage size in MB, Default 512, Max 10240
+        "efs_config": [{ "Arn": "arn:aws:elasticfilesystem:...:access-point/fsap-...", "LocalMountPath": "/mnt/data" }], // Optional EFS configuration. See EFS section for details.
         "num_retained_versions":null, // Indicates the number of old versions to retain for the lambda. If absent, keeps all the versions of the function.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
@@ -1534,6 +1536,129 @@ To avoid this, you can file a [service ticket](https://console.aws.amazon.com/su
 If you want to utilise [AWS Lambda's Dead Letter Queue feature](http://docs.aws.amazon.com/lambda/latest/dg/dlq.html) simply add the key `dead_letter_arn`, with the value being the complete ARN to the corresponding SNS topic or SQS queue in your `zappa_settings.json`.
 
 You must have already created the corresponding SNS/SQS topic/queue, and the Lambda function execution role must have been provisioned with read/publish/sendMessage access to the DLQ resource.
+
+### Elastic File System (EFS)
+
+Zappa supports mounting [Amazon Elastic File System (EFS)](https://aws.amazon.com/efs/) to your Lambda functions, providing persistent, shared storage that persists across Lambda invocations. This is useful for applications that need to read or write large files, share data between Lambda invocations, or store ML models.
+
+#### Basic Configuration
+
+EFS requires your Lambda to run inside a VPC. Add both `vpc_config` and `efs_config` to your settings:
+
+```javascript
+{
+    "dev": {
+        "vpc_config": {
+            "SubnetIds": ["subnet-12345678", "subnet-87654321"],
+            "SecurityGroupIds": ["sg-12345678"]
+        },
+        "efs_config": true  // Auto-create EFS with default mount at /mnt/efs
+    }
+}
+```
+
+#### Configuration Options
+
+The `efs_config` setting accepts several formats:
+
+```javascript
+// Minimal: auto-create EFS mounted at /mnt/efs
+"efs_config": true
+
+// Custom mount path (must start with /mnt/)
+"efs_config": {
+    "LocalMountPath": "/mnt/data"
+}
+
+// Full configuration with performance options
+"efs_config": {
+    "LocalMountPath": "/mnt/data",
+    "ThroughputMode": "bursting",
+    "PerformanceMode": "generalPurpose"
+}
+
+// Use existing EFS access point
+"efs_config": {
+    "Arn": "arn:aws:elasticfilesystem:us-east-1:123456789:access-point/fsap-12345678",
+    "LocalMountPath": "/mnt/models"
+}
+
+// Multiple mounts
+"efs_config": [
+    { "LocalMountPath": "/mnt/data" },
+    { "Arn": "arn:aws:elasticfilesystem:...:access-point/fsap-...", "LocalMountPath": "/mnt/models" }
+]
+```
+
+**Available Options and Defaults:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `LocalMountPath` | Mount path inside Lambda (must start with `/mnt/`) | `/mnt/efs` |
+| `Arn` | Existing EFS access point ARN. If omitted, Zappa auto-creates EFS resources | Auto-create |
+| `ThroughputMode` | `"bursting"` or `"provisioned"` | `"bursting"` |
+| `PerformanceMode` | `"generalPurpose"` or `"maxIO"` | `"generalPurpose"` |
+
+**Note:** EFS storage is elastic - it automatically grows and shrinks based on usage. No size configuration is required.
+
+#### Security Group Configuration
+
+**Important**: For Lambda to connect to EFS, the security group must allow NFS traffic (TCP port 2049) between Lambda and the EFS mount targets. The Lambda function and EFS mount targets typically share the same security group, so you need a self-referencing ingress rule.
+
+If you encounter errors like:
+```
+The function couldn't connect to the Amazon EFS file system with access point arn:aws:elasticfilesystem:...
+Check your network configuration and try again.
+```
+
+Add an ingress rule to your security group allowing TCP port 2049 from itself:
+
+**AWS CLI:**
+```bash
+aws ec2 authorize-security-group-ingress \
+    --group-id sg-12345678 \
+    --protocol tcp \
+    --port 2049 \
+    --source-group sg-12345678
+```
+
+**CloudFormation/Terraform:**
+```yaml
+# CloudFormation example
+LambdaSecurityGroupNfsIngress:
+  Type: AWS::EC2::SecurityGroupIngress
+  Properties:
+    GroupId: !Ref LambdaSecurityGroup
+    IpProtocol: tcp
+    FromPort: 2049
+    ToPort: 2049
+    SourceSecurityGroupId: !Ref LambdaSecurityGroup
+```
+
+#### Accessing EFS in Your Code
+
+Once configured, access the mounted filesystem like any local directory:
+
+```python
+import os
+
+def handler(event, context):
+    # Write to EFS
+    with open('/mnt/data/myfile.txt', 'w') as f:
+        f.write('Hello from Lambda!')
+
+    # Read from EFS
+    files = os.listdir('/mnt/data')
+    return {'files': files}
+```
+
+#### Notes
+
+- Mount paths must start with `/mnt/`
+- Each mount path must be unique within a Lambda function
+- When `manage_roles` is true, Zappa automatically adds the required EFS permissions to the Lambda execution role
+- Auto-created EFS resources are tagged with `CreatedBy: Zappa` for easy identification
+- EFS provides a POSIX-compliant file system, so standard file operations work as expected
 
 ### Unique Package ID
 

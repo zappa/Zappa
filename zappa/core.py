@@ -33,6 +33,7 @@ from setuptools import find_packages
 from tqdm import tqdm
 
 from .utilities import (
+    DEFAULT_EFS_MOUNT_POINT,
     add_event_source,
     conflicts_with_a_neighbouring_module,
     contains_python_files_or_subdirs,
@@ -1053,7 +1054,7 @@ class Zappa:
         self,
         lambda_name: str,
         vpc_config: dict,
-        mount_path: str = "/mnt/",
+        mount_path: str = DEFAULT_EFS_MOUNT_POINT,
         throughput_mode: str = "bursting",
         performance_mode: str = "generalPurpose",
     ) -> str:
@@ -1091,8 +1092,11 @@ class Zappa:
             file_system_id = response["FileSystemId"]
 
             # Wait for file system to be available
-            waiter = self.efs_client.get_waiter("file_system_available")
-            waiter.wait(FileSystemId=file_system_id)
+            while True:
+                fs_response = self.efs_client.describe_file_systems(FileSystemId=file_system_id)
+                if fs_response["FileSystems"][0]["LifeCycleState"] == "available":
+                    break
+                time.sleep(5)
 
         # Create mount targets for each subnet
         security_group_ids = vpc_config.get("SecurityGroupIds", [])
