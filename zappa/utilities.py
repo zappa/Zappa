@@ -705,15 +705,7 @@ def get_event_source(
     if not event_source_class:
         raise ValueError("Unknown event source: {0}".format(arn))
 
-    # Handle S3 special case for function ARN
-    if svc == "s3":
-        split_arn = lambda_arn.split(":")
-        arn_front = ":".join(split_arn[:-1])
-        arn_back = split_arn[-1]
-        function_arn = ":".join([arn_back, target_function])
-        lambda_arn = arn_front
-    else:
-        function_arn = lambda_arn
+    function_arn = lambda_arn
 
     event_source_obj = event_source_class(boto_session, event_source)
 
