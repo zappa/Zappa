@@ -1213,6 +1213,7 @@ class Zappa:
         aws_environment_variables=None,
         aws_kms_key_arn=None,
         snap_start=None,
+        capacity_provider_config=None,
         xray_tracing=False,
         local_zip=None,
         use_alb=False,
