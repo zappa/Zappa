@@ -2,7 +2,6 @@
 Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
-import datetime
 import getpass
 import hashlib
 import json
@@ -1423,9 +1422,7 @@ class Zappa:
         for version in versions["Versions"]:
             versions_in_lambda.append(version["Version"])
         while "NextMarker" in versions:
-            versions = self.lambda_client.list_versions_by_function(
-                    FunctionName=function_name, Marker=versions["NextMarker"]
-                )
+            versions = self.lambda_client.list_versions_by_function(FunctionName=function_name, Marker=versions["NextMarker"])
             for version in versions["Versions"]:
                 versions_in_lambda.append(version["Version"])
         return versions_in_lambda
@@ -1543,9 +1540,9 @@ class Zappa:
                 function_arn=f"{response["FunctionArn"]}:{latest_version}",
                 function_state="Active",
             )
-      
+
             # publish to latest
-            response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo='LATEST_PUBLISHED')
+            response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
             logger.info(f"Publish to {response['FunctionArn']}")
 
             time.sleep(10)
@@ -1671,7 +1668,6 @@ class Zappa:
         if marker:
             list_kwargs["Marker"] = marker
 
-
         logger.info(f"Wait for {function_arn} to be {function_state} ...")
         last_response = None
         for attempt in range(1, max_attempts + 1):
@@ -1691,7 +1687,7 @@ class Zappa:
             matched_item = None
             page = response or {}
             while True:
-                for item in (page.get("FunctionVersions") or []):
+                for item in page.get("FunctionVersions") or []:
                     arn = item.get("FunctionArn") or ""
                     if function_arn in arn:
                         matched_item = item
@@ -1717,7 +1713,7 @@ class Zappa:
                         f"Function version [{matched_item.get('FunctionArn')}] entered Failed state under "
                         f"capacity provider [{capacity_provider_name}]."
                     )
-                if normalized_state == "active" and state == 'Active':
+                if normalized_state == "active" and state == "Active":
                     return last_response
             else:
                 if normalized_state == "empty":
