@@ -1157,8 +1157,7 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
-            capacity_provider_config=self.capacity_provider_config,
-            architecture=self.architecture,
+            capacity_provider_config=self.capacity_provider_config
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri

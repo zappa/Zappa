@@ -3542,6 +3542,7 @@ class TestZappa(unittest.TestCase):
         zappa_core.lambda_client.list_function_versions_by_capacity_provider.return_value = expected
 
         result = zappa_core.wait_for_capacity_provider_response(
+            function_arn=None,
             capacity_provider_name="provider",
         )
 
@@ -3620,6 +3621,7 @@ class TestZappa(unittest.TestCase):
         zappa_core.lambda_client.list_function_versions_by_capacity_provider.return_value = expected
 
         result = zappa_core.wait_for_capacity_provider_response(
+            function_arn=None,
             capacity_provider_name="provider",
             marker="m",
         )
@@ -3640,6 +3642,7 @@ class TestZappa(unittest.TestCase):
         zappa_core.lambda_client.list_function_versions_by_capacity_provider.side_effect = [error, success]
 
         result = zappa_core.wait_for_capacity_provider_response(
+            function_arn=None,
             capacity_provider_name="provider",
             max_attempts=2,
             delay_seconds=0,
