@@ -1100,7 +1100,8 @@ to change Zappa's behavior. Use these at your own risk!
         "lambda_description": "Your Description", // However you want to describe your project for the AWS console. Default "Zappa Deployment".
         "lambda_handler": "your_custom_handler", // The name of Lambda handler. Default: handler.lambda_handler
         "layers": ["arn:aws:lambda:<region>:<account_id>:layer:<layer_name>:<layer_version>"], // optional lambda layers
-        "lambda_concurrency": 10, // Sets the maximum number of simultaneous executions for a function, and reserves capacity for that concurrency level. Default is None.
+        "lambda_concurrency": 10, // Sets the maximum number of simultaneous executions for a function, and reserves capacity for that concurrency level. Default is None. Not supported when using capacity providers.
+        "capacity_provider_config": { "LambdaManagedInstancesCapacityProviderConfig": { "CapacityProviderArn": "arn:aws:lambda:<region>:<account_id>:capacity-provider/<name>", "PerExecutionEnvironmentMaxConcurrency": 10, "ExecutionEnvironmentMemoryGiBPerVCpu": 2.0 } }, // Configure the Lambda capacity provider used for your function. Optional. Not compatible with VPC configurations.
         "lets_encrypt_key": "s3://your-bucket/account.key", // Let's Encrypt account key path. Can either be an S3 path or a local file path.
         "log_level": "DEBUG", // Set the Zappa log level. Can be one of CRITICAL, ERROR, WARNING, INFO and DEBUG. Default: DEBUG
         "manage_roles": true, // Have Zappa automatically create and define IAM execution roles and policies. Default true. If false, you must define your own IAM Role and role_name setting.

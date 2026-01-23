@@ -28,6 +28,8 @@ import argcomplete
 import botocore
 import click
 import hjson as json
+
+# import pkg_resources
 import requests
 import slugify
 import toml
@@ -125,6 +127,7 @@ class ZappaCLI:
     xray_tracing = False
     aws_kms_key_arn = ""
     snap_start = None
+    capacity_provider_config = None
     context_header_mappings = None
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
@@ -201,6 +204,9 @@ class ZappaCLI:
 
         desc = "Zappa - Deploy Python applications to AWS Lambda" " and API Gateway.\n"
         parser = argparse.ArgumentParser(description=desc)
+        from importlib.metadata import version
+
+        zappa_version = version("zappa")
         parser.add_argument(
             "-v",
             "--version",
@@ -591,7 +597,7 @@ class ZappaCLI:
                     + click.style(self.api_stage, bold=True)
                     + ".."
                 )
-
+        click.echo(self.vargs)
         # Explicitly define the app function.
         # Related: https://github.com/Miserlou/Zappa/issues/832
         if self.vargs.get("app_function", None):
@@ -913,9 +919,11 @@ class ZappaCLI:
                 runtime=self.runtime,
                 aws_environment_variables=self.aws_environment_variables,
                 aws_kms_key_arn=self.aws_kms_key_arn,
+                capacity_provider_config=self.capacity_provider_config,
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
+                architecture=self.architecture,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -954,7 +962,8 @@ class ZappaCLI:
                 function_name=self.lambda_arn,
                 function_url_config=self.function_url_config,
             )
-            self.zappa.deploy_lambda_function_url(**kwargs)
+            endpoint_url = self.zappa.deploy_lambda_function_url(**kwargs)
+            self.zappa.wait_until_lambda_function_is_updated(function_name=self.lambda_name)
 
         if self.use_apigateway:
             # Create and configure the API Gateway
@@ -1008,9 +1017,8 @@ class ZappaCLI:
                 else:
                     self.zappa.add_api_stage_to_api_key(api_key=self.api_key, api_id=api_id, stage_name=self.api_stage)
 
-            if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_updated(function_name=self.lambda_name)
-                self.touch_endpoint(endpoint_url)
+        if self.stage_config.get("touch", True):
+            self.touch_endpoint(endpoint_url)
 
         # Finally, delete the local copy our zip package
         if not source_zip and not docker_image_uri:
@@ -1029,7 +1037,8 @@ class ZappaCLI:
         """
         Repackage and update the function code.
         """
-
+        click.echo(self.stage_config)
+        click.echo(self.zappa.aws_region)
         if not source_zip and not docker_image_uri:
             # Make sure we're in a venv.
             self.check_venv()
@@ -1151,6 +1160,8 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
+            capacity_provider_config=self.capacity_provider_config,
+            architecture=self.architecture,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1196,7 +1207,9 @@ class ZappaCLI:
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
             snap_start=self.snap_start,
+            capacity_provider_config=self.capacity_provider_config,
             wait=False,
+            architecture=self.architecture,
         )
 
         # Finally, delete the local copy our zip package
@@ -1264,7 +1277,7 @@ class ZappaCLI:
                 function_name=self.lambda_arn,
                 function_url_config=self.function_url_config,
             )
-            self.zappa.update_lambda_function_url(**kwargs)
+            endpoint_url = self.zappa.update_lambda_function_url(**kwargs)[:-1]
         else:
             self.zappa.delete_lambda_function_url(self.lambda_arn)
 
@@ -1283,6 +1296,7 @@ class ZappaCLI:
             endpoint_url += "/" + self.base_path
 
         deployed_string = "Your updated Zappa deployment is " + click.style("live", fg="green", bold=True) + "!"
+        touch_url = endpoint_url
         if self.use_apigateway:
             deployed_string = deployed_string + ": " + click.style("{}".format(endpoint_url), bold=True)
 
@@ -1292,13 +1306,11 @@ class ZappaCLI:
 
                 if endpoint_url != api_url:
                     deployed_string = deployed_string + " (" + api_url + ")"
-
-            if self.stage_config.get("touch", True):
-                self.zappa.wait_until_lambda_function_is_updated(function_name=self.lambda_name)
                 if api_url:
-                    self.touch_endpoint(api_url)
-                elif endpoint_url:
-                    self.touch_endpoint(endpoint_url)
+                    touch_url = api_url
+
+        if self.stage_config.get("touch", True):
+            self.touch_endpoint(touch_url)
 
         click.echo(deployed_string)
 
@@ -1368,6 +1380,9 @@ class ZappaCLI:
         if self.use_alb:
             self.zappa.undeploy_lambda_alb(self.lambda_name)
 
+        # if self.function_url_domains:
+        #     self.zappa.undeploy_function_url_custom_domain(self.lambda_name)
+
         if self.use_apigateway:
             if remove_logs:
                 self.zappa.remove_api_gateway_logs(self.lambda_name)
@@ -1425,6 +1440,13 @@ class ZappaCLI:
         Given a a list of functions and a schedule to execute them,
         setup up regular execution.
         """
+        self.zappa.unschedule_events(
+            lambda_name=self.lambda_name,
+            lambda_arn=self.lambda_arn,
+            events=[],
+            excluded_source_services=["dynamodb", "kinesis", "sqs"],
+        )
+
         events = self.stage_config.get("events", [])
 
         if events:
@@ -1448,7 +1470,6 @@ class ZappaCLI:
                     "description": "Zappa Keep Warm - {}".format(self.lambda_name),
                 }
             )
-
         if events:
             try:
                 function_response = self.zappa.lambda_client.get_function(FunctionName=self.lambda_name)
@@ -1499,7 +1520,7 @@ class ZappaCLI:
 
     def unschedule(self):
         """
-        Given a a list of scheduled functions,
+        Given a list of scheduled functions,
         tear down their regular execution.
         """
 
@@ -2300,7 +2321,7 @@ class ZappaCLI:
         Register or update a domain certificate for this env.
         """
 
-        if not self.domain:
+        if not (self.domain or self.function_url_domains):
             raise ClickException(
                 "Can't certify a domain without " + click.style("domain", fg="red", bold=True) + " configured!"
             )
@@ -2381,19 +2402,19 @@ class ZappaCLI:
                 certificate_chain = f.read()
 
         click.echo("Certifying domain " + click.style(self.domain, fg="green", bold=True) + "..")
+        route53 = self.stage_config.get("route53_enabled", True)
 
-        # Get cert and update domain.
+        # Get cert and update domain for api_gateway
+        if self.use_apigateway:
+            # Let's Encrypt
+            if not cert_location and not cert_arn:
+                from .letsencrypt import get_cert_and_update_domain
 
-        # Let's Encrypt
-        if not cert_location and not cert_arn:
-            from .letsencrypt import get_cert_and_update_domain
+                cert_success = get_cert_and_update_domain(self.zappa, self.lambda_name, self.api_stage, self.domain, manual)
 
-            cert_success = get_cert_and_update_domain(self.zappa, self.lambda_name, self.api_stage, self.domain, manual)
+            # Custom SSL / ACM
+            else:
 
-        # Custom SSL / ACM
-        else:
-            route53 = self.stage_config.get("route53_enabled", True)
-            if self.use_apigateway:
                 if not self.zappa.get_domain_name(self.domain, route53=route53):
                     dns_name = self.zappa.create_domain_name(
                         domain_name=self.domain,
@@ -2428,28 +2449,29 @@ class ZappaCLI:
                     )
 
                 cert_success = True
+                if cert_success:
+                    click.echo("Certificate " + click.style("updated", fg="green", bold=True) + "!")
+                else:
+                    click.echo(click.style("Failed", fg="red", bold=True) + " to generate or install certificate! :(")
+                    click.echo("\n==============\n")
+                    shamelessly_promote()
 
-            if self.use_function_url:
-                self.lambda_arn = self.zappa.get_lambda_function(function_name=self.lambda_name)
-                dns_name = self.zappa.update_lambda_function_url_domains(
-                    self.lambda_arn, self.function_url_domains, cert_arn, self.function_url_cloudfront_config
-                )
-                if route53:
-                    for domain in self.function_url_domains:
-                        self.zappa.update_route53_records(domain, dns_name)
-                print(
-                    "Created a new domain name with supplied certificate. "
-                    "Please note that it can take up to 40 minutes for this domain to be "
-                    "created and propagated through AWS, but it requires no further work on your part."
-                )
-            cert_success = True
-
-        if cert_success:
-            click.echo("Certificate " + click.style("updated", fg="green", bold=True) + "!")
-        else:
-            click.echo(click.style("Failed", fg="red", bold=True) + " to generate or install certificate! :(")
-            click.echo("\n==============\n")
-            shamelessly_promote()
+        if self.use_function_url:
+            self.lambda_arn = self.zappa.get_lambda_function(function_name=self.lambda_name)
+            dns_name = self.zappa.update_lambda_function_url_domains(
+                self.lambda_arn,
+                self.function_url_domains,
+                cert_arn,
+                self.function_url_cloudfront_config,
+            )
+            if route53:
+                for domain in self.function_url_domains:
+                    self.zappa.update_route53_records(domain, dns_name)
+            print(
+                "Created a new domain name with supplied certificate. "
+                "Please note that it can take up to 40 minutes for this domain to be "
+                "created and propagated through AWS, but it requires no further work on your part."
+            )
 
     ##
     # Shell
@@ -2679,6 +2701,7 @@ class ZappaCLI:
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.snap_start = self.stage_config.get("snap_start", "None")
+        self.capacity_provider_config = self.stage_config.get("capacity_provider_config", None)
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
@@ -2714,6 +2737,9 @@ class ZappaCLI:
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
+
+        # Architectures
+        self.architecture = self.stage_config.get("architecture", "x86_64")
 
         desired_role_name = self.lambda_name + "-ZappaLambdaExecutionRole"
         self.zappa = Zappa(
@@ -3431,6 +3457,9 @@ class ZappaCLI:
                 + click.style(str(req.status_code), fg="red", bold=True)
                 + " response code."
             )
+
+        if req.status_code == 200:
+            click.echo(req.text)
 
 
 ####################################################################

@@ -1,0 +1,162 @@
+{
+  "ResponseMetadata": {
+    "RequestId": "e9a681a2-2a82-4e8c-bab0-133e6d1fd04d",
+    "HTTPStatusCode": 200,
+    "HTTPHeaders": {
+      "x-amzn-requestid": "e9a681a2-2a82-4e8c-bab0-133e6d1fd04d",
+      "etag": "EQZU30ULEIL60",
+      "content-type": "text/xml",
+      "content-length": "4148",
+      "date": "Wed, 26 Oct 2022 03:45:13 GMT"
+    },
+    "RetryAttempts": 0
+  },
+  "ETag": "EQZU30ULEIL60",
+  "Distribution": {
+    "Id": "E1YIU775JNY3JV",
+    "ARN": "arn:aws:cloudfront::123456789:distribution/E1YIU775JNY3JV",
+    "Status": "InProgress",
+    "LastModifiedTime": "",
+    "InProgressInvalidationBatches": 0,
+    "DomainName": "dolayrplf7f1.cloudfront.net",
+    "ActiveTrustedSigners": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "ActiveTrustedKeyGroups": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "DistributionConfig": {
+      "CallerReference": "zappa-create-function-url-custom-domain",
+      "Aliases": {
+        "Quantity": 1,
+        "Items": [
+          "test-lambda-function-url.example.com"
+        ]
+      },
+      "DefaultRootObject": "",
+      "Origins": {
+        "Quantity": 1,
+        "Items": [
+          {
+            "Id": "LambdaFunctionURL",
+            "DomainName": "wwvjk2tpuvrr457k3xt4kuryby0qmmzs.lambda-url.ap-southeast-1.on.aws",
+            "OriginPath": "",
+            "CustomHeaders": {
+              "Quantity": 1,
+              "Items": [
+                {
+                  "HeaderName": "CloudFront",
+                  "HeaderValue": "CloudFront"
+                }
+              ]
+            },
+            "CustomOriginConfig": {
+              "HTTPPort": 80,
+              "HTTPSPort": 443,
+              "OriginProtocolPolicy": "https-only",
+              "OriginSslProtocols": {
+                "Quantity": 1,
+                "Items": [
+                  "TLSv1"
+                ]
+              },
+              "OriginReadTimeout": 60,
+              "OriginKeepaliveTimeout": 60
+            },
+            "ConnectionAttempts": 3,
+            "ConnectionTimeout": 10,
+            "OriginShield": {
+              "Enabled": false
+            },
+            "OriginAccessControlId": ""
+          }
+        ]
+      },
+      "OriginGroups": {
+        "Quantity": 0
+      },
+      "DefaultCacheBehavior": {
+        "TargetOriginId": "LambdaFunctionURL",
+        "TrustedSigners": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "TrustedKeyGroups": {
+          "Enabled": false,
+          "Quantity": 0
+        },
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": [
+            "HEAD",
+            "DELETE",
+            "POST",
+            "GET",
+            "OPTIONS",
+            "PUT",
+            "PATCH"
+          ],
+          "CachedMethods": {
+            "Quantity": 3,
+            "Items": [
+              "HEAD",
+              "GET",
+              "OPTIONS"
+            ]
+          }
+        },
+        "SmoothStreaming": true,
+        "Compress": true,
+        "LambdaFunctionAssociations": {
+          "Quantity": 0
+        },
+        "FunctionAssociations": {
+          "Quantity": 0
+        },
+        "FieldLevelEncryptionId": "",
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      },
+      "CacheBehaviors": {
+        "Quantity": 0
+      },
+      "CustomErrorResponses": {
+        "Quantity": 0
+      },
+      "Comment": "Lambda FunctionURL zappa-function-url-test-dev",
+      "Logging": {
+        "Enabled": false,
+        "IncludeCookies": false,
+        "Bucket": "",
+        "Prefix": ""
+      },
+      "PriceClass": "PriceClass_100",
+      "Enabled": true,
+      "ViewerCertificate": {
+        "CloudFrontDefaultCertificate": false,
+        "ACMCertificateArn": "arn:aws:acm:us-east-1:123456789:certificate/77bff5cb-03c7-4b11-ba8e-312e6f49a31f",
+        "SSLSupportMethod": "sni-only",
+        "MinimumProtocolVersion": "TLSv1.2_2021",
+        "Certificate": "arn:aws:acm:us-east-1:123456789:certificate/77bff5cb-03c7-4b11-ba8e-312e6f49a31f",
+        "CertificateSource": "acm"
+      },
+      "Restrictions": {
+        "GeoRestriction": {
+          "RestrictionType": "none",
+          "Quantity": 0
+        }
+      },
+      "WebACLId": "",
+      "HttpVersion": "http2",
+      "IsIPV6Enabled": true
+    },
+    "AliasICPRecordals": [
+      {
+        "CNAME": "test-lambda-function-url.example.com",
+        "ICPRecordalStatus": "APPROVED"
+      }
+    ]
+  }
+}
