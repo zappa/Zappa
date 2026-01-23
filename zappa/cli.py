@@ -204,9 +204,6 @@ class ZappaCLI:
 
         desc = "Zappa - Deploy Python applications to AWS Lambda" " and API Gateway.\n"
         parser = argparse.ArgumentParser(description=desc)
-        from importlib.metadata import version
-
-        zappa_version = version("zappa")
         parser.add_argument(
             "-v",
             "--version",
@@ -1380,8 +1377,6 @@ class ZappaCLI:
         if self.use_alb:
             self.zappa.undeploy_lambda_alb(self.lambda_name)
 
-        # if self.function_url_domains:
-        #     self.zappa.undeploy_function_url_custom_domain(self.lambda_name)
 
         if self.use_apigateway:
             if remove_logs:

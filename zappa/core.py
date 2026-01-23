@@ -1332,7 +1332,6 @@ class Zappa:
         concurrency=None,
         capacity_provider_config=None,
         docker_image_uri=None,
-        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1341,7 +1340,7 @@ class Zappa:
         """
         logger.info("Updating Lambda function code..")
 
-        kwargs = dict(FunctionName=function_name, Publish=publish, Architectures=[architecture])
+        kwargs = dict(FunctionName=function_name, Publish=publish, Architectures=[self.architecture])
         if docker_image_uri:
             kwargs["ImageUri"] = docker_image_uri
         elif local_zip:
@@ -1349,6 +1348,7 @@ class Zappa:
         else:
             kwargs["S3Bucket"] = bucket
             kwargs["S3Key"] = s3_key
+        
 
         response = self.lambda_client.update_function_code(**kwargs)
         resource_arn = response["FunctionArn"]
@@ -1445,8 +1445,7 @@ class Zappa:
         layers=None,
         snap_start=None,
         capacity_provider_config=None,
-        wait=True,
-        architecture=None,
+        wait=True
     ):
         """
         Given an existing function ARN, update the configuration variables.
@@ -1531,15 +1530,19 @@ class Zappa:
             elif "capacity-provider:" in capacity_provider_name_part:
                 capacity_provider_name_part = capacity_provider_name_part.split("capacity-provider:", 1)[1]
             capacity_provider_name = capacity_provider_name_part.rsplit("/", 1)[-1]
-            # wait for latest version
+            
             versions_in_lambda = self.list_lambda_function_versions(function_name=function_name)
-            latest_version = max(int(v) for v in versions_in_lambda if v.isdigit())
+            
+            if versions_in_lambda:
+                # wait for latest version
+                latest_version = max(int(v) for v in versions_in_lambda if v.isdigit())
 
-            self.wait_for_capacity_provider_response(
-                capacity_provider_name=capacity_provider_name,
-                function_arn=f"{response["FunctionArn"]}:{latest_version}",
-                function_state="Active",
-            )
+                if latest_version:
+                    self.wait_for_capacity_provider_response(
+                        capacity_provider_name=capacity_provider_name,
+                        function_arn=f"{response["FunctionArn"]}:{latest_version}",
+                        function_state="Active",
+                    )
 
             # publish to latest
             response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
