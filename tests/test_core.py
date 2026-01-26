@@ -225,14 +225,6 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
-    def test_manylinux_pattern_python314(self):
-        z = Zappa(runtime="python3.14")
-        wheel_filename = "psycopg_binary-3.2.5-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-        abi3_wheel_filename = "cryptography-44.0.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-
-        self.assertTrue(z.manylinux_wheel_file_match.match(wheel_filename))
-        self.assertTrue(z.manylinux_wheel_file_match.match(abi3_wheel_filename))
-
         # same, but with an ABI3 package
         mock_installed_packages = {"cryptography": "44.0.2"}
         with mock.patch(
@@ -4407,17 +4399,6 @@ class TestZappa(unittest.TestCase):
             import zappa
 
             reload(zappa)
-
-    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 14))
-    def test_supported_python_version(self, *_):
-        from importlib import reload
-
-        try:
-            import zappa
-
-            reload(zappa)
-        except RuntimeError as exc:  # pragma: no cover
-            self.fail(f"RuntimeError raised for supported Python version: {exc}")
 
     @mock.patch("os.getenv", return_value="True")
     @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 6))

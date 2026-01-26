@@ -3176,7 +3176,11 @@ class Zappa:
         # Related: https://github.com/boto/boto3/issues/157
         # and: http://docs.aws.amazon.com/Route53/latest/APIReference/CreateAliasRRSAPI.html
         # and policy: https://spin.atomicobject.com/2016/04/28/route-53-hosted-zone-managment/
+        # pure_zone_id = zone_id.split('/hostedzone/')[1]
 
+        # XXX: ClientError: An error occurred (InvalidChangeBatch) when calling the ChangeResourceRecordSets operation:
+        # Tried to create an alias that targets d1awfeji80d0k2.cloudfront.net., type A in zone Z1XWOQP59BYF6Z,
+        # but the alias target name does not lie within the target zone
         response = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={"Changes": [{"Action": "UPSERT", "ResourceRecordSet": record_set}]},
@@ -3455,7 +3459,7 @@ class Zappa:
 
         permission_response = self.lambda_client.add_permission(
             FunctionName=lambda_name,
-            StatementId="zappa-" + "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8)),
+            StatementId="".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8)),
             Action="lambda:InvokeFunction",
             Principal=principal,
             SourceArn=source_arn,
@@ -3486,17 +3490,18 @@ class Zappa:
         # and do not require event permissions. They do require additional permissions on the Lambda roles though.
         # http://docs.aws.amazon.com/lambda/latest/dg/lambda-api-permissions-ref.html
         pull_services = ["dynamodb", "kinesis", "sqs"]
+
+        # XXX: Not available in Lambda yet.
+        # We probably want to execute the latest code.
+        # if default:
+        #     lambda_arn = lambda_arn + ":$LATEST"
+
         self.unschedule_events(
             lambda_name=lambda_name,
             lambda_arn=lambda_arn,
             events=events,
             excluded_source_services=pull_services,
         )
-        # XXX: Not available in Lambda yet.
-        # We probably want to execute the latest code.
-        # if default:
-        #     lambda_arn = lambda_arn + ":$LATEST"
-
         for event in events:
             function = event["function"]
             expression = event.get("expression", None)  # single expression
