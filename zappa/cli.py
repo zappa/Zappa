@@ -2454,11 +2454,11 @@ class ZappaCLI:
             if route53:
                 for domain in self.function_url_domains:
                     self.zappa.update_route53_records(domain, dns_name)
-        print(
-            "Created a new domain name with supplied certificate. "
-            "Please note that it can take up to 40 minutes for this domain to be "
-            "created and propagated through AWS, but it requires no further work on your part."
-        )
+            print(
+                "Created a new domain name with supplied certificate. "
+                "Please note that it can take up to 40 minutes for this domain to be "
+                "created and propagated through AWS, but it requires no further work on your part."
+            )
 
     ##
     # Shell
