@@ -3274,8 +3274,7 @@ class Zappa:
                     },
                 ],
             )
-        if use_function_url:
-            pass
+
         return res
 
     def update_domain_base_path_mapping(self, domain_name, lambda_name, stage, base_path):
