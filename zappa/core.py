@@ -16,7 +16,6 @@ import sys
 import tarfile
 import tempfile
 import time
-import urllib
 import uuid
 import zipfile
 from builtins import bytes, int
@@ -1449,7 +1448,6 @@ class Zappa:
         """
         Given an existing function ARN, update the configuration variables.
         """
-
         logger.info("Updating Lambda function configuration..")
 
         if not vpc_config:
@@ -3093,7 +3091,7 @@ class Zappa:
                     if item["name"] == lambda_name:
                         return item["id"]
 
-                logger.exception(f"Could not get API ID.")
+                logger.exception("Could not get API ID.")
                 return None
             except Exception:  # pragma: no cover
                 # We don't even have an API deployed. That's okay!
@@ -3114,6 +3112,7 @@ class Zappa:
         """
         Creates the API GW domain and returns the resulting DNS name.
         """
+
         # This is a Let's Encrypt or custom certificate
         if not certificate_arn:
             agw_response = self.apigateway_client.create_domain_name(
@@ -3130,6 +3129,7 @@ class Zappa:
                 certificateName=certificate_name,
                 certificateArn=certificate_arn,
             )
+
         api_id = self.get_api_id(lambda_name)
         if not api_id:
             raise LookupError("No API URL to certify found - did you deploy?")
@@ -3230,8 +3230,6 @@ class Zappa:
         stage=None,
         route53=True,
         base_path=None,
-        use_apigateway=True,
-        use_function_url=False,
     ):
         """
         This updates your certificate information for an existing domain,
@@ -3258,7 +3256,7 @@ class Zappa:
             )
             certificate_arn = acm_certificate["CertificateArn"]
 
-        if use_apigateway:
+        if self.apigateway:
             self.update_domain_base_path_mapping(domain_name, lambda_name, stage, base_path)
 
             res = self.apigateway_client.update_domain_name(
