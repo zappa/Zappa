@@ -16,6 +16,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib
 import uuid
 import zipfile
 from builtins import bytes, int
@@ -1870,7 +1871,6 @@ class Zappa:
         if not response.get("FunctionUrlConfigs", []):
             logger.info("no function url configured on lambda, skip setting custom domains")
         url = response["FunctionUrlConfigs"][0]["FunctionUrl"]
-        import urllib
 
         url = urllib.parse.urlparse(url)
 
