@@ -592,6 +592,7 @@ class ZappaCLI:
                     + click.style(self.api_stage, bold=True)
                     + ".."
                 )
+
         # Explicitly define the app function.
         # Related: https://github.com/Miserlou/Zappa/issues/832
         if self.vargs.get("app_function", None):
@@ -1383,6 +1384,11 @@ class ZappaCLI:
 
             self.zappa.undeploy_api_gateway(self.lambda_name, domain_name=domain_name, base_path=base_path)
 
+        if self.use_function_url:
+            if self.function_url_domains:
+                self.zappa.undeploy_function_url_custom_domain(self.lambda_name)
+            self.zappa.delete_lambda_function_url(self.lambda_arn)
+
         self.unschedule()  # removes event triggers, including warm up event.
 
         self.zappa.delete_lambda_function(self.lambda_name)
@@ -1426,7 +1432,6 @@ class ZappaCLI:
         Given a a list of functions and a schedule to execute them,
         setup up regular execution.
         """
-
         events = self.stage_config.get("events", [])
 
         if events:
@@ -1450,6 +1455,7 @@ class ZappaCLI:
                     "description": "Zappa Keep Warm - {}".format(self.lambda_name),
                 }
             )
+
         if events:
             try:
                 function_response = self.zappa.lambda_client.get_function(FunctionName=self.lambda_name)
@@ -2395,7 +2401,7 @@ class ZappaCLI:
             # Custom SSL / ACM
             else:
 
-                if not self.zappa.get_domain_name(self.domain, route53=route53):
+                if not self.zappa.get_domain_name(self.domain, route53=route53) and (not self.function_url_enabled):
                     dns_name = self.zappa.create_domain_name(
                         domain_name=self.domain,
                         certificate_name=self.domain + "-Zappa-Cert",

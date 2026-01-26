@@ -163,7 +163,7 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
     # Support PEP600 (https://peps.python.org/pep-0600/)
     # The wheel filename is {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
     runtime_major_version, runtime_minor_version = runtime[6:].split(".")
-    python_tag = f"cp{runtime_major_version}{runtime_minor_version}"  # python3.14 -> cp314
+    python_tag = f"cp{runtime_major_version}{runtime_minor_version}"  # python3.13 -> cp313
     manylinux_legacy_tags = ("manylinux2014", "manylinux2010", "manylinux1")
     if architecture == X86_ARCHITECTURE:
         valid_platform_tags = [X86_ARCHITECTURE]
@@ -246,7 +246,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.14",  # Detected at runtime in CLI
+        runtime="python3.13",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -2726,7 +2726,7 @@ class Zappa:
                 continue
             yield api
 
-    def undeploy_function_url_custom_domain(self, lambda_name, domains=None):
+    def undeploy_function_url_custom_domain(self, lambda_name):
 
         response = self.lambda_client.list_function_url_configs(FunctionName=lambda_name, MaxItems=50)
         if not response.get("FunctionUrlConfigs", []):
@@ -3093,8 +3093,7 @@ class Zappa:
                     if item["name"] == lambda_name:
                         return item["id"]
 
-                logger.exception(f"Could not get API ID. {lambda_name} {self.boto_session.region_name}")
-                logger.exception(response)
+                logger.exception(f"Could not get API ID.")
                 return None
             except Exception:  # pragma: no cover
                 # We don't even have an API deployed. That's okay!
@@ -3115,7 +3114,6 @@ class Zappa:
         """
         Creates the API GW domain and returns the resulting DNS name.
         """
-
         # This is a Let's Encrypt or custom certificate
         if not certificate_arn:
             agw_response = self.apigateway_client.create_domain_name(
@@ -3132,19 +3130,16 @@ class Zappa:
                 certificateName=certificate_name,
                 certificateArn=certificate_arn,
             )
-            api_id = self.get_api_id(lambda_name)
-            if not api_id:
-                raise LookupError("No API URL to certify found - did you deploy?")
+        api_id = self.get_api_id(lambda_name)
+        if not api_id:
+            raise LookupError("No API URL to certify found - did you deploy?")
 
-            self.apigateway_client.create_base_path_mapping(
-                domainName=domain_name,
-                basePath="" if base_path is None else base_path,
-                restApiId=api_id,
-                stage=stage,
-            )
-
-        if self.function_url_enabled:
-            pass
+        self.apigateway_client.create_base_path_mapping(
+            domainName=domain_name,
+            basePath="" if base_path is None else base_path,
+            restApiId=api_id,
+            stage=stage,
+        )
 
         return agw_response["distributionDomainName"]
 

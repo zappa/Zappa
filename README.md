@@ -1013,6 +1013,7 @@ to change Zappa's behavior. Use these at your own risk!
               "maxAge": 0 // The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. default 0.
             }
         },
+        "function_url_domains": ["yourapp.yourdomain.com"], // optional, list of custom domains to associate with the function URL. Requires certificate_arn to be set.
         // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
         // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
         // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
