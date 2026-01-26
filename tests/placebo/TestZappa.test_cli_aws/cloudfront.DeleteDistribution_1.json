@@ -1,0 +1,12 @@
+{
+  "ResponseMetadata": {
+    "RequestId": "7f720a6c-9e5b-4080-b289-df07fe33c7fc",
+    "HTTPStatusCode": 204,
+    "HTTPHeaders": {
+      "x-amzn-requestid": "7f720a6c-9e5b-4080-b289-df07fe33c7fc",
+      "content-type": "text/xml",
+      "date": "Wed, 26 Oct 2022 06:16:00 GMT"
+    },
+    "RetryAttempts": 0
+  }
+}
