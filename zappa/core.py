@@ -1348,7 +1348,6 @@ class Zappa:
         else:
             kwargs["S3Bucket"] = bucket
             kwargs["S3Key"] = s3_key
-        
 
         response = self.lambda_client.update_function_code(**kwargs)
         resource_arn = response["FunctionArn"]
@@ -1445,7 +1444,7 @@ class Zappa:
         layers=None,
         snap_start=None,
         capacity_provider_config=None,
-        wait=True
+        wait=True,
     ):
         """
         Given an existing function ARN, update the configuration variables.
@@ -1530,9 +1529,9 @@ class Zappa:
             elif "capacity-provider:" in capacity_provider_name_part:
                 capacity_provider_name_part = capacity_provider_name_part.split("capacity-provider:", 1)[1]
             capacity_provider_name = capacity_provider_name_part.rsplit("/", 1)[-1]
-            
+
             versions_in_lambda = self.list_lambda_function_versions(function_name=function_name)
-            
+
             if versions_in_lambda:
                 # wait for latest version
                 latest_version = max(int(v) for v in versions_in_lambda if v.isdigit())

@@ -1157,7 +1157,7 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
-            capacity_provider_config=self.capacity_provider_config
+            capacity_provider_config=self.capacity_provider_config,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1205,7 +1205,6 @@ class ZappaCLI:
             snap_start=self.snap_start,
             capacity_provider_config=self.capacity_provider_config,
             wait=False,
-            architecture=self.architecture,
         )
 
         # Finally, delete the local copy our zip package
@@ -1375,7 +1374,6 @@ class ZappaCLI:
 
         if self.use_alb:
             self.zappa.undeploy_lambda_alb(self.lambda_name)
-
 
         if self.use_apigateway:
             if remove_logs:

@@ -881,10 +881,21 @@ class TestZappa(unittest.TestCase):
         z.credentials_arn = object()
         z.lambda_client = mock.MagicMock()
         z.lambda_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+        capacity_provider_arn = "arn:aws:lambda:us-east-1:123456789012:capacity-provider/zappa-test"
+        z.lambda_client.list_function_versions_by_capacity_provider.return_value = {
+            "CapacityProviderArn": capacity_provider_arn,
+            "FunctionVersions": [
+                {"FunctionArn": "test", "State": "Active"},
+            ],
+            "NextMarker": "",
+        }
+        z.lambda_client.publish_version.return_value = {
+            "FunctionArn": "test",
+        }
         z.wait_until_lambda_function_is_updated = mock.MagicMock()
         capacity_provider_config = {
             "LambdaManagedInstancesCapacityProviderConfig": {
-                "CapacityProviderArn": "arn:aws:lambda:us-east-1:123456789012:capacity-provider/zappa-test",
+                "CapacityProviderArn": capacity_provider_arn,
                 "PerExecutionEnvironmentMaxConcurrency": 10,
                 "ExecutionEnvironmentMemoryGiBPerVCpu": 4.0,
             }
