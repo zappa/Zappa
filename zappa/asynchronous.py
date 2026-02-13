@@ -85,7 +85,6 @@ Discussion of this comes from:
 
 """
 
-import importlib
 import inspect
 import json
 import os
@@ -96,7 +95,11 @@ from functools import update_wrapper, wraps
 import boto3
 import botocore
 
-from .utilities import get_topic_name, validate_json_serializable
+from .utilities import (
+    get_topic_name,
+    import_and_get_function,
+    validate_json_serializable,
+)
 
 try:
     from zappa_settings import ASYNC_RESPONSE_TABLE
@@ -458,10 +461,7 @@ def import_and_get_task(task_path):
     Given a modular path to a function, import that module
     and return the function.
     """
-    module, function = task_path.rsplit(".", 1)
-    app_module = importlib.import_module(module)
-    app_function = getattr(app_module, function)
-    return app_function
+    return import_and_get_function(task_path)
 
 
 def get_func_task_path(func):

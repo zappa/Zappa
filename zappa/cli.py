@@ -19,7 +19,6 @@ import sys
 import tempfile
 import time
 import zipfile
-from builtins import bytes, input
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -2624,6 +2623,7 @@ class ZappaCLI:
             raise ClickException("Please provide a valid ephemeral_storage size between 512 - 10240 in your Zappa settings.")
 
         self.app_function = self.stage_config.get("app_function", None)
+        self.app_type = self.stage_config.get("app_type", None)
         self.exception_handler = self.stage_config.get("exception_handler", None)
         self.aws_region = self.stage_config.get("aws_region", None)
         self.debug = self.stage_config.get("debug", True)
@@ -2951,6 +2951,9 @@ class ZappaCLI:
                 )
             app_module, app_function = self.app_function.rsplit(".", 1)
             settings_s = settings_s + "APP_MODULE='{0!s}'\nAPP_FUNCTION='{1!s}'\n".format(app_module, app_function)
+
+        if self.app_type:
+            settings_s += "APP_TYPE='{0!s}'\n".format(self.app_type)
 
         if self.exception_handler:
             settings_s += "EXCEPTION_HANDLER='{0!s}'\n".format(self.exception_handler)
