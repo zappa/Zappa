@@ -37,7 +37,7 @@ tqdm = ">=4.66.3"
 troposphere = ">=3.0"
 Werkzeug = "*"
 wheel = "*"
-setuptools = "<80.0.0"
+setuptools = "*"
 
 [pipenv]
 allow_prereleases = false
