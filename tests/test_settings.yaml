@@ -67,3 +67,6 @@ capacity_provider_enabled:
       CapacityProviderArn: arn:aws:lambda:us-east-1:123456789012:capacity-provider/zappa-test
       PerExecutionEnvironmentMaxConcurrency: 5
       ExecutionEnvironmentMemoryGiBPerVCpu: 2.0
+capacity_provider_publish_latest_published_enabled:
+  extends: capacity_provider_enabled
+  capacity_provider_publish_to_latest_published: true

@@ -881,6 +881,9 @@ class TestZappa(unittest.TestCase):
             ],
             "NextMarker": "",
         }
+        z.lambda_client.list_versions_by_function.return_value = {
+            "Versions": [{"Version": "$LATEST.PUBLISHED"}, {"Version": "1"}]
+        }
         z.lambda_client.publish_version.return_value = {
             "FunctionArn": "test",
         }
@@ -904,6 +907,43 @@ class TestZappa(unittest.TestCase):
             z.lambda_client.update_function_configuration.call_args[1]["CapacityProviderConfig"],
             capacity_provider_config,
         )
+        z.lambda_client.delete_function.assert_not_called()
+        z.lambda_client.publish_version.assert_not_called()
+
+    def test_update_capacity_provider_configuration_publish_to_latest_published(self):
+        z = Zappa(load_credentials=False)
+        z.credentials_arn = object()
+        z.lambda_client = mock.MagicMock()
+        z.lambda_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+        capacity_provider_arn = "arn:aws:lambda:us-east-1:123456789012:capacity-provider/zappa-test"
+        z.lambda_client.list_function_versions_by_capacity_provider.return_value = {
+            "CapacityProviderArn": capacity_provider_arn,
+            "FunctionVersions": [{"FunctionArn": "test", "State": "Active"}],
+            "NextMarker": "",
+        }
+        z.lambda_client.list_versions_by_function.return_value = {
+            "Versions": [{"Version": "$LATEST"}, {"Version": "1"}, {"Version": "$LATEST.PUBLISHED"}]
+        }
+        z.lambda_client.publish_version.return_value = {"FunctionArn": "test"}
+        z.wait_until_lambda_function_is_updated = mock.MagicMock()
+        capacity_provider_config = {
+            "LambdaManagedInstancesCapacityProviderConfig": {
+                "CapacityProviderArn": capacity_provider_arn,
+                "PerExecutionEnvironmentMaxConcurrency": 10,
+                "ExecutionEnvironmentMemoryGiBPerVCpu": 4.0,
+            }
+        }
+
+        z.update_lambda_configuration(
+            "test",
+            "test",
+            "test",
+            capacity_provider_config=capacity_provider_config,
+            capacity_provider_publish_to_latest_published=True,
+        )
+
+        z.lambda_client.delete_function.assert_called_once_with(FunctionName="test", Qualifier="$LATEST.PUBLISHED")
+        z.lambda_client.publish_version.assert_called_once_with(FunctionName="test", PublishTo="LATEST_PUBLISHED")
 
     def test_update_capacity_provider_rejects_vpc(self):
         z = Zappa(load_credentials=False)
@@ -953,6 +993,13 @@ class TestZappa(unittest.TestCase):
             }
         }
         self.assertEqual(expected_config, zappa_cli.capacity_provider_config)
+        self.assertFalse(zappa_cli.capacity_provider_publish_to_latest_published)
+
+    def test_capacity_provider_publish_to_latest_published_configuration(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "capacity_provider_publish_latest_published_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertTrue(zappa_cli.capacity_provider_publish_to_latest_published)
 
     def test_update_empty_aws_env_hash(self):
         z = Zappa()

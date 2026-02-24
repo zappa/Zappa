@@ -126,6 +126,7 @@ class ZappaCLI:
     aws_kms_key_arn = ""
     snap_start = None
     capacity_provider_config = None
+    capacity_provider_publish_to_latest_published = False
     context_header_mappings = None
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
@@ -1200,6 +1201,7 @@ class ZappaCLI:
             layers=self.layers,
             snap_start=self.snap_start,
             capacity_provider_config=self.capacity_provider_config,
+            capacity_provider_publish_to_latest_published=self.capacity_provider_publish_to_latest_published,
             wait=False,
         )
 
@@ -2689,6 +2691,9 @@ class ZappaCLI:
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.snap_start = self.stage_config.get("snap_start", "None")
         self.capacity_provider_config = self.stage_config.get("capacity_provider_config", None)
+        self.capacity_provider_publish_to_latest_published = self.stage_config.get(
+            "capacity_provider_publish_to_latest_published", False
+        )
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")

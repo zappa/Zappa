@@ -1444,6 +1444,7 @@ class Zappa:
         layers=None,
         snap_start=None,
         capacity_provider_config=None,
+        capacity_provider_publish_to_latest_published=False,
         wait=True,
     ):
         """
@@ -1542,16 +1543,20 @@ class Zappa:
                         function_state="Active",
                     )
 
-            # publish to latest
-            response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
-            logger.info(f"Publish to {response['FunctionArn']}")
+            if capacity_provider_publish_to_latest_published:
+                if "$LATEST.PUBLISHED" in versions_in_lambda:
+                    self.lambda_client.delete_function(FunctionName=function_name, Qualifier="$LATEST.PUBLISHED")
 
-            time.sleep(10)
-            self.wait_for_capacity_provider_response(
-                capacity_provider_name=capacity_provider_name,
-                function_arn=response["FunctionArn"],
-                function_state="Active",
-            )
+                # publish to latest
+                response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
+                logger.info(f"Publish to {response['FunctionArn']}")
+
+                time.sleep(10)
+                self.wait_for_capacity_provider_response(
+                    capacity_provider_name=capacity_provider_name,
+                    function_arn=response["FunctionArn"],
+                    function_state="Active",
+                )
 
         if self.tags:
             self.lambda_client.tag_resource(Resource=resource_arn, Tags=self.tags)
