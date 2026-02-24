@@ -1565,6 +1565,7 @@ class ZappaCLI:
             invocation_type="RequestResponse",
             client_context=client_context,
             qualifier=qualifier,
+            log_type="Tail" if not self.capacity_provider_config else "None",
         )
 
         print(self.format_lambda_response(response, not no_color))
