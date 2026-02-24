@@ -600,7 +600,10 @@ class TestZappa(unittest.TestCase):
             },
             "isBase64Encoded": False,
             "body": "",
-            "cookies": ["Cookie_1=Value1; Expires=21 Oct 2021 07:48 GMT", "Cookie_2=Value2; Max-Age=78000"],
+            "cookies": [
+                "Cookie_1=Value1; Expires=21 Oct 2021 07:48 GMT",
+                "Cookie_2=Value2; Max-Age=78000",
+            ],
         }
         response = lh.handler(event, None)
 

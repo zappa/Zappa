@@ -296,6 +296,7 @@ def run_message(message):
                 "ttl": {"N": str(int(time.time() + 600))},
                 "async_status": {"S": "in progress"},
                 "async_response": {"S": str(json.dumps("N/A"))},
+                "message": {"S": json.dumps(message)},
             },
         )
 

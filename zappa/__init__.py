@@ -8,7 +8,13 @@ def running_in_docker() -> bool:
     - When docker is used allow usage of any python version
     """
     # https://stackoverflow.com/questions/63116419
-    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in {"y", "yes", "t", "true", "1"}
+    running_in_docker_flag = os.getenv("ZAPPA_RUNNING_IN_DOCKER", "False").lower() in {
+        "y",
+        "yes",
+        "t",
+        "true",
+        "1",
+    }
     return running_in_docker_flag
 
 

@@ -28,6 +28,8 @@ import argcomplete
 import botocore
 import click
 import hjson as json
+
+# import pkg_resources
 import requests
 import slugify
 import toml
@@ -203,6 +205,9 @@ class ZappaCLI:
 
         desc = "Zappa - Deploy Python applications to AWS Lambda" " and API Gateway.\n"
         parser = argparse.ArgumentParser(description=desc)
+        from importlib.metadata import version
+
+        zappa_version = version("zappa")
         parser.add_argument(
             "-v",
             "--version",
@@ -593,7 +598,7 @@ class ZappaCLI:
                     + click.style(self.api_stage, bold=True)
                     + ".."
                 )
-
+        click.echo(self.vargs)
         # Explicitly define the app function.
         # Related: https://github.com/Miserlou/Zappa/issues/832
         if self.vargs.get("app_function", None):
@@ -919,6 +924,7 @@ class ZappaCLI:
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
+                architecture=self.architecture,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -1032,7 +1038,8 @@ class ZappaCLI:
         """
         Repackage and update the function code.
         """
-
+        click.echo(self.stage_config)
+        click.echo(self.zappa.aws_region)
         if not source_zip and not docker_image_uri:
             # Make sure we're in a venv.
             self.check_venv()
@@ -1203,6 +1210,7 @@ class ZappaCLI:
             capacity_provider_config=self.capacity_provider_config,
             capacity_provider_publish_to_latest_published=self.capacity_provider_publish_to_latest_published,
             wait=False,
+            architecture=self.architecture,
         )
 
         # Finally, delete the local copy our zip package
@@ -1373,6 +1381,9 @@ class ZappaCLI:
         if self.use_alb:
             self.zappa.undeploy_lambda_alb(self.lambda_name)
 
+        # if self.function_url_domains:
+        #     self.zappa.undeploy_function_url_custom_domain(self.lambda_name)
+
         if self.use_apigateway:
             if remove_logs:
                 self.zappa.remove_api_gateway_logs(self.lambda_name)
@@ -1435,6 +1446,13 @@ class ZappaCLI:
         Given a a list of functions and a schedule to execute them,
         setup up regular execution.
         """
+        self.zappa.unschedule_events(
+            lambda_name=self.lambda_name,
+            lambda_arn=self.lambda_arn,
+            events=[],
+            excluded_source_services=["dynamodb", "kinesis", "sqs"],
+        )
+
         events = self.stage_config.get("events", [])
 
         if events:
@@ -1458,7 +1476,6 @@ class ZappaCLI:
                     "description": "Zappa Keep Warm - {}".format(self.lambda_name),
                 }
             )
-
         if events:
             try:
                 function_response = self.zappa.lambda_client.get_function(FunctionName=self.lambda_name)
@@ -2730,6 +2747,9 @@ class ZappaCLI:
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
 
+        # Architectures
+        self.architecture = self.stage_config.get("architecture", "x86_64")
+
         desired_role_name = self.lambda_name + "-ZappaLambdaExecutionRole"
         self.zappa = Zappa(
             boto_session=session,
@@ -3446,6 +3466,9 @@ class ZappaCLI:
                 + click.style(str(req.status_code), fg="red", bold=True)
                 + " response code."
             )
+
+        if req.status_code == 200:
+            click.echo(req.text)
 
 
 ####################################################################

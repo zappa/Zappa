@@ -44,7 +44,10 @@ class GeneralUtilitiesTestCase(unittest.TestCase):
             # Give the user their AWS region back, we're done testing with us-east-1.
             os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
 
-    @mock.patch("zappa.core.find_packages", return_value=["package", "package.subpackage", "package.another"])
+    @mock.patch(
+        "zappa.core.find_packages",
+        return_value=["package", "package.subpackage", "package.another"],
+    )
     def test_copy_editable_packages(self, mock_find_packages):
         virtual_env = Path(os.environ.get("VIRTUAL_ENV"))
         if not virtual_env:

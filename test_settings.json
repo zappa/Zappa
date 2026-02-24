@@ -154,6 +154,15 @@
        "binary_support": true,
        "additional_text_mimetypes": ["application/custommimetype"]
     },
+    "function_url_enabled": {
+        "extends": "ttt888",
+        "function_url_enabled": true
+    },
+    "function_url_custom_domain": {
+        "extends": "function_url_enabled",
+        "function_url_domains": ["test-lambda-function-url.example.com", "test-lambda-function-url-1.example.com"],
+        "route53_enabled": true
+    },
     "arch_arm64": {
         "s3_bucket": "lmbda",
         "app_function": "tests.test_app.hello_world",
