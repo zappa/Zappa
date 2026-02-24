@@ -2,7 +2,6 @@
 Zappa core library. You may also want to look at `cli.py` and `util.py`.
 """
 
-import datetime
 import getpass
 import hashlib
 import json
@@ -164,7 +163,7 @@ def build_manylinux_wheel_file_match_pattern(runtime: str, architecture: str) ->
     # Support PEP600 (https://peps.python.org/pep-0600/)
     # The wheel filename is {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
     runtime_major_version, runtime_minor_version = runtime[6:].split(".")
-    python_tag = f"cp{runtime_major_version}{runtime_minor_version}"  # python3.14 -> cp314
+    python_tag = f"cp{runtime_major_version}{runtime_minor_version}"  # python3.13 -> cp313
     manylinux_legacy_tags = ("manylinux2014", "manylinux2010", "manylinux1")
     if architecture == X86_ARCHITECTURE:
         valid_platform_tags = [X86_ARCHITECTURE]
@@ -247,7 +246,7 @@ class Zappa:
         load_credentials=True,
         desired_role_name=None,
         desired_role_arn=None,
-        runtime="python3.14",  # Detected at runtime in CLI
+        runtime="python3.13",  # Detected at runtime in CLI
         tags=(),
         endpoint_urls={},
         xray_tracing=False,
@@ -270,9 +269,6 @@ class Zappa:
 
         if desired_role_arn:
             self.credentials_arn = desired_role_arn
-
-        if architecture:
-            self.architecture = architecture
 
         self.runtime = runtime
 
@@ -402,10 +398,7 @@ class Zappa:
                 for (
                     requirement_package_name
                 ) in distribution_package.requires:  # Generated requirements specified for this Distribution
-                    deps += self.get_deps_list(
-                        pkg_name=requirement_package_name,
-                        installed_distros=installed_distros,
-                    )
+                    deps += self.get_deps_list(pkg_name=requirement_package_name, installed_distros=installed_distros)
         return list(set(deps))  # de-dupe before returning
 
     def create_handler_venv(self, use_zappa_release: Optional[str] = None):
@@ -667,12 +660,7 @@ class Zappa:
                     ignore=shutil.ignore_patterns(*excludes),
                 )
             else:
-                copytree(
-                    site_packages_64.resolve(),
-                    temp_package_path.resolve(),
-                    metadata=False,
-                    symlinks=False,
-                )
+                copytree(site_packages_64.resolve(), temp_package_path.resolve(), metadata=False, symlinks=False)
 
         if egg_links:
             self.copy_editable_packages(egg_links, temp_package_path)
@@ -1218,8 +1206,8 @@ class Zappa:
         ephemeral_storage={"Size": 512},
         publish=True,
         vpc_config=None,
-        efs_config=None,
         dead_letter_config=None,
+        efs_config=None,
         runtime="python3.13",
         aws_environment_variables=None,
         aws_kms_key_arn=None,
@@ -1231,7 +1219,6 @@ class Zappa:
         layers=None,
         concurrency=None,
         docker_image_uri=None,
-        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1251,16 +1238,6 @@ class Zappa:
             aws_kms_key_arn = ""
         if not layers:
             layers = []
-        if not architecture:
-            self.architecture = "x86_64"
-
-        uses_capacity_provider = bool(capacity_provider_config)
-        uses_vpc = bool(vpc_config and (vpc_config.get("SubnetIds") or vpc_config.get("SecurityGroupIds")))
-        if uses_capacity_provider and uses_vpc:
-            raise ValueError(
-                "Lambda capacity providers cannot be used with VPC configurations. "
-                "Remove VPC settings or disable the capacity provider."
-            )
 
         uses_capacity_provider = bool(capacity_provider_config)
         uses_vpc = bool(vpc_config and (vpc_config.get("SubnetIds") or vpc_config.get("SecurityGroupIds")))
@@ -1355,7 +1332,6 @@ class Zappa:
         concurrency=None,
         capacity_provider_config=None,
         docker_image_uri=None,
-        architecture=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1468,14 +1444,11 @@ class Zappa:
         layers=None,
         snap_start=None,
         capacity_provider_config=None,
-        capacity_provider_publish_to_latest_published=False,
         wait=True,
-        architecture=None,
     ):
         """
         Given an existing function ARN, update the configuration variables.
         """
-
         logger.info("Updating Lambda function configuration..")
 
         if not vpc_config:
@@ -1569,20 +1542,16 @@ class Zappa:
                         function_state="Active",
                     )
 
-            if capacity_provider_publish_to_latest_published:
-                if "$LATEST.PUBLISHED" in versions_in_lambda:
-                    self.lambda_client.delete_function(FunctionName=function_name, Qualifier="$LATEST.PUBLISHED")
+            # publish to latest
+            response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
+            logger.info(f"Publish to {response['FunctionArn']}")
 
-                # publish to latest
-                response = self.lambda_client.publish_version(FunctionName=function_name, PublishTo="LATEST_PUBLISHED")
-                logger.info(f"Publish to {response['FunctionArn']}")
-
-                time.sleep(10)
-                self.wait_for_capacity_provider_response(
-                    capacity_provider_name=capacity_provider_name,
-                    function_arn=response["FunctionArn"],
-                    function_state="Active",
-                )
+            time.sleep(10)
+            self.wait_for_capacity_provider_response(
+                capacity_provider_name=capacity_provider_name,
+                function_arn=response["FunctionArn"],
+                function_state="Active",
+            )
 
         if self.tags:
             self.lambda_client.tag_resource(Resource=resource_arn, Tags=self.tags)
@@ -1909,10 +1878,7 @@ class Zappa:
 
         config = {
             "CallerReference": "zappa-create-function-url-custom-domain-" + function_name.split(":")[-1],
-            "Aliases": {
-                "Quantity": len(function_url_domains),
-                "Items": function_url_domains,
-            },
+            "Aliases": {"Quantity": len(function_url_domains), "Items": function_url_domains},
             "DefaultRootObject": "",
             "Enabled": True,
             "PriceClass": "PriceClass_100",
@@ -1928,10 +1894,7 @@ class Zappa:
                         "CustomHeaders": {
                             "Quantity": 1,
                             "Items": [
-                                {
-                                    "HeaderName": "CloudFront",
-                                    "HeaderValue": "CloudFront",
-                                },
+                                {"HeaderName": "CloudFront", "HeaderValue": "CloudFront"},
                             ],
                         },
                         "CustomOriginConfig": {
@@ -1956,29 +1919,13 @@ class Zappa:
                 "FieldLevelEncryptionId": "",
                 "AllowedMethods": {
                     "Quantity": 7,
-                    "Items": [
-                        "HEAD",
-                        "DELETE",
-                        "POST",
-                        "GET",
-                        "OPTIONS",
-                        "PUT",
-                        "PATCH",
-                    ],
-                    "CachedMethods": {
-                        "Quantity": 3,
-                        "Items": ["HEAD", "GET", "OPTIONS"],
-                    },
+                    "Items": ["HEAD", "DELETE", "POST", "GET", "OPTIONS", "PUT", "PATCH"],
+                    "CachedMethods": {"Quantity": 3, "Items": ["HEAD", "GET", "OPTIONS"]},
                 },
                 "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",  # noqa: E501 https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
                 "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",  # noqa: E501 https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html#managed-origin-request-policy-all-viewer-except-host-header
             },
-            "Logging": {
-                "Enabled": False,
-                "IncludeCookies": False,
-                "Bucket": "",
-                "Prefix": "",
-            },
+            "Logging": {"Enabled": False, "IncludeCookies": False, "Bucket": "", "Prefix": ""},
             "Restrictions": {"GeoRestriction": {"RestrictionType": "none", **NULL_CONFIG}},
             "WebACLId": "",
         }
@@ -3144,8 +3091,7 @@ class Zappa:
                     if item["name"] == lambda_name:
                         return item["id"]
 
-                logger.exception(f"Could not get API ID. {lambda_name} {self.boto_session.region_name}")
-                logger.exception(response)
+                logger.exception("Could not get API ID.")
                 return None
             except Exception:  # pragma: no cover
                 # We don't even have an API deployed. That's okay!
@@ -3183,19 +3129,17 @@ class Zappa:
                 certificateName=certificate_name,
                 certificateArn=certificate_arn,
             )
-            api_id = self.get_api_id(lambda_name)
-            if not api_id:
-                raise LookupError("No API URL to certify found - did you deploy?")
 
-            self.apigateway_client.create_base_path_mapping(
-                domainName=domain_name,
-                basePath="" if base_path is None else base_path,
-                restApiId=api_id,
-                stage=stage,
-            )
+        api_id = self.get_api_id(lambda_name)
+        if not api_id:
+            raise LookupError("No API URL to certify found - did you deploy?")
 
-        if self.function_url_enabled:
-            pass
+        self.apigateway_client.create_base_path_mapping(
+            domainName=domain_name,
+            basePath="" if base_path is None else base_path,
+            restApiId=api_id,
+            stage=stage,
+        )
 
         return agw_response["distributionDomainName"]
 
@@ -3227,7 +3171,11 @@ class Zappa:
         # Related: https://github.com/boto/boto3/issues/157
         # and: http://docs.aws.amazon.com/Route53/latest/APIReference/CreateAliasRRSAPI.html
         # and policy: https://spin.atomicobject.com/2016/04/28/route-53-hosted-zone-managment/
+        # pure_zone_id = zone_id.split('/hostedzone/')[1]
 
+        # XXX: ClientError: An error occurred (InvalidChangeBatch) when calling the ChangeResourceRecordSets operation:
+        # Tried to create an alias that targets d1awfeji80d0k2.cloudfront.net., type A in zone Z1XWOQP59BYF6Z,
+        # but the alias target name does not lie within the target zone
         response = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={"Changes": [{"Action": "UPSERT", "ResourceRecordSet": record_set}]},
@@ -3282,8 +3230,6 @@ class Zappa:
         stage=None,
         route53=True,
         base_path=None,
-        use_apigateway=True,
-        use_function_url=False,
     ):
         """
         This updates your certificate information for an existing domain,
@@ -3505,7 +3451,7 @@ class Zappa:
 
         permission_response = self.lambda_client.add_permission(
             FunctionName=lambda_name,
-            StatementId="zappa-" + "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8)),
+            StatementId="".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8)),
             Action="lambda:InvokeFunction",
             Principal=principal,
             SourceArn=source_arn,
@@ -3536,17 +3482,18 @@ class Zappa:
         # and do not require event permissions. They do require additional permissions on the Lambda roles though.
         # http://docs.aws.amazon.com/lambda/latest/dg/lambda-api-permissions-ref.html
         pull_services = ["dynamodb", "kinesis", "sqs"]
+
+        # XXX: Not available in Lambda yet.
+        # We probably want to execute the latest code.
+        # if default:
+        #     lambda_arn = lambda_arn + ":$LATEST"
+
         self.unschedule_events(
             lambda_name=lambda_name,
             lambda_arn=lambda_arn,
             events=events,
             excluded_source_services=pull_services,
         )
-        # XXX: Not available in Lambda yet.
-        # We probably want to execute the latest code.
-        # if default:
-        #     lambda_arn = lambda_arn + ":$LATEST"
-
         for event in events:
             function = event["function"]
             expression = event.get("expression", None)  # single expression
@@ -4047,10 +3994,11 @@ class Zappa:
             if profile_name:
                 self.boto_session = boto3.Session(profile_name=profile_name, region_name=self.aws_region)
             elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
+                region_name = os.environ.get("AWS_DEFAULT_REGION") or self.aws_region
                 session_kw = {
                     "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID"),
                     "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                    "region_name": self.aws_region,
+                    "region_name": region_name,
                 }
 
                 # If we're executing in a role, AWS_SESSION_TOKEN will be present, too.
