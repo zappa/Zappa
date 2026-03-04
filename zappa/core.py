@@ -2109,6 +2109,76 @@ class Zappa:
 
         return http_api
 
+    def create_websocket_api(
+        self,
+        lambda_arn: str,
+        api_name: Optional[str] = None,
+        stage_name: str = "production",
+    ):
+        """
+        Create a WebSocket API Gateway for this Zappa deployment.
+        Returns the new Api CF resource.
+        """
+        import troposphere.apigatewayv2 as apigwv2
+
+        ws_api = apigwv2.Api("WsApi")
+        ws_api.Name = (api_name or lambda_arn.split(":")[-1]) + "-ws"
+        ws_api.ProtocolType = "WEBSOCKET"
+        ws_api.RouteSelectionExpression = "$request.body.action"
+        self.cf_template.add_resource(ws_api)
+
+        # Integration (AWS_PROXY for WebSocket Lambda)
+        integration = apigwv2.Integration("WsIntegration")
+        integration.ApiId = troposphere.Ref(ws_api)
+        integration.IntegrationType = "AWS_PROXY"
+        integration.IntegrationUri = troposphere.Join(
+            "",
+            [
+                "arn:aws:apigateway:",
+                troposphere.Ref("AWS::Region"),
+                ":lambda:path/2015-03-31/functions/",
+                lambda_arn,
+                "/invocations",
+            ],
+        )
+        self.cf_template.add_resource(integration)
+
+        # Routes: $connect, $disconnect, $default
+        for route_suffix, route_key in [("Connect", "$connect"), ("Disconnect", "$disconnect"), ("Default", "$default")]:
+            route = apigwv2.Route(f"Ws{route_suffix}Route")
+            route.ApiId = troposphere.Ref(ws_api)
+            route.RouteKey = route_key
+            route.Target = troposphere.Join("", ["integrations/", troposphere.Ref(integration)])
+            self.cf_template.add_resource(route)
+
+        # Stage with AutoDeploy
+        stage = apigwv2.Stage("WsStage")
+        stage.ApiId = troposphere.Ref(ws_api)
+        stage.StageName = stage_name
+        stage.AutoDeploy = True
+        self.cf_template.add_resource(stage)
+
+        # Lambda invoke permission
+        permission = troposphere.awslambda.Permission("WsInvokePermission")
+        permission.FunctionName = lambda_arn
+        permission.Action = "lambda:InvokeFunction"
+        permission.Principal = "apigateway.amazonaws.com"
+        permission.SourceArn = troposphere.Join(
+            "",
+            [
+                "arn:aws:execute-api:",
+                troposphere.Ref("AWS::Region"),
+                ":",
+                troposphere.Ref("AWS::AccountId"),
+                ":",
+                troposphere.Ref(ws_api),
+                "/*",
+            ],
+        )
+        self.cf_template.add_resource(permission)
+
+        return ws_api
+
     def create_api_gateway_routes(  # type: ignore[no-untyped-def]
         self,
         lambda_arn: str,
@@ -2692,6 +2762,8 @@ class Zappa:
         endpoint_configuration=None,
         apigateway_version=DEFAULT_APIGATEWAY_VERSION,
         stage_name=None,
+        websocket=False,
+        websocket_stage_name=None,
     ):
         """
         Build the entire CF stack.
@@ -2729,6 +2801,14 @@ class Zappa:
             apigateway_version=apigateway_version,
             stage_name=stage_name,
         )
+
+        if websocket:
+            self.create_websocket_api(
+                lambda_arn=lambda_arn,
+                api_name=lambda_name,
+                stage_name=websocket_stage_name or stage_name or "production",
+            )
+
         return self.cf_template
 
     def update_stack(
@@ -2862,6 +2942,19 @@ class Zappa:
             return "https://{}.execute-api.{}.amazonaws.com/{}".format(api_id, self.boto_session.region_name, stage_name)
         else:
             return None
+
+    def get_websocket_url(self, lambda_name, stage_name="production"):
+        """
+        Given a lambda_name and stage_name, return the WebSocket API URL.
+        """
+        try:
+            response = self.cf_client.describe_stack_resource(StackName=lambda_name, LogicalResourceId="WsApi")
+            api_id = response["StackResourceDetail"].get("PhysicalResourceId")
+            if api_id:
+                return "wss://{}.execute-api.{}.amazonaws.com/{}".format(api_id, self.boto_session.region_name, stage_name)
+        except Exception:
+            pass
+        return None
 
     def get_api_id(self, lambda_name: str, apigateway_version: str = DEFAULT_APIGATEWAY_VERSION):
         """
