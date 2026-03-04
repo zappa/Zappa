@@ -1682,10 +1682,12 @@ class Zappa:
     def delete_lambda_function_url(self, function_name):
         try:
             response = self.lambda_client.list_function_url_configs(FunctionName=function_name, MaxItems=50)
-        except self.lambda_client.exceptions.ClientError:
-            # Lambda Function URLs are not supported in all regions.
-            # See: https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html
-            return
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "AccessDeniedException":
+                # Lambda Function URLs are not supported in all regions.
+                # See: https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html
+                return
+            raise
         for config in response.get("FunctionUrlConfigs", []):
             resp = self.lambda_client.delete_function_url_config(FunctionName=config["FunctionArn"])
             if resp["ResponseMetadata"]["HTTPStatusCode"] == 204:
