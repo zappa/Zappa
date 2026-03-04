@@ -2117,7 +2117,7 @@ class Zappa:
         import troposphere.apigatewayv2 as apigwv2
 
         ws_api = apigwv2.Api("WsApi")
-        ws_api.Name = (api_name or lambda_arn.split(":")[-1]) + "-websocket"
+        ws_api.Name = (api_name or lambda_arn.split(":")[-1]) + "-ws"
         ws_api.ProtocolType = "WEBSOCKET"
         ws_api.RouteSelectionExpression = "$request.body.action"
         self.cf_template.add_resource(ws_api)
