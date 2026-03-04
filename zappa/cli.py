@@ -969,6 +969,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                websocket=self.use_websocket,
             )
 
             self.zappa.update_stack(
@@ -1024,6 +1025,11 @@ class ZappaCLI:
         self.callback("post")
 
         click.echo(deployment_string)
+
+        if self.use_websocket:
+            ws_url = self.zappa.get_websocket_url(self.lambda_name, self.api_stage)
+            if ws_url:
+                click.echo("WebSocket URL: " + click.style(ws_url, bold=True))
 
     def update(self, source_zip=None, no_upload=False, docker_image_uri=None):
         """
@@ -1216,6 +1222,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                websocket=self.use_websocket,
             )
             self.zappa.update_stack(
                 self.lambda_name,
@@ -1301,6 +1308,11 @@ class ZappaCLI:
                     self.touch_endpoint(endpoint_url)
 
         click.echo(deployed_string)
+
+        if self.use_websocket:
+            ws_url = self.zappa.get_websocket_url(self.lambda_name, self.api_stage)
+            if ws_url:
+                click.echo("WebSocket URL: " + click.style(ws_url, bold=True))
 
     def rollback(self, revision):
         """
@@ -2712,6 +2724,9 @@ class ZappaCLI:
         default_function_url_config.update(self.stage_config.get("function_url_config", {}))
         self.function_url_config = default_function_url_config
 
+        # WebSocket support - auto-detected from zappa.websocket imports
+        self.use_websocket = self._detect_websocket_usage()
+
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
 
@@ -2754,6 +2769,27 @@ class ZappaCLI:
                 self.zappa.extra_permissions.append(efs_permission)
             else:
                 self.zappa.extra_permissions = [efs_permission]
+
+        # Automatically add execute-api:ManageConnections when WebSocket is enabled
+        if self.use_websocket and self.manage_roles:
+            ws_resource_arn = f"arn:aws:execute-api:{self.aws_region}:*:*"
+            try:
+                sts_client = self.zappa.boto_session.client("sts")
+                account_id = sts_client.get_caller_identity()["Account"]
+                ws_resource_arn = f"arn:aws:execute-api:{self.aws_region}:{account_id}:*"
+            except Exception:
+                pass
+            ws_permission = {
+                "Effect": "Allow",
+                "Action": [
+                    "execute-api:ManageConnections",
+                ],
+                "Resource": ws_resource_arn,
+            }
+            if self.zappa.extra_permissions:
+                self.zappa.extra_permissions.append(ws_permission)
+            else:
+                self.zappa.extra_permissions = [ws_permission]
 
         if self.app_function:
             self.collision_warning(self.app_function)
@@ -3355,6 +3391,39 @@ class ZappaCLI:
             cache_cluster_encrypted=self.stage_config.get("cache_cluster_encrypted", False),
         )
         return endpoint_url
+
+    @staticmethod
+    def _detect_websocket_usage():
+        """Walk the project directory looking for zappa.websocket imports."""
+        import ast
+
+        skip_dirs = {".", "__pycache__", "node_modules", ".git", ".tox", ".eggs", "venv", "env", ".venv"}
+        for dirpath, dirnames, filenames in os.walk("."):
+            # Skip hidden dirs, venvs, caches
+            dirnames[:] = [d for d in dirnames if d not in skip_dirs and not d.startswith(".")]
+            for fname in filenames:
+                if not fname.endswith(".py"):
+                    continue
+                fpath = os.path.join(dirpath, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                        source = f.read()
+                except OSError:
+                    continue
+                if "zappa.websocket" not in source:
+                    continue
+                try:
+                    tree = ast.parse(source, filename=fpath)
+                except SyntaxError:
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.module and "zappa.websocket" in node.module:
+                        return True
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name and "zappa.websocket" in alias.name:
+                                return True
+        return False
 
     def check_venv(self):
         """Ensure we're inside a virtualenv."""
