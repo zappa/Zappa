@@ -12,7 +12,6 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-
 - [About](#about)
 - [Installation and Configuration](#installation-and-configuration)
   - [Running the Initial Setup / Settings](#running-the-initial-setup--settings)
@@ -85,6 +84,12 @@
     - [Notes](#notes)
   - [Unique Package ID](#unique-package-id)
   - [Application Load Balancer Event Source](#application-load-balancer-event-source)
+  - [WebSocket Support](#websocket-support)
+    - [Using Decorators](#using-decorators)
+    - [Using a Base Class](#using-a-base-class)
+    - [Sending Messages to Clients](#sending-messages-to-clients)
+    - [How It Works](#how-it-works)
+    - [Explicit Configuration](#explicit-configuration)
   - [Endpoint Configuration](#endpoint-configuration)
     - [Example Private API Gateway configuration](#example-private-api-gateway-configuration)
   - [Cold Starts (Experimental)](#cold-starts-experimental)
@@ -1716,6 +1721,80 @@ Like API Gateway, Zappa can automatically provision ALB resources for you. You'l
 More information on using ALB as an event source for Lambda can be found [here](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/lambda-functions.html).
 
 _An important note_: right now, Zappa will provision ONE lambda to ONE load balancer, which means using `base_path` along with ALB configuration is currently unsupported.
+
+### WebSocket Support
+
+Zappa supports [API Gateway WebSocket APIs](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api.html), enabling persistent WebSocket connections handled by Lambda. WebSocket support is auto-detected when your project imports from `zappa.websocket` — no settings changes required.
+
+#### Using Decorators
+
+```python
+from zappa.websocket import on_connect, on_disconnect, on_message, send_message
+
+@on_connect
+def handle_connect(event, context):
+    print(f"Client connected: {event['requestContext']['connectionId']}")
+    return {"statusCode": 200}
+
+@on_disconnect
+def handle_disconnect(event, context):
+    print(f"Client disconnected: {event['requestContext']['connectionId']}")
+    return {"statusCode": 200}
+
+@on_message
+def handle_message(event, context):
+    # Echo the message back to the client
+    body = json.loads(event.get("body", "{}"))
+    send_message(event, {"echo": body})
+    return {"statusCode": 200}
+```
+
+#### Using a Base Class
+
+```python
+from zappa.websocket import ZappaWebSocketServer, send_message
+
+class MyWebSocket(ZappaWebSocketServer):
+    def on_connect(self, event, context):
+        return {"statusCode": 200}
+
+    def on_message(self, event, context):
+        send_message(event, {"echo": event.get("body")})
+        return {"statusCode": 200}
+
+    # on_disconnect is optional — only overridden methods are registered
+```
+
+#### Sending Messages to Clients
+
+Use `send_message(event, data)` to push messages to a connected client. The data will be JSON-encoded automatically unless it is already a string or bytes:
+
+```python
+from zappa.websocket import send_message
+
+send_message(event, {"type": "notification", "text": "Hello!"})
+send_message(event, "raw string payload")
+```
+
+#### How It Works
+
+- On `zappa deploy` or `zappa update`, Zappa scans your project for `from zappa.websocket import ...` statements
+- When detected, it provisions a WebSocket API Gateway alongside your REST/HTTP API via CloudFormation
+- The WebSocket URL (`wss://...`) is printed after deployment
+- Incoming WebSocket events (`CONNECT`, `DISCONNECT`, `MESSAGE`) are routed to your registered handlers
+- CloudFormation manages the full lifecycle — `zappa undeploy` cleans up all WebSocket resources
+
+#### Explicit Configuration
+
+To enable or disable WebSocket support explicitly instead of relying on auto-detection, add to your `zappa_settings.json`:
+
+```json
+{
+    "production": {
+        "websocket_enabled": true
+    }
+}
+```
 
 ### Endpoint Configuration
 
