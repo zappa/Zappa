@@ -1729,41 +1729,79 @@ Zappa supports [API Gateway WebSocket APIs](https://docs.aws.amazon.com/apigatew
 #### Using Decorators
 
 ```python
+import json
+import logging
+
+from flask import Flask
 from zappa.websocket import on_connect, on_disconnect, on_message, send_message
+
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return {"status": "ok"}
+
 
 @on_connect
 def handle_connect(event, context):
-    print(f"Client connected: {event['requestContext']['connectionId']}")
+    connection_id = event["requestContext"]["connectionId"]
+    logger.info("Client connected: %s", connection_id)
     return {"statusCode": 200}
+
 
 @on_disconnect
 def handle_disconnect(event, context):
-    print(f"Client disconnected: {event['requestContext']['connectionId']}")
+    connection_id = event["requestContext"]["connectionId"]
+    logger.info("Client disconnected: %s", connection_id)
     return {"statusCode": 200}
+
 
 @on_message
 def handle_message(event, context):
-    # Echo the message back to the client
-    body = json.loads(event.get("body", "{}"))
-    send_message(event, {"echo": body})
+    body = event.get("body", "{}")
+    data = json.loads(body)
+    # Echo the message back to the sender
+    send_message(event, {"echo": data})
     return {"statusCode": 200}
 ```
 
 #### Using a Base Class
 
 ```python
+import json
+import logging
+
+from flask import Flask
 from zappa.websocket import ZappaWebSocketServer, send_message
+
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return {"status": "ok"}
+
 
 class MyWebSocket(ZappaWebSocketServer):
     def on_connect(self, event, context):
+        connection_id = event["requestContext"]["connectionId"]
+        logger.info("Client connected: %s", connection_id)
         return {"statusCode": 200}
 
     def on_message(self, event, context):
-        send_message(event, {"echo": event.get("body")})
+        data = json.loads(event.get("body", "{}"))
+        send_message(event, {"echo": data})
         return {"statusCode": 200}
 
     # on_disconnect is optional — only overridden methods are registered
 ```
+
+Both examples are complete `app.py` files. The `@on_connect` and `@on_message` handlers (or `on_connect`/`on_message` methods) are required; `@on_disconnect` is optional.
 
 #### Sending Messages to Clients
 
