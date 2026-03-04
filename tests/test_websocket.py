@@ -216,7 +216,7 @@ class TestSendMessage(unittest.TestCase):
         )
         mock_client.post_to_connection.assert_called_once_with(
             ConnectionId="conn-123",
-            Data=json.dumps(data),
+            Data=json.dumps(data).encode("utf-8"),
         )
 
     @patch("zappa.websocket.boto3.client")
@@ -237,7 +237,7 @@ class TestSendMessage(unittest.TestCase):
 
         mock_client.post_to_connection.assert_called_once_with(
             ConnectionId="conn-456",
-            Data="raw string",
+            Data=b"raw string",
         )
 
 

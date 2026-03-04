@@ -71,6 +71,11 @@ class ZappaWebSocketServer:
 
     Subclass and override on_connect, on_disconnect, and/or on_message.
     Only overridden methods are registered.
+
+    Both ``on_connect`` and ``on_message`` must be overridden (or
+    registered via decorators) — ``validate_registry()`` requires
+    ``$connect`` and ``$default`` routes whenever any handler is
+    registered.  ``on_disconnect`` is optional.
     """
 
     _instance = None
@@ -131,10 +136,12 @@ def send_message(event, data):
     endpoint_url = f"https://{domain}/{stage}"
     client = boto3.client("apigatewaymanagementapi", endpoint_url=endpoint_url)
 
-    if isinstance(data, (str, bytes)):
+    if isinstance(data, bytes):
         payload = data
+    elif isinstance(data, str):
+        payload = data.encode("utf-8")
     else:
-        payload = json.dumps(data)
+        payload = json.dumps(data).encode("utf-8")
 
     client.post_to_connection(ConnectionId=connection_id, Data=payload)
 

@@ -2772,12 +2772,19 @@ class ZappaCLI:
 
         # Automatically add execute-api:ManageConnections when WebSocket is enabled
         if self.use_websocket and self.manage_roles:
+            ws_resource_arn = f"arn:aws:execute-api:{self.aws_region}:*:*"
+            try:
+                sts_client = self.zappa.boto_session.client("sts")
+                account_id = sts_client.get_caller_identity()["Account"]
+                ws_resource_arn = f"arn:aws:execute-api:{self.aws_region}:{account_id}:*"
+            except Exception:
+                pass
             ws_permission = {
                 "Effect": "Allow",
                 "Action": [
                     "execute-api:ManageConnections",
                 ],
-                "Resource": "arn:aws:execute-api:*:*:*",
+                "Resource": ws_resource_arn,
             }
             if self.zappa.extra_permissions:
                 self.zappa.extra_permissions.append(ws_permission)
@@ -3390,7 +3397,7 @@ class ZappaCLI:
         """Walk the project directory looking for zappa.websocket imports."""
         import ast
 
-        skip_dirs = {".", "__pycache__", "node_modules", ".git", ".tox", ".eggs"}
+        skip_dirs = {".", "__pycache__", "node_modules", ".git", ".tox", ".eggs", "venv", "env", ".venv"}
         for dirpath, dirnames, filenames in os.walk("."):
             # Skip hidden dirs, venvs, caches
             dirnames[:] = [d for d in dirnames if d not in skip_dirs and not d.startswith(".")]
