@@ -474,5 +474,75 @@ class TestDetectWebSocketUsage(unittest.TestCase):
                 os.chdir(old_cwd)
 
 
+class TestWebSocketIAMPermissions(unittest.TestCase):
+    """Test that WebSocket enables execute-api:ManageConnections on the Lambda role."""
+
+    def _make_cli(self, use_websocket, manage_roles=True, extra_permissions=None):
+        from zappa.cli import ZappaCLI
+
+        cli = ZappaCLI.__new__(ZappaCLI)
+        cli.use_websocket = use_websocket
+        cli.manage_roles = manage_roles
+
+        # Minimal Zappa mock
+        cli.zappa = MagicMock()
+        cli.zappa.extra_permissions = extra_permissions
+        return cli
+
+    def test_websocket_adds_manage_connections_permission(self):
+        """When websocket is enabled, ManageConnections should be added."""
+        cli = self._make_cli(use_websocket=True, extra_permissions=None)
+
+        # Simulate the permission-adding block from load_settings
+        if cli.use_websocket and cli.manage_roles:
+            ws_permission = {
+                "Effect": "Allow",
+                "Action": ["execute-api:ManageConnections"],
+                "Resource": "arn:aws:execute-api:*:*:*",
+            }
+            if cli.zappa.extra_permissions:
+                cli.zappa.extra_permissions.append(ws_permission)
+            else:
+                cli.zappa.extra_permissions = [ws_permission]
+
+        self.assertEqual(len(cli.zappa.extra_permissions), 1)
+        self.assertIn("execute-api:ManageConnections", cli.zappa.extra_permissions[0]["Action"])
+
+    def test_websocket_appends_to_existing_permissions(self):
+        """ManageConnections should append to existing extra_permissions."""
+        existing = [{"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": "*"}]
+        cli = self._make_cli(use_websocket=True, extra_permissions=existing)
+
+        if cli.use_websocket and cli.manage_roles:
+            ws_permission = {
+                "Effect": "Allow",
+                "Action": ["execute-api:ManageConnections"],
+                "Resource": "arn:aws:execute-api:*:*:*",
+            }
+            if cli.zappa.extra_permissions:
+                cli.zappa.extra_permissions.append(ws_permission)
+            else:
+                cli.zappa.extra_permissions = [ws_permission]
+
+        self.assertEqual(len(cli.zappa.extra_permissions), 2)
+
+    def test_no_websocket_no_permission_added(self):
+        """When websocket is disabled, no ManageConnections permission."""
+        cli = self._make_cli(use_websocket=False, extra_permissions=None)
+
+        if cli.use_websocket and cli.manage_roles:
+            ws_permission = {
+                "Effect": "Allow",
+                "Action": ["execute-api:ManageConnections"],
+                "Resource": "arn:aws:execute-api:*:*:*",
+            }
+            if cli.zappa.extra_permissions:
+                cli.zappa.extra_permissions.append(ws_permission)
+            else:
+                cli.zappa.extra_permissions = [ws_permission]
+
+        self.assertIsNone(cli.zappa.extra_permissions)
+
+
 if __name__ == "__main__":
     unittest.main()

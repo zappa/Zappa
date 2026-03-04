@@ -2724,10 +2724,8 @@ class ZappaCLI:
         default_function_url_config.update(self.stage_config.get("function_url_config", {}))
         self.function_url_config = default_function_url_config
 
-        # WebSocket support - auto-detect or explicit setting
-        self.use_websocket = self.stage_config.get("websocket_enabled", None)
-        if self.use_websocket is None:
-            self.use_websocket = self._detect_websocket_usage()
+        # WebSocket support - auto-detected from zappa.websocket imports
+        self.use_websocket = self._detect_websocket_usage()
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
@@ -2771,6 +2769,20 @@ class ZappaCLI:
                 self.zappa.extra_permissions.append(efs_permission)
             else:
                 self.zappa.extra_permissions = [efs_permission]
+
+        # Automatically add execute-api:ManageConnections when WebSocket is enabled
+        if self.use_websocket and self.manage_roles:
+            ws_permission = {
+                "Effect": "Allow",
+                "Action": [
+                    "execute-api:ManageConnections",
+                ],
+                "Resource": "arn:aws:execute-api:*:*:*",
+            }
+            if self.zappa.extra_permissions:
+                self.zappa.extra_permissions.append(ws_permission)
+            else:
+                self.zappa.extra_permissions = [ws_permission]
 
         if self.app_function:
             self.collision_warning(self.app_function)

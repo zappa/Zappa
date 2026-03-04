@@ -90,7 +90,6 @@
     - [Using a Base Class](#using-a-base-class)
     - [Sending Messages to Clients](#sending-messages-to-clients)
     - [How It Works](#how-it-works)
-    - [Explicit Configuration](#explicit-configuration)
   - [Endpoint Configuration](#endpoint-configuration)
     - [Example Private API Gateway configuration](#example-private-api-gateway-configuration)
   - [Cold Starts (Experimental)](#cold-starts-experimental)
@@ -1784,18 +1783,6 @@ send_message(event, "raw string payload")
 - The WebSocket URL (`wss://...`) is printed after deployment
 - Incoming WebSocket events (`CONNECT`, `DISCONNECT`, `MESSAGE`) are routed to your registered handlers
 - CloudFormation manages the full lifecycle — `zappa undeploy` cleans up all WebSocket resources
-
-#### Explicit Configuration
-
-To enable or disable WebSocket support explicitly instead of relying on auto-detection, add to your `zappa_settings.json`:
-
-```json
-{
-    "production": {
-        "websocket_enabled": true
-    }
-}
-```
 
 ### Endpoint Configuration
 
