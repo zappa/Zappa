@@ -16,12 +16,14 @@ class TestWebSocketRegistry(unittest.TestCase):
 
         self._registry_backup = dict(zappa.websocket._registry)
         zappa.websocket._registry.clear()
+        zappa.websocket._validated = False
 
     def tearDown(self):
         import zappa.websocket
 
         zappa.websocket._registry.clear()
         zappa.websocket._registry.update(self._registry_backup)
+        zappa.websocket._validated = False
 
     def test_decorators_register_handlers(self):
         from zappa.websocket import _registry, on_connect, on_disconnect, on_message
@@ -102,6 +104,90 @@ class TestWebSocketRegistry(unittest.TestCase):
         self.assertFalse(is_websocket_event({"requestContext": {"eventType": "OTHER"}}))
         self.assertFalse(is_websocket_event({"requestContext": {}}))
         self.assertFalse(is_websocket_event({}))
+
+    def test_validate_registry_passes_with_all_required(self):
+        from zappa.websocket import on_connect, on_message, validate_registry
+
+        @on_connect
+        def handle_connect(event, context):
+            return {"statusCode": 200}
+
+        @on_message
+        def handle_message(event, context):
+            return {"statusCode": 200}
+
+        # Should not raise
+        validate_registry()
+
+    def test_validate_registry_passes_with_empty_registry(self):
+        from zappa.websocket import validate_registry
+
+        # Empty registry is valid — no WebSocket usage
+        validate_registry()
+
+    def test_validate_registry_fails_missing_connect(self):
+        from zappa.websocket import (
+            WebSocketConfigurationError,
+            on_message,
+            validate_registry,
+        )
+
+        @on_message
+        def handle_message(event, context):
+            return {"statusCode": 200}
+
+        with self.assertRaises(WebSocketConfigurationError) as ctx:
+            validate_registry()
+        self.assertIn("@on_connect", str(ctx.exception))
+
+    def test_validate_registry_fails_missing_message(self):
+        from zappa.websocket import (
+            WebSocketConfigurationError,
+            on_connect,
+            validate_registry,
+        )
+
+        @on_connect
+        def handle_connect(event, context):
+            return {"statusCode": 200}
+
+        with self.assertRaises(WebSocketConfigurationError) as ctx:
+            validate_registry()
+        self.assertIn("@on_message", str(ctx.exception))
+
+    def test_validate_registry_fails_only_disconnect(self):
+        from zappa.websocket import (
+            WebSocketConfigurationError,
+            on_disconnect,
+            validate_registry,
+        )
+
+        @on_disconnect
+        def handle_disconnect(event, context):
+            return {"statusCode": 200}
+
+        with self.assertRaises(WebSocketConfigurationError) as ctx:
+            validate_registry()
+        self.assertIn("@on_connect", str(ctx.exception))
+        self.assertIn("@on_message", str(ctx.exception))
+
+    def test_validate_registry_runs_only_once(self):
+        from zappa.websocket import on_connect, on_message, validate_registry
+
+        @on_connect
+        def handle_connect(event, context):
+            return {"statusCode": 200}
+
+        @on_message
+        def handle_message(event, context):
+            return {"statusCode": 200}
+
+        validate_registry()
+        # Second call should be a no-op even if we tamper with registry
+        import zappa.websocket
+
+        zappa.websocket._registry.clear()
+        validate_registry()  # Should not raise
 
 
 class TestSendMessage(unittest.TestCase):
@@ -244,6 +330,7 @@ class TestWebSocketHandlerDispatch(unittest.TestCase):
         import zappa.websocket
 
         zappa.websocket._registry.clear()
+        zappa.websocket._validated = False
 
     def test_connect_event_dispatched(self):
         import zappa.websocket
@@ -253,6 +340,10 @@ class TestWebSocketHandlerDispatch(unittest.TestCase):
         @zappa.websocket.on_connect
         def handle_connect(event, context):
             results.append("connected")
+            return {"statusCode": 200}
+
+        @zappa.websocket.on_message
+        def handle_message(event, context):
             return {"statusCode": 200}
 
         lh = LambdaHandler("tests.test_websocket_settings")
@@ -276,6 +367,10 @@ class TestWebSocketHandlerDispatch(unittest.TestCase):
         import zappa.websocket
 
         results = []
+
+        @zappa.websocket.on_connect
+        def handle_connect(event, context):
+            return {"statusCode": 200}
 
         @zappa.websocket.on_message
         def handle_msg(event, context):

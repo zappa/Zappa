@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 # Route key -> callable mapping
 _registry = {}
+_validated = False
+
+REQUIRED_ROUTES = {"$connect", "$default"}
 
 
 def on_connect(func):
@@ -134,6 +137,34 @@ def send_message(event, data):
         payload = json.dumps(data)
 
     client.post_to_connection(ConnectionId=connection_id, Data=payload)
+
+
+def validate_registry():
+    """Validate that all required routes are registered.
+
+    Raises WebSocketConfigurationError if handlers are registered
+    but required routes ($connect, $default) are missing.
+    """
+    global _validated
+    if _validated:
+        return
+    _validated = True
+
+    if not _registry:
+        return
+
+    missing = REQUIRED_ROUTES - set(_registry.keys())
+    if missing:
+        route_to_decorator = {"$connect": "@on_connect", "$default": "@on_message"}
+        missing_names = ", ".join(route_to_decorator.get(r, r) for r in sorted(missing))
+        raise WebSocketConfigurationError(
+            f"WebSocket handlers registered but missing required routes: {missing_names}. "
+            f"All WebSocket apps must define handlers for $connect and $default ($disconnect is optional)."
+        )
+
+
+class WebSocketConfigurationError(Exception):
+    """Raised when WebSocket handler registration is incomplete."""
 
 
 def get_handler(route_key):
