@@ -19,7 +19,6 @@ import time
 import urllib
 import uuid
 import zipfile
-from builtins import bytes, int
 from io import open
 from pathlib import Path
 from typing import Iterable, Optional
@@ -73,8 +72,10 @@ FUNCTION_URL_PUBLIC_PERMISSION_RULES = (
 
 FUNCTION_URL_PUBLIC_PERMISSION_SIDS = {rule[0] for rule in FUNCTION_URL_PUBLIC_PERMISSION_RULES}
 
-# Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
-API_GATEWAY_REGIONS = [
+# Latest lists:
+#   https://docs.aws.amazon.com/general/latest/gr/rande.html#apigateway_region
+#   https://docs.aws.amazon.com/general/latest/gr/rande.html#lambda_region
+AWS_REGIONS = [
     "us-east-1",
     "us-east-2",
     "us-west-1",
@@ -84,7 +85,6 @@ API_GATEWAY_REGIONS = [
     "eu-west-1",
     "eu-west-2",
     "eu-west-3",
-    "eu-north-1",
     "ap-northeast-1",
     "ap-northeast-2",
     "ap-northeast-3",
@@ -99,35 +99,10 @@ API_GATEWAY_REGIONS = [
     "us-gov-east-1",
     "us-gov-west-1",
 ]
+API_GATEWAY_REGIONS = AWS_REGIONS
+LAMBDA_REGIONS = AWS_REGIONS
 
 DEFAULT_APIGATEWAY_VERSION = "v1"
-
-# Latest list: https://docs.aws.amazon.com/general/latest/gr/rande.html#lambda_region
-LAMBDA_REGIONS = [
-    "us-east-1",
-    "us-east-2",
-    "us-west-1",
-    "us-west-2",
-    "eu-central-1",
-    "eu-north-1",
-    "eu-west-1",
-    "eu-west-2",
-    "eu-west-3",
-    "eu-north-1",
-    "ap-northeast-1",
-    "ap-northeast-2",
-    "ap-northeast-3",
-    "ap-southeast-1",
-    "ap-southeast-2",
-    "ap-east-1",
-    "ap-south-1",
-    "ca-central-1",
-    "cn-north-1",
-    "cn-northwest-1",
-    "sa-east-1",
-    "us-gov-east-1",
-    "us-gov-west-1",
-]
 
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56

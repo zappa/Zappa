@@ -1,14 +1,16 @@
-import base64
 import logging
 import sys
 from io import BytesIO
 from typing import Optional
 from urllib.parse import unquote, urlencode
 
-from .utilities import ApacheNCSAFormatter, merge_headers, titlecase_keys
-
-BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
-
+from .utilities import (
+    ApacheNCSAFormatter,
+    extract_request_body,
+    merge_headers,
+    resolve_context_headers,
+    titlecase_keys,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ def create_wsgi_request(
     trailing_slash=True,
     binary_support=False,
     base_path=None,
-    context_header_mappings={},
+    context_header_mappings=None,
 ):
     """
     Given some event_info via API Gateway,
@@ -31,37 +33,14 @@ def create_wsgi_request(
     else:
         method, headers, path, query_string, remote_user, authorizer = process_lambda_payload_v1(event_info)
 
-    if context_header_mappings:
-        for key, value in context_header_mappings.items():
-            parts = value.split(".")
-            header_val = event_info["requestContext"]
-            for part in parts:
-                if part not in header_val:
-                    header_val = None
-                    break
-                else:
-                    header_val = header_val[part]
-            if header_val is not None:
-                headers[key] = header_val
+    resolve_context_headers(event_info, headers, context_header_mappings)
 
     # Related:  https://github.com/Miserlou/Zappa/issues/677
     #           https://github.com/Miserlou/Zappa/issues/683
     #           https://github.com/Miserlou/Zappa/issues/696
     #           https://github.com/Miserlou/Zappa/issues/836
     #           https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
-    if binary_support and (method in BINARY_METHODS):
-        if event_info.get("isBase64Encoded", False):
-            encoded_body = event_info["body"]
-            body = base64.b64decode(encoded_body)
-        else:
-            body = event_info.get("body")
-            if isinstance(body, str):
-                body = body.encode("utf-8")
-
-    else:
-        body = event_info.get("body")
-        if isinstance(body, str):
-            body = body.encode("utf-8")
+    body = extract_request_body(event_info, method, binary_support)
 
     # Make header names canonical, e.g. content-type => Content-Type
     # https://github.com/Miserlou/Zappa/issues/1188
@@ -199,8 +178,6 @@ def common_log(environ, response, response_time: Optional[int] = None):
 
     response_time: response time in micro-seconds
     """
-
-    logger = logging.getLogger(__name__)
 
     if response_time:
         formatter = ApacheNCSAFormatter(with_response_time=True)

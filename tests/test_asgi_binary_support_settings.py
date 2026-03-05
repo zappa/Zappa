@@ -1,0 +1,14 @@
+API_STAGE = "dev"
+APP_FUNCTION = "app"
+APP_MODULE = "tests.test_asgi_app"
+APP_TYPE = "asgi"
+BINARY_SUPPORT = True
+CONTEXT_HEADER_MAPPINGS = {}
+DEBUG = "True"
+DJANGO_SETTINGS = None
+DOMAIN = "api.example.com"
+ENVIRONMENT_VARIABLES = {}
+EXCEPTION_HANDLER = None
+LOG_LEVEL = "DEBUG"
+PROJECT_NAME = "asgi_binary_support_settings"
+COGNITO_TRIGGER_MAPPING = {}

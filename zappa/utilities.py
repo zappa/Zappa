@@ -1,5 +1,7 @@
+import base64
 import calendar
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -30,6 +32,30 @@ class UnserializableJsonError(TypeError):
 
 # mimetypes starting with entries defined here are considered as TEXT when BINARTY_SUPPORT is True.
 # - Additional TEXT mimetypes may be defined with the 'ADDITIONAL_TEXT_MIMETYPES' setting.
+BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
+
+
+def extract_request_body(event_info: Dict[str, Any], method: str, binary_support: bool = False) -> bytes:
+    """Extract the request body from a Lambda event as bytes.
+
+    Handles base64 decoding when binary_support is enabled and isBase64Encoded is True.
+    Always returns bytes (never None).
+    """
+    if binary_support and method in BINARY_METHODS:
+        if event_info.get("isBase64Encoded", False):
+            encoded_body = event_info.get("body", "")
+            return base64.b64decode(encoded_body) if encoded_body else b""
+        body = event_info.get("body")
+        if isinstance(body, str):
+            return body.encode("utf-8")
+        return body or b""
+
+    body = event_info.get("body")
+    if isinstance(body, str):
+        return body.encode("utf-8")
+    return body or b""
+
+
 DEFAULT_TEXT_MIMETYPES = (
     "text/",
     "application/json",  # RFC 4627
@@ -116,6 +142,16 @@ def parse_s3_url(url: Optional[str]) -> Tuple[str, str]:
     return bucket, path
 
 
+def import_and_get_function(dotted_path: str) -> Any:
+    """
+    Given a dotted module path to a function (e.g. 'myapp.tasks.my_func'),
+    import that module and return the function.
+    """
+    module, function = dotted_path.rsplit(".", 1)
+    app_module = importlib.import_module(module)
+    return getattr(app_module, function)
+
+
 def human_size(num: float, suffix: str = "B") -> str:
     """
     Convert bytes length to a human-readable version
@@ -131,21 +167,13 @@ def string_to_timestamp(timestring: str) -> int:
     """
     Accepts a str, returns an int timestamp.
     """
-
-    ts = None
-
     # Uses an extended version of Go's duration string.
     try:
         delta = durationpy.from_str(timestring)
         past = datetime.datetime.now(datetime.timezone.utc) - delta
-        ts = calendar.timegm(past.timetuple())
-        return ts
+        return calendar.timegm(past.timetuple())
     except Exception:
-        pass
-
-    if ts:
-        return ts
-    return 0
+        return 0
 
 
 ##
@@ -171,12 +199,11 @@ def detect_django_settings() -> List[str]:
     return matches
 
 
-def detect_flask_apps() -> list[str]:
+def _detect_apps_by_pattern(patterns: list[str]) -> list[str]:
     """
-    Automatically try to discover Flask apps files,
-    return them as relative module paths.
+    Scan .py files in the current directory for assignment patterns like '= Flask(' or '= FastAPI(',
+    returning matches as relative module paths (e.g. 'myapp.app').
     """
-
     matches = []
     cwd = Path.cwd()
     for py_file in cwd.rglob("*.py"):
@@ -184,25 +211,38 @@ def detect_flask_apps() -> list[str]:
             continue
 
         with py_file.open("r", encoding="utf-8") as f:
-            lines = f.readlines()
-            for line in lines:
+            for line in f:
                 app = None
-
-                # Kind of janky..
-                if "= Flask(" in line:
-                    app = line.split("= Flask(")[0].strip()
-                if "=Flask(" in line:
-                    app = line.split("=Flask(")[0].strip()
+                for pattern in patterns:
+                    if pattern in line:
+                        app = line.split(pattern.split("(")[0])[0].strip()
+                        app = app.rstrip("= ")
+                        break
 
                 if not app:
                     continue
 
                 package_path = py_file.relative_to(cwd)
                 package_module = ".".join(package_path.parts).replace(".py", "")
-                app_module = f"{package_module}.{app}"
-                matches.append(app_module)
+                matches.append(f"{package_module}.{app}")
 
     return matches
+
+
+def detect_flask_apps() -> list[str]:
+    """
+    Automatically try to discover Flask apps files,
+    return them as relative module paths.
+    """
+    return _detect_apps_by_pattern(["= Flask(", "=Flask("])
+
+
+def detect_asgi_apps() -> list[str]:
+    """
+    Automatically try to discover ASGI app files,
+    return them as relative module paths.
+    """
+    return _detect_apps_by_pattern(["= FastAPI(", "=FastAPI(", "= Starlette(", "=Starlette(", "= Quart(", "=Quart("])
 
 
 def get_venv_from_python_version() -> str:
@@ -210,28 +250,13 @@ def get_venv_from_python_version() -> str:
 
 
 def get_runtime_from_python_version() -> str:
-    """ """
-    if sys.version_info[0] < 3:
-        raise ValueError("Python 2.x is no longer supported.")
-    else:
-        if sys.version_info[1] <= 7:
-            raise ValueError("Python 3.7 and below are no longer supported.")
-        elif sys.version_info[1] == 8:
-            raise ValueError("Python 3.8 and below are no longer supported.")
-        elif sys.version_info[1] == 9:
-            return "python3.9"
-        elif sys.version_info[1] == 10:
-            return "python3.10"
-        elif sys.version_info[1] == 11:
-            return "python3.11"
-        elif sys.version_info[1] == 12:
-            return "python3.12"
-        elif sys.version_info[1] == 13:
-            return "python3.13"
-        elif sys.version_info[1] == 14:
-            return "python3.14"
-        else:
-            raise ValueError(f"Python f{'.'.join(str(v) for v in sys.version_info[:2])} is not yet supported.")
+    """Return the AWS Lambda runtime string for the current Python version."""
+    major, minor = sys.version_info[:2]
+    if major < 3 or minor < 9:
+        raise ValueError(f"Python {major}.{minor} is no longer supported.")
+    if minor > 14:
+        raise ValueError(f"Python {major}.{minor} is not yet supported.")
+    return f"python{major}.{minor}"
 
 
 ##
@@ -882,6 +907,32 @@ def is_valid_bucket_name(name: str) -> bool:
         return False
 
     return True
+
+
+def resolve_context_headers(
+    event_info: Dict[str, Any],
+    headers: Dict[str, Any],
+    context_header_mappings: Optional[Dict[str, str]],
+) -> None:
+    """
+    Resolve context header mappings from the API Gateway requestContext
+    and add them to the headers dict (mutates in place).
+    """
+    if not context_header_mappings:
+        return
+    request_context = event_info.get("requestContext")
+    if not request_context:
+        return
+    for key, value in context_header_mappings.items():
+        parts = value.split(".")
+        header_val: Any = request_context
+        for part in parts:
+            if part not in header_val:
+                header_val = None
+                break
+            header_val = header_val[part]
+        if header_val is not None:
+            headers[key] = header_val
 
 
 def merge_headers(event: Dict[str, Any]) -> Dict[str, str]:
