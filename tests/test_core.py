@@ -3791,6 +3791,39 @@ class TestZappa(unittest.TestCase):
         boto_mock.client().create_function_url_config.assert_not_called()
         boto_mock.client().update_function_url_config.assert_not_called()
 
+    @mock.patch("botocore.client")
+    def test_delete_lambda_function_url_unsupported_region(self, client):
+        """In regions where Lambda Function URLs are not supported,
+        list_function_url_configs raises ClientError. delete_lambda_function_url
+        should catch it and return early without attempting any deletes."""
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="eu-south-2",
+            load_credentials=True,
+        )
+        function_name = "abc"
+        function_arn = "arn:aws:lambda:eu-south-2:123456789:function:{}".format(function_name)
+
+        error_response = {
+            "Error": {
+                "Code": "AccessDeniedException",
+                "Message": "User is not authorized to perform: lambda:ListFunctionUrlConfigs",
+            }
+        }
+        zappa_core.lambda_client.list_function_url_configs.side_effect = botocore.exceptions.ClientError(
+            error_response, "ListFunctionUrlConfigs"
+        )
+
+        # Should not raise — returns early
+        zappa_core.delete_lambda_function_url(function_name=function_arn)
+
+        # Verify no delete or policy operations were attempted
+        boto_mock.client().delete_function_url_config.assert_not_called()
+        boto_mock.client().get_policy.assert_not_called()
+        boto_mock.client().remove_permission.assert_not_called()
+
     # Issue #1407: API Gateway v2 update returns 500 on status check
     # https://github.com/zappa/Zappa/issues/1407
     @mock.patch("botocore.client")
