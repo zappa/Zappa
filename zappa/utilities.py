@@ -920,9 +920,12 @@ def resolve_context_headers(
     """
     if not context_header_mappings:
         return
+    request_context = event_info.get("requestContext")
+    if not request_context:
+        return
     for key, value in context_header_mappings.items():
         parts = value.split(".")
-        header_val: Any = event_info["requestContext"]
+        header_val: Any = request_context
         for part in parts:
             if part not in header_val:
                 header_val = None

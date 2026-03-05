@@ -176,6 +176,13 @@ class LambdaHandler:
             # Determine app type: explicit setting, auto-detection, or default to WSGI
             self.app_type = getattr(self.settings, "APP_TYPE", None)
             if self.app_type == "asgi" and wsgi_app_function is not None:
+                if not self._is_asgi_app(wsgi_app_function):
+                    logger.warning(
+                        "app_type is 'asgi' but %s.%s does not look like an ASGI callable. "
+                        "Verify your app_function points to an async callable with signature (scope, receive, send).",
+                        self.settings.APP_MODULE,
+                        self.settings.APP_FUNCTION,
+                    )
                 self.asgi_app = wsgi_app_function
                 self.wsgi_app = None
             elif self.app_type is None and wsgi_app_function is not None and self._is_asgi_app(wsgi_app_function):
@@ -477,7 +484,7 @@ class LambdaHandler:
 
         handler, scope = self._run_asgi_handler(event, context, script_name, settings)
 
-        response_body = None
+        response_body = ""
         response_is_base_64_encoded = False
         if handler.response_body:
             response_body, response_is_base_64_encoded = self._process_asgi_response_body(
@@ -531,13 +538,15 @@ class LambdaHandler:
                 status_phrase = "Unknown"
             zappa_returndict["statusDescription"] = f"{status_code} {status_phrase}"
 
+        processed_body = ""
+        is_base64_encoded = False
         if handler.response_body:
             processed_body, is_base64_encoded = self._process_asgi_response_body(
                 bytes(handler.response_body), handler.response_headers, settings=settings
             )
-            zappa_returndict["body"] = processed_body
-            if is_base64_encoded:
-                zappa_returndict["isBase64Encoded"] = is_base64_encoded
+        zappa_returndict["body"] = processed_body
+        if is_base64_encoded:
+            zappa_returndict["isBase64Encoded"] = is_base64_encoded
 
         zappa_returndict["statusCode"] = handler.status_code
 
@@ -585,7 +594,7 @@ class LambdaHandler:
             wsgi_name = "HTTP_" + header_name.upper().replace("-", "_")
             environ[wsgi_name] = value.decode("latin-1")
 
-        response = _LogResponse(status_code, b"x" * content_length)
+        response = _LogResponse(status_code, b"" if content_length == 0 else bytes(content_length))
         common_log(environ, response, response_time=response_time)
 
     @staticmethod

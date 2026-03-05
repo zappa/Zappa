@@ -1857,7 +1857,7 @@ On each Lambda invocation, Zappa:
 
 1. Converts the Lambda event (API Gateway v1/v2, ALB, or Function URL) into an ASGI scope dict
 2. Wraps the request body in an ASGI `receive` callable
-3. Runs your async application using `asyncio.run()` via the `ASGIHandler` bridge
+3. Runs your async application inside an `asyncio` event loop via the `ASGIHandler` bridge
 4. Collects the response status, headers, and body from ASGI `send()` calls
 5. Formats the response for API Gateway / ALB / Function URL
 

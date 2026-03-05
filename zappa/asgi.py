@@ -55,7 +55,11 @@ def create_asgi_scope(
 
     # Determine server
     host = headers.get("Host", headers.get("host", server_name))
-    port = int(headers.get("X-Forwarded-Port", headers.get("x-forwarded-port", "443")))
+    port_header = headers.get("X-Forwarded-Port", headers.get("x-forwarded-port", "443"))
+    try:
+        port = int(port_header)
+    except (TypeError, ValueError):
+        port = 443
 
     scope: Dict[str, Any] = {
         "type": "http",
@@ -115,10 +119,10 @@ class ASGIHandler:
                 "body": self.body,
                 "more_body": False,
             }
-        # After the request is sent, wait for disconnect (which won't come in Lambda)
-        # This blocks the coroutine if the app calls receive() again
-        await asyncio.get_event_loop().create_future()
-        return {"type": "http.disconnect"}  # pragma: no cover
+        # After the request is sent, signal disconnect immediately.
+        # In Lambda there is no persistent connection, so blocking here
+        # would hang the invocation until timeout.
+        return {"type": "http.disconnect"}
 
     async def send(self, message: Dict[str, Any]) -> None:
         if message["type"] == "http.response.start":
