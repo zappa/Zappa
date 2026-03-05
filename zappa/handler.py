@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import collections
 import datetime
@@ -9,9 +10,9 @@ import os
 import sys
 import tarfile
 import traceback
-from builtins import str
+from http import HTTPStatus
 from types import ModuleType
-from typing import Tuple
+from typing import Any, Dict, List, Tuple
 
 import boto3
 from werkzeug.wrappers import Response
@@ -19,12 +20,24 @@ from werkzeug.wrappers import Response
 # This file may be copied into a project's root,
 # so handle both scenarios.
 try:
+    from zappa.asgi import ASGIHandler, create_asgi_request_body, create_asgi_scope
     from zappa.middleware import ZappaWSGIMiddleware
-    from zappa.utilities import DEFAULT_TEXT_MIMETYPES, merge_headers, parse_s3_url
+    from zappa.utilities import (
+        DEFAULT_TEXT_MIMETYPES,
+        import_and_get_function,
+        merge_headers,
+        parse_s3_url,
+    )
     from zappa.wsgi import common_log, create_wsgi_request
 except ImportError:  # pragma: no cover
+    from .asgi import ASGIHandler, create_asgi_request_body, create_asgi_scope
     from .middleware import ZappaWSGIMiddleware
-    from .utilities import DEFAULT_TEXT_MIMETYPES, merge_headers, parse_s3_url
+    from .utilities import (
+        DEFAULT_TEXT_MIMETYPES,
+        import_and_get_function,
+        merge_headers,
+        parse_s3_url,
+    )
     from .wsgi import common_log, create_wsgi_request
 
 
@@ -32,6 +45,9 @@ except ImportError:  # pragma: no cover
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Lightweight response object for common_log (avoids class-per-request overhead)
+_LogResponse = collections.namedtuple("_LogResponse", ["status_code", "content"])
 
 
 class LambdaHandler:
@@ -49,6 +65,8 @@ class LambdaHandler:
     # Application
     app_module = None
     wsgi_app = None
+    asgi_app = None
+    app_type = None
     trailing_slash = False
 
     def __new__(cls, settings_name="zappa_settings", session=None):
@@ -94,8 +112,8 @@ class LambdaHandler:
             # Set any locally defined env vars
             # Environment variable keys can't be Unicode
             # https://github.com/Miserlou/Zappa/issues/604
-            for key in self.settings.ENVIRONMENT_VARIABLES.keys():
-                os.environ[str(key)] = self.settings.ENVIRONMENT_VARIABLES[key]
+            for key in self.settings.ENVIRONMENT_VARIABLES:
+                os.environ[key] = self.settings.ENVIRONMENT_VARIABLES[key]
 
             # Pulling from S3 if given a zip path
             project_archive_path = getattr(self.settings, "ARCHIVE_PATH", None)
@@ -155,7 +173,28 @@ class LambdaHandler:
                 wsgi_app_function = get_django_wsgi(self.settings.DJANGO_SETTINGS)
                 self.trailing_slash = True
 
-            self.wsgi_app = ZappaWSGIMiddleware(wsgi_app_function)
+            # Determine app type: explicit setting, auto-detection, or default to WSGI
+            self.app_type = getattr(self.settings, "APP_TYPE", None)
+            if self.app_type == "asgi" and wsgi_app_function is not None:
+                if not self._is_asgi_app(wsgi_app_function):
+                    logger.warning(
+                        "app_type is 'asgi' but %s.%s does not look like an ASGI callable. "
+                        "Verify your app_function points to an async callable with signature (scope, receive, send).",
+                        self.settings.APP_MODULE,
+                        self.settings.APP_FUNCTION,
+                    )
+                self.asgi_app = wsgi_app_function
+                self.wsgi_app = None
+            elif self.app_type is None and wsgi_app_function is not None and self._is_asgi_app(wsgi_app_function):
+                self.app_type = "asgi"
+                self.asgi_app = wsgi_app_function
+                self.wsgi_app = None
+            else:
+                self.wsgi_app = ZappaWSGIMiddleware(wsgi_app_function)
+
+    def _get_boto_session(self) -> boto3.Session:
+        """Return the configured boto3 session, or create a default one."""
+        return self.session if self.session else boto3.Session()
 
     def load_remote_project_archive(self, project_zip_path):
         """
@@ -164,10 +203,7 @@ class LambdaHandler:
         project_folder = "/tmp/{0!s}".format(self.settings.PROJECT_NAME)
         if not os.path.isdir(project_folder):
             # The project folder doesn't exist in this cold lambda, get it from S3
-            if not self.session:
-                boto_session = boto3.Session()
-            else:
-                boto_session = self.session
+            boto_session = self._get_boto_session()
 
             # Download zip file from S3
             remote_bucket, remote_file = parse_s3_url(project_zip_path)
@@ -192,10 +228,7 @@ class LambdaHandler:
         sensitiZve or stage-specific configuration variables in s3 instead of
         version control.
         """
-        if not self.session:
-            boto_session = boto3.Session()
-        else:
-            boto_session = self.session
+        boto_session = self._get_boto_session()
 
         s3 = boto_session.resource("s3")
         try:
@@ -236,10 +269,7 @@ class LambdaHandler:
         Given a modular path to a function, import that module
         and return the function.
         """
-        module, function = whole_function.rsplit(".", 1)
-        app_module = importlib.import_module(module)
-        app_function = getattr(app_module, function)
-        return app_function
+        return import_and_get_function(whole_function)
 
     @classmethod
     def lambda_handler(cls, event, context):  # pragma: no cover
@@ -270,6 +300,32 @@ class LambdaHandler:
                 logger.error(msg="Failed to process exception via custom handler.")
                 print(cex)
         return exception_processed
+
+    def _handle_request_exception(self, event: Dict[str, Any], context: Any, exception: Exception) -> Dict[str, Any]:
+        """Handle an uncaught exception during request processing, returning a 500 response."""
+        print(exception)
+        exc_info = sys.exc_info()
+        message = (
+            "An uncaught exception happened while servicing this request. "
+            "You can investigate this with the `zappa tail` command."
+        )
+
+        settings = self.settings
+        if settings is not None:
+            self._process_exception(
+                exception_handler=settings.EXCEPTION_HANDLER,
+                event=event,
+                context=context,
+                exception=exception,
+            )
+
+        content: Dict[str, Any] = collections.OrderedDict()
+        content["statusCode"] = 500
+        body: Dict[str, Any] = {"message": message}
+        if settings is not None and settings.DEBUG:
+            body["traceback"] = traceback.format_exception(*exc_info)
+        content["body"] = json.dumps(str(body), sort_keys=True, indent=4)
+        return content
 
     @staticmethod
     def _process_response_body(response: Response, settings: ModuleType) -> Tuple[str, bool]:
@@ -313,17 +369,241 @@ class LambdaHandler:
         return body, encode_body_as_base64
 
     @staticmethod
+    def _is_asgi_app(app: Any) -> bool:
+        """
+        Detect whether an application object is an ASGI app.
+        Checks for async callable with 3 parameters (scope, receive, send).
+        """
+        callable_obj = app
+        if not callable(app):
+            return False
+        # If it's a class instance, check __call__
+        if hasattr(app, "__call__") and not inspect.isfunction(app) and not inspect.iscoroutinefunction(app):
+            callable_obj = app.__call__
+
+        if asyncio.iscoroutinefunction(callable_obj):
+            try:
+                sig = inspect.signature(callable_obj)
+                # ASGI apps take 3 params: scope, receive, send
+                # Exclude 'self' for bound methods
+                params = [p for p in sig.parameters.values() if p.name != "self" and p.default is inspect.Parameter.empty]
+                return len(params) == 3
+            except (ValueError, TypeError):
+                pass
+        return False
+
+    @staticmethod
+    def _process_asgi_response_body(
+        response_body: bytes,
+        response_headers: List[Tuple[bytes, bytes]],
+        settings: ModuleType,
+    ) -> Tuple[str, bool]:
+        """
+        Perform ASGI response body encoding/decoding for Lambda.
+        Mirrors _process_response_body but works with raw bytes and ASGI header tuples.
+        """
+        encode_body_as_base64 = False
+        if settings.BINARY_SUPPORT:
+            handle_as_text_mimetypes = DEFAULT_TEXT_MIMETYPES
+            additional_text_mimetypes = getattr(settings, "ADDITIONAL_TEXT_MIMETYPES", None)
+            if additional_text_mimetypes:
+                handle_as_text_mimetypes += tuple(additional_text_mimetypes)
+
+            # Check Content-Encoding header
+            content_encoding = ""
+            content_type = ""
+            for name, value in response_headers:
+                header_name = name.decode("latin-1").lower()
+                if header_name == "content-encoding":
+                    content_encoding = value.decode("latin-1")
+                elif header_name == "content-type":
+                    content_type = value.decode("latin-1")
+
+            if content_encoding:
+                encode_body_as_base64 = True
+            else:
+                # Extract mimetype (without parameters)
+                mimetype = content_type.split(";")[0].strip().lower() if content_type else ""
+                if mimetype and not mimetype.startswith(handle_as_text_mimetypes):
+                    encode_body_as_base64 = True
+
+        if encode_body_as_base64:
+            body = base64.b64encode(response_body).decode("utf-8")
+        else:
+            body = response_body.decode("utf-8")
+
+        return body, encode_body_as_base64
+
+    def _run_asgi_handler(
+        self, event: Dict[str, Any], context: Any, script_name: str, settings: ModuleType
+    ) -> Tuple[ASGIHandler, Dict[str, Any]]:
+        """Create ASGI scope, run the ASGI handler, and return (handler, scope)."""
+        base_path = getattr(settings, "BASE_PATH", None)
+        scope = create_asgi_scope(
+            event,
+            script_name=script_name,
+            base_path=base_path,
+            trailing_slash=self.trailing_slash,
+            binary_support=settings.BINARY_SUPPORT,
+            context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
+        )
+        scope["scheme"] = "https"
+        scope["lambda.context"] = context
+        scope["lambda.event"] = event
+
+        body = create_asgi_request_body(event, binary_support=settings.BINARY_SUPPORT)
+
+        asgi_handler = ASGIHandler(self.asgi_app, scope, body)
+        asgi_handler.run()
+        return asgi_handler, scope
+
+    def _create_lambda_wsgi_environ(
+        self, event: Dict[str, Any], context: Any, script_name: str, settings: ModuleType
+    ) -> Dict[str, Any]:
+        """Create and enrich a WSGI environ dict for Lambda execution."""
+        base_path = getattr(settings, "BASE_PATH", None)
+        environ = create_wsgi_request(
+            event,
+            script_name=script_name,
+            base_path=base_path,
+            trailing_slash=self.trailing_slash,
+            binary_support=settings.BINARY_SUPPORT,
+            context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
+        )
+        environ["HTTPS"] = "on"
+        environ["wsgi.url_scheme"] = "https"
+        environ["lambda.context"] = context
+        environ["lambda.event"] = event
+        return environ
+
+    def _handle_asgi_request_v2(
+        self, event: Dict[str, Any], context: Any, script_name: str, settings: ModuleType
+    ) -> Dict[str, Any]:
+        """Handle a v2 (HTTP API / Function URL) request via ASGI."""
+        time_start = datetime.datetime.now()
+
+        handler, scope = self._run_asgi_handler(event, context, script_name, settings)
+
+        response_body = ""
+        response_is_base_64_encoded = False
+        if handler.response_body:
+            response_body, response_is_base_64_encoded = self._process_asgi_response_body(
+                bytes(handler.response_body), handler.response_headers, settings=settings
+            )
+
+        cookies: List[str] = []
+        response_headers: Dict[str, str] = {}
+        for name, value in handler.response_headers:
+            header_name = name.decode("latin-1")
+            header_value = value.decode("latin-1")
+            if header_name.lower() == "set-cookie":
+                cookies.append(header_value)
+            else:
+                if header_name in response_headers:
+                    response_headers[header_name] = f"{response_headers[header_name]},{header_value}"
+                else:
+                    response_headers[header_name] = header_value
+
+        # Log the request
+        time_end = datetime.datetime.now()
+        delta = time_end - time_start
+        response_time_us = int(delta.total_seconds() * 1_000_000)
+        self._log_asgi_request(scope, handler.status_code, len(handler.response_body), response_time_us)
+
+        return {
+            "cookies": cookies,
+            "isBase64Encoded": response_is_base_64_encoded,
+            "statusCode": handler.status_code,
+            "headers": response_headers,
+            "body": response_body,
+        }
+
+    def _handle_asgi_request_v1(
+        self, event: Dict[str, Any], context: Any, script_name: str, is_elb_context: bool, settings: ModuleType
+    ) -> Dict[str, Any]:
+        """Handle a v1 (REST API / ALB) request via ASGI."""
+        time_start = datetime.datetime.now()
+
+        handler, scope = self._run_asgi_handler(event, context, script_name, settings)
+
+        zappa_returndict: Dict[str, Any] = {}
+
+        if is_elb_context:
+            zappa_returndict["isBase64Encoded"] = False
+            status_code = handler.status_code
+            # Build status description like "200 OK"
+            try:
+                status_phrase = HTTPStatus(status_code).phrase
+            except ValueError:
+                status_phrase = "Unknown"
+            zappa_returndict["statusDescription"] = f"{status_code} {status_phrase}"
+
+        processed_body = ""
+        is_base64_encoded = False
+        if handler.response_body:
+            processed_body, is_base64_encoded = self._process_asgi_response_body(
+                bytes(handler.response_body), handler.response_headers, settings=settings
+            )
+        zappa_returndict["body"] = processed_body
+        if is_base64_encoded:
+            zappa_returndict["isBase64Encoded"] = is_base64_encoded
+
+        zappa_returndict["statusCode"] = handler.status_code
+
+        # Build response headers based on what the event contained
+        if "headers" in event:
+            zappa_returndict["headers"] = {}
+            for name, value in handler.response_headers:
+                header_name = name.decode("latin-1")
+                header_value = value.decode("latin-1")
+                zappa_returndict["headers"][header_name] = header_value
+
+        if "multiValueHeaders" in event:
+            zappa_returndict["multiValueHeaders"] = {}
+            # Group header values by name
+            multi_headers: Dict[str, List[str]] = {}
+            for name, value in handler.response_headers:
+                header_name = name.decode("latin-1")
+                header_value = value.decode("latin-1")
+                multi_headers.setdefault(header_name, []).append(header_value)
+            zappa_returndict["multiValueHeaders"] = multi_headers
+
+        # Log the request
+        time_end = datetime.datetime.now()
+        delta = time_end - time_start
+        response_time_us = int(delta.total_seconds() * 1_000_000)
+        self._log_asgi_request(scope, handler.status_code, len(handler.response_body), response_time_us)
+
+        return zappa_returndict
+
+    def _log_asgi_request(self, scope: Dict[str, Any], status_code: int, content_length: int, response_time: int) -> None:
+        """Log an ASGI request in Common Log Format by building a minimal environ dict."""
+        headers = scope.get("headers", [])
+
+        # Build a minimal WSGI-like environ for the common_log function
+        environ: Dict[str, str] = {
+            "REQUEST_METHOD": scope.get("method", "GET"),
+            "PATH_INFO": scope.get("path", "/"),
+            "QUERY_STRING": scope.get("query_string", b"").decode("latin-1"),
+            "SERVER_PROTOCOL": f"HTTP/{scope.get('http_version', '1.1')}",
+            "REMOTE_ADDR": scope.get("client", ("127.0.0.1", 0))[0],
+        }
+
+        for name, value in headers:
+            header_name = name.decode("latin-1")
+            wsgi_name = "HTTP_" + header_name.upper().replace("-", "_")
+            environ[wsgi_name] = value.decode("latin-1")
+
+        response = _LogResponse(status_code, b"" if content_length == 0 else bytes(content_length))
+        common_log(environ, response, response_time=response_time)
+
+    @staticmethod
     def run_function(app_function, event, context):
         """
         Given a function and event context,
         detect signature and execute, returning any result.
         """
-        # getargspec does not support python 3 method with type hints
-        # Related issue: https://github.com/Miserlou/Zappa/issues/1452
-        if hasattr(inspect, "getfullargspec"):  # Python 3
-            args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(app_function)
-        else:  # Python 2
-            args, varargs, keywords, defaults = inspect.getargspec(app_function)
+        args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(app_function)
         num_args = len(args)
         if num_args == 0:
             result = app_function(event, context) if varargs else app_function()
@@ -382,8 +662,8 @@ class LambdaHandler:
         """
         Get the associated function to execute for a cognito trigger
         """
-        print(
-            "get_function_for_cognito_trigger",
+        logger.debug(
+            "get_function_for_cognito_trigger mapping=%s trigger=%s result=%s",
             self.settings.COGNITO_TRIGGER_MAPPING,
             trigger,
             self.settings.COGNITO_TRIGGER_MAPPING.get(trigger),
@@ -405,8 +685,8 @@ class LambdaHandler:
         # Set any API Gateway defined Stage Variables
         # as env vars
         if event.get("stageVariables"):
-            for key in event["stageVariables"].keys():
-                os.environ[str(key)] = event["stageVariables"][key]
+            for key in event["stageVariables"]:
+                os.environ[key] = event["stageVariables"][key]
 
         # This is the result of a keep alive, recertify
         # or scheduled event.
@@ -536,8 +816,6 @@ class LambdaHandler:
         # This is an HTTP-protocol API Gateway event or Lambda url event with payload format version 2.0
         elif "version" in event and event["version"] == "2.0":
             try:
-                time_start = datetime.datetime.now()
-
                 # Determine if this is API Gateway v2 (has stage) or Function URL (no stage)
                 # API Gateway v2 includes stage in requestContext
                 request_context = event.get("requestContext", {})
@@ -553,21 +831,13 @@ class LambdaHandler:
                     # Function URL - no stage
                     script_name = ""
 
-                base_path = getattr(settings, "BASE_PATH", None)
-                environ = create_wsgi_request(
-                    event,
-                    script_name=script_name,
-                    base_path=base_path,
-                    trailing_slash=self.trailing_slash,
-                    binary_support=settings.BINARY_SUPPORT,
-                    context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
-                )
+                # ASGI path
+                if self.app_type == "asgi":
+                    return self._handle_asgi_request_v2(event, context, script_name, settings)
 
-                # We are always on https on Lambda, so tell our wsgi app that.
-                environ["HTTPS"] = "on"
-                environ["wsgi.url_scheme"] = "https"
-                environ["lambda.context"] = context
-                environ["lambda.event"] = event
+                time_start = datetime.datetime.now()
+
+                environ = self._create_lambda_wsgi_environ(event, context, script_name, settings)
 
                 # Execute the application
                 with Response.from_app(self.wsgi_app, environ) as response:
@@ -594,9 +864,9 @@ class LambdaHandler:
                     # and log it in the Common Log format.
                     time_end = datetime.datetime.now()
                     delta = time_end - time_start
-                    response_time_ms = delta.total_seconds() * 1000
+                    response_time_us = int(delta.total_seconds() * 1_000_000)
                     response.content = response.data
-                    common_log(environ, response, response_time=response_time_ms)
+                    common_log(environ, response, response_time=response_time_us)
 
                     return {
                         "cookies": cookies,
@@ -606,38 +876,7 @@ class LambdaHandler:
                         "body": response_body,
                     }
             except Exception as e:
-                # Print statements are visible in the logs either way
-                print(e)
-                exc_info = sys.exc_info()
-                message = (
-                    "An uncaught exception happened while servicing this request. "
-                    "You can investigate this with the `zappa tail` command."
-                )
-
-                # If we didn't even build an app_module, just raise.
-                if not settings.DJANGO_SETTINGS:
-                    try:
-                        self.app_module
-                    except NameError as ne:
-                        message = "Failed to import module: {}".format(ne.message)
-
-                # Call exception handler for unhandled exceptions
-                exception_handler = self.settings.EXCEPTION_HANDLER
-                self._process_exception(
-                    exception_handler=exception_handler,
-                    event=event,
-                    context=context,
-                    exception=e,
-                )
-
-                # Return this unspecified exception as a 500, using template that API Gateway expects.
-                content = collections.OrderedDict()
-                content["statusCode"] = 500
-                body = {"message": message}
-                if settings.DEBUG:  # only include traceback if debug is on.
-                    body["traceback"] = traceback.format_exception(*exc_info)  # traceback as a list for readability.
-                content["body"] = json.dumps(str(body), sort_keys=True, indent=4)
-                return content
+                return self._handle_request_exception(event, context, e)
 
         # Normal web app flow
         try:
@@ -689,23 +928,11 @@ class LambdaHandler:
                             # API stage
                             script_name = f"/{settings.API_STAGE}"
 
-                base_path = getattr(settings, "BASE_PATH", None)
+                # ASGI path
+                if self.app_type == "asgi":
+                    return self._handle_asgi_request_v1(event, context, script_name, is_elb_context, settings)
 
-                # Create the environment for WSGI and handle the request
-                environ = create_wsgi_request(
-                    event,
-                    script_name=script_name,
-                    base_path=base_path,
-                    trailing_slash=self.trailing_slash,
-                    binary_support=settings.BINARY_SUPPORT,
-                    context_header_mappings=settings.CONTEXT_HEADER_MAPPINGS,
-                )
-
-                # We are always on https on Lambda, so tell our wsgi app that.
-                environ["HTTPS"] = "on"
-                environ["wsgi.url_scheme"] = "https"
-                environ["lambda.context"] = context
-                environ["lambda.event"] = event
+                environ = self._create_lambda_wsgi_environ(event, context, script_name, settings)
 
                 # Execute the application
                 with Response.from_app(self.wsgi_app, environ) as response:
@@ -739,44 +966,13 @@ class LambdaHandler:
                     # and log it in the Common Log format.
                     time_end = datetime.datetime.now()
                     delta = time_end - time_start
-                    response_time_us = delta.total_seconds() * 1_000_000  # convert to microseconds
+                    response_time_us = int(delta.total_seconds() * 1_000_000)  # convert to microseconds
                     response.content = response.data
                     common_log(environ, response, response_time=response_time_us)
 
                     return zappa_returndict
         except Exception as e:  # pragma: no cover
-            # Print statements are visible in the logs either way
-            print(e)
-            exc_info = sys.exc_info()
-            message = (
-                "An uncaught exception happened while servicing this request. "
-                "You can investigate this with the `zappa tail` command."
-            )
-
-            # If we didn't even build an app_module, just raise.
-            if not settings.DJANGO_SETTINGS:
-                try:
-                    self.app_module
-                except NameError as ne:
-                    message = "Failed to import module: {}".format(ne.message)
-
-            # Call exception handler for unhandled exceptions
-            exception_handler = self.settings.EXCEPTION_HANDLER
-            self._process_exception(
-                exception_handler=exception_handler,
-                event=event,
-                context=context,
-                exception=e,
-            )
-
-            # Return this unspecified exception as a 500, using template that API Gateway expects.
-            content = collections.OrderedDict()
-            content["statusCode"] = 500
-            body = {"message": message}
-            if settings.DEBUG:  # only include traceback if debug is on.
-                body["traceback"] = traceback.format_exception(*exc_info)  # traceback as a list for readability.
-            content["body"] = json.dumps(str(body), sort_keys=True, indent=4)
-            return content
+            return self._handle_request_exception(event, context, e)
 
 
 def lambda_handler(event, context):  # pragma: no cover

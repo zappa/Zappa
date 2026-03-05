@@ -78,6 +78,9 @@ test-general:
 test-utilities:
 	pytest tests/test_utilities.py --cov=zappa --durations=0
 
+test-asgi:
+	pytest tests/test_asgi.py --cov=zappa --durations=0
+
 coverage-report:
 	coverage report --include="*/zappa*"
 
@@ -91,6 +94,7 @@ tests:
 		tests/test_async.py \
 		tests/test_core.py \
 		tests/test_utilities.py \
+		tests/test_asgi.py \
 		--cov=zappa \
 		--cov-report=xml \
 		--durations=0

@@ -113,8 +113,8 @@ def get_cert_and_update_domain(
 
 
 def create_domain_key():
-    devnull = open(os.devnull, "wb")
-    out = subprocess.check_output(["openssl", "genrsa", "2048"], stderr=devnull)
+    with open(os.devnull, "wb") as devnull:
+        out = subprocess.check_output(["openssl", "genrsa", "2048"], stderr=devnull)
     with open(os.path.join(gettempdir(), "domain.key"), "wb") as f:
         f.write(out)
 
@@ -132,14 +132,15 @@ def create_domain_csr(domain):
         subj,
     ]
 
-    devnull = open(os.devnull, "wb")
-    out = subprocess.check_output(cmd, stderr=devnull)
+    with open(os.devnull, "wb") as devnull:
+        out = subprocess.check_output(cmd, stderr=devnull)
     with open(os.path.join(gettempdir(), "domain.csr"), "wb") as f:
         f.write(out)
 
 
 def create_chained_certificate():
-    signed_crt = open(os.path.join(gettempdir(), "signed.crt"), "rb").read()
+    with open(os.path.join(gettempdir(), "signed.crt"), "rb") as f:
+        signed_crt = f.read()
 
     cross_cert_url = "https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem"
     cert = requests.get(cross_cert_url)
@@ -162,8 +163,8 @@ def parse_account_key():
         "-noout",
         "-text",
     ]
-    devnull = open(os.devnull, "wb")
-    return subprocess.check_output(cmd, stderr=devnull)
+    with open(os.devnull, "wb") as devnull:
+        return subprocess.check_output(cmd, stderr=devnull)
 
 
 def parse_csr():
@@ -349,8 +350,8 @@ def sign_certificate():
         "-outform",
         "DER",
     ]
-    devnull = open(os.devnull, "wb")
-    csr_der = subprocess.check_output(cmd, stderr=devnull)
+    with open(os.devnull, "wb") as devnull:
+        csr_der = subprocess.check_output(cmd, stderr=devnull)
     code, result = _send_signed_request(
         DEFAULT_CA + "/acme/new-cert",
         {
@@ -372,9 +373,8 @@ def encode_certificate(result):
     cert_body = """-----BEGIN CERTIFICATE-----\n{0}\n-----END CERTIFICATE-----\n""".format(
         "\n".join(textwrap.wrap(base64.b64encode(result).decode("utf8"), 64))
     )
-    signed_crt = open("{}/signed.crt".format(gettempdir()), "w")
-    signed_crt.write(cert_body)
-    signed_crt.close()
+    with open("{}/signed.crt".format(gettempdir()), "w") as signed_crt:
+        signed_crt.write(cert_body)
 
     return True
 
