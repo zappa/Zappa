@@ -40,13 +40,11 @@ def create_asgi_scope(
     if trailing_slash and not path.endswith("/"):
         path = path + "/"
 
-    # Build ASGI headers as list of [name, value] byte pairs
-    asgi_headers: List[Tuple[bytes, bytes]] = []
-    for key, value in headers.items():
-        asgi_headers.append((key.lower().encode("latin-1"), str(value).encode("latin-1")))
+    # Normalize header keys to lowercase for consistent lookups
+    lower_headers = {k.lower(): v for k, v in headers.items()}
 
     # Determine client from X-Forwarded-For
-    x_forwarded_for = headers.get("X-Forwarded-For", headers.get("x-forwarded-for", ""))
+    x_forwarded_for = lower_headers.get("x-forwarded-for", "")
     if "," in x_forwarded_for:
         addresses = [addr.strip() for addr in x_forwarded_for.split(",")]
         remote_addr = addresses[-2]
@@ -54,12 +52,17 @@ def create_asgi_scope(
         remote_addr = x_forwarded_for or "127.0.0.1"
 
     # Determine server
-    host = headers.get("Host", headers.get("host", server_name))
-    port_header = headers.get("X-Forwarded-Port", headers.get("x-forwarded-port", "443"))
+    host = lower_headers.get("host", server_name)
+    port_header = lower_headers.get("x-forwarded-port", "443")
     try:
         port = int(port_header)
     except (TypeError, ValueError):
         port = 443
+
+    # Build ASGI headers as list of [name, value] byte pairs
+    asgi_headers: List[Tuple[bytes, bytes]] = [
+        (k.encode("latin-1"), str(v).encode("latin-1")) for k, v in lower_headers.items()
+    ]
 
     scope: Dict[str, Any] = {
         "type": "http",
