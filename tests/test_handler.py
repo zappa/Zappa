@@ -731,7 +731,7 @@ class TestZappa(unittest.TestCase):
             "https://api.example.com/return/request/url",
         )
 
-    def test_v2_custom_domain_redirect_URL_does_not_duplicate_stage(self):
+    def test_v2_custom_domain_redirect_url_does_not_duplicate_stage(self):
         """
         Verifies WSGI environ values when using a custom domain with API Gateway V2.
 
