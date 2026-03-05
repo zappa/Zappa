@@ -2724,8 +2724,8 @@ class ZappaCLI:
         default_function_url_config.update(self.stage_config.get("function_url_config", {}))
         self.function_url_config = default_function_url_config
 
-        # WebSocket support - auto-detected from zappa.websocket imports
-        self.use_websocket = self._detect_websocket_usage()
+        # WebSocket support - explicit setting or auto-detected from zappa.websocket imports
+        self.use_websocket = self.stage_config.get("websocket_handler_module") or self._detect_websocket_usage()
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
@@ -2990,6 +2990,9 @@ class ZappaCLI:
 
         if self.app_type:
             settings_s += "APP_TYPE='{0!s}'\n".format(self.app_type)
+
+        if self.use_websocket:
+            settings_s += "WEBSOCKET_HANDLER_MODULE='{0!s}'\n".format(self.use_websocket)
 
         if self.exception_handler:
             settings_s += "EXCEPTION_HANDLER='{0!s}'\n".format(self.exception_handler)
@@ -3397,7 +3400,13 @@ class ZappaCLI:
 
     @staticmethod
     def _detect_websocket_usage():
-        """Walk the project directory looking for zappa.websocket imports."""
+        """Walk the project directory looking for zappa.websocket imports.
+
+        Returns the dotted module path of the first file found (e.g.
+        ``"ws_handlers"`` or ``"mypackage.ws"``), or ``None`` if no
+        WebSocket usage is detected.  The return value is truthy/falsy
+        so existing ``if self.use_websocket:`` checks still work.
+        """
         import ast
 
         skip_dirs = {".", "__pycache__", "node_modules", ".git", ".tox", ".eggs", "venv", "env", ".venv"}
@@ -3420,13 +3429,24 @@ class ZappaCLI:
                 except SyntaxError:
                     continue
                 for node in ast.walk(tree):
+                    has_import = False
                     if isinstance(node, ast.ImportFrom) and node.module and "zappa.websocket" in node.module:
-                        return True
-                    if isinstance(node, ast.Import):
+                        has_import = True
+                    elif isinstance(node, ast.Import):
                         for alias in node.names:
                             if alias.name and "zappa.websocket" in alias.name:
-                                return True
-        return False
+                                has_import = True
+                                break
+                    if has_import:
+                        # Convert file path to dotted module name
+                        # "./ws_handlers.py" -> "ws_handlers"
+                        # "./pkg/ws.py" -> "pkg.ws"
+                        module_path = os.path.normpath(fpath)
+                        if module_path.startswith("." + os.sep):
+                            module_path = module_path[2:]
+                        module_path = module_path[: -len(".py")]
+                        return module_path.replace(os.sep, ".")
+        return None
 
     def check_venv(self):
         """Ensure we're inside a virtualenv."""
