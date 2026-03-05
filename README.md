@@ -85,6 +85,14 @@
     - [Notes](#notes)
   - [Unique Package ID](#unique-package-id)
   - [Application Load Balancer Event Source](#application-load-balancer-event-source)
+  - [ASGI Support](#asgi-support)
+    - [Setting Up a FastAPI App](#setting-up-a-fastapi-app)
+    - [The app_type Setting](#the-app_type-setting)
+    - [Starlette Example](#starlette-example)
+    - [Quart Example](#quart-example)
+    - [Binary Support with ASGI](#binary-support-with-asgi)
+    - [ASGI Internals](#asgi-internals)
+    - [ASGI Limitations](#asgi-limitations)
   - [WebSocket Support](#websocket-support)
     - [Using Decorators](#using-decorators)
     - [Using a Base Class](#using-a-base-class)
@@ -115,9 +123,9 @@
   <i>In a hurry? Click to see <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/Miserlou/Talks/master/serverless-sf/big.quickstart.html">(now slightly out-dated) slides from Serverless SF</a>!</i>
 </p>
 
-**Zappa** makes it super easy to build and deploy server-less, event-driven Python applications (including, but not limited to, WSGI web apps) on AWS Lambda + API Gateway. Think of it as "serverless" web hosting for your Python apps. That means **infinite scaling**, **zero downtime**, **zero maintenance** - and at a fraction of the cost of your current deployments!
+**Zappa** makes it super easy to build and deploy server-less, event-driven Python applications (including, but not limited to, WSGI and ASGI web apps) on AWS Lambda + API Gateway. Think of it as "serverless" web hosting for your Python apps. That means **infinite scaling**, **zero downtime**, **zero maintenance** - and at a fraction of the cost of your current deployments!
 
-If you've got a Python web app (including Django and Flask apps), it's as easy as:
+If you've got a Python web app (including Django, Flask, FastAPI, and Starlette apps), it's as easy as:
 
 ```
 $ pip install zappa
@@ -135,7 +143,7 @@ With a traditional HTTP server, the server is online 24/7, processing requests o
 
 Better still, with Zappa you only pay for the milliseconds of server time that you use, so it's many **orders of magnitude cheaper** than VPS/PaaS hosts like Linode or Heroku - and in most cases, it's completely free. Plus, there's no need to worry about load balancing or keeping servers online ever again.
 
-It's great for deploying serverless microservices with frameworks like Flask and Bottle, and for hosting larger web apps and CMSes with Django. Or, you can use any WSGI-compatible app you like! You **probably don't need to change your existing applications** to use it, and you're not locked into using it.
+It's great for deploying serverless microservices with frameworks like Flask and Bottle, and for hosting larger web apps and CMSes with Django. Zappa also supports ASGI frameworks like **FastAPI**, **Starlette**, and **Quart** — deploy async Python apps to Lambda with the same ease. You can use any WSGI or ASGI-compatible app you like! You **probably don't need to change your existing applications** to use it, and you're not locked into using it.
 
 Zappa also lets you build hybrid event-driven applications that can scale to **trillions of events** a year with **no additional effort** on your part! You also get **free SSL certificates**, **global app deployment**, **API access management**, **automatic security policy generation**, **precompiled C-extensions**, **auto keep-warms**, **oversized Lambda packages**, and **many other exclusive features**!
 
@@ -167,7 +175,7 @@ Next, you'll need to define your local and server-side settings.
 
     $ zappa init
 
-This will automatically detect your application type (Flask/Django - Pyramid users [see here](https://github.com/Miserlou/Zappa/issues/278#issuecomment-241917956)) and help you define your deployment configuration settings. Once you finish initialization, you'll have a file named _zappa_settings.json_ in your project directory defining your basic deployment settings. It will probably look something like this for most WSGI apps:
+This will automatically detect your application type (Flask/Django/FastAPI/Starlette - Pyramid users [see here](https://github.com/Miserlou/Zappa/issues/278#issuecomment-241917956)) and help you define your deployment configuration settings. Once you finish initialization, you'll have a file named _zappa_settings.json_ in your project directory defining your basic deployment settings. It will probably look something like this for most WSGI apps:
 
 ```javascript
 {
@@ -197,6 +205,20 @@ or for Django:
     }
 }
 ```
+
+or for ASGI apps (FastAPI, Starlette, Quart):
+
+```javascript
+{
+    "dev": {
+        "s3_bucket": "lambda",
+        "app_function": "your_module.app",
+        "app_type": "asgi"
+    }
+}
+```
+
+See the [ASGI Support](#asgi-support) section for details.
 
 _Psst: If you're deploying a Django application with Zappa for the first time, you might want to read Edgar Roman's [Django Zappa Guide](https://edgarroman.github.io/zappa-django-guide/)._
 
@@ -1001,6 +1023,7 @@ to change Zappa's behavior. Use these at your own risk!
         },
         "api_key_required": false, // enable securing API Gateway endpoints with x-api-key header (default False)
         "api_key": "your_api_key_id", // optional, use an existing API key. The option "api_key_required" must be true to apply
+        "app_type": "asgi", // optional, set to "asgi" to run an ASGI app (FastAPI, Starlette, Quart). When omitted, Zappa auto-detects async callables or defaults to WSGI.
         "apigateway_enabled": true, // Set to false if you don't want to create an API Gateway resource. Default true.
         "apigateway_description": "My funky application!", // Define a custom description for the API Gateway console. Default None.
         "assume_policy": "my_assume_policy.json", // optional, IAM assume policy JSON file
@@ -1721,6 +1744,130 @@ Like API Gateway, Zappa can automatically provision ALB resources for you. You'l
 More information on using ALB as an event source for Lambda can be found [here](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/lambda-functions.html).
 
 _An important note_: right now, Zappa will provision ONE lambda to ONE load balancer, which means using `base_path` along with ALB configuration is currently unsupported.
+
+### ASGI Support
+
+Zappa supports ASGI (Asynchronous Server Gateway Interface) applications alongside traditional WSGI apps. This enables deploying async Python frameworks like **FastAPI**, **Starlette**, and **Quart** on AWS Lambda.
+
+ASGI support works with all Lambda event sources: API Gateway v1 (REST API), API Gateway v2 (HTTP API), Application Load Balancer, and Lambda Function URLs.
+
+#### Setting Up a FastAPI App
+
+1. Create your FastAPI application:
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello from FastAPI on Lambda!"}
+
+@app.get("/items/{item_id}")
+async def read_item(item_id: int):
+    return {"item_id": item_id}
+```
+
+2. Configure `zappa_settings.json`:
+
+```javascript
+{
+    "dev": {
+        "app_function": "your_module.app",
+        "app_type": "asgi",
+        "s3_bucket": "my-zappa-bucket",
+        "runtime": "python3.12"
+    }
+}
+```
+
+3. Deploy:
+
+```
+$ zappa deploy dev
+```
+
+#### The app_type Setting
+
+The `app_type` setting tells Zappa how to handle your application:
+
+- **`"asgi"`** — Run through the ASGI handler. Use this for FastAPI, Starlette, Quart, or any ASGI-compatible application.
+- **Omitted / not set** — Zappa auto-detects: if your `app_function` is an async callable with the ASGI signature `(scope, receive, send)`, Zappa treats it as ASGI automatically. Otherwise, it falls back to WSGI.
+
+Setting `app_type` to `"asgi"` explicitly is recommended. Auto-detection works for simple cases, but explicit configuration avoids ambiguity.
+
+#### Starlette Example
+
+```python
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+
+async def homepage(request):
+    return JSONResponse({"message": "Hello from Starlette!"})
+
+app = Starlette(routes=[Route("/", homepage)])
+```
+
+```javascript
+{
+    "dev": {
+        "app_function": "your_module.app",
+        "app_type": "asgi",
+        "s3_bucket": "my-zappa-bucket"
+    }
+}
+```
+
+#### Quart Example
+
+```python
+from quart import Quart, jsonify
+
+app = Quart(__name__)
+
+@app.route("/")
+async def hello():
+    return await jsonify(message="Hello from Quart!")
+```
+
+```javascript
+{
+    "dev": {
+        "app_function": "your_module.app",
+        "app_type": "asgi",
+        "s3_bucket": "my-zappa-bucket"
+    }
+}
+```
+
+#### Binary Support with ASGI
+
+Binary support works the same as with WSGI apps. When `binary_support` is `true`, Zappa base64-encodes responses that have:
+
+- A `Content-Encoding` header (gzip, br, deflate, etc.)
+- A MIME type that is not text-based (e.g., `application/octet-stream`, `image/png`)
+
+Text-based responses (`text/*`, `application/json`, `application/xml`, etc.) are returned as plain text even with `binary_support` enabled.
+
+#### ASGI Internals
+
+On each Lambda invocation, Zappa:
+
+1. Converts the Lambda event (API Gateway v1/v2, ALB, or Function URL) into an ASGI scope dict
+2. Wraps the request body in an ASGI `receive` callable
+3. Runs your async application using `asyncio.run()` via the `ASGIHandler` bridge
+4. Collects the response status, headers, and body from ASGI `send()` calls
+5. Formats the response for API Gateway / ALB / Function URL
+
+No additional dependencies are required — `asyncio` is part of the Python standard library.
+
+#### ASGI Limitations
+
+- **WebSocket** connections are not supported through the ASGI handler. Use the [WebSocket Support](#websocket-support) feature for WebSocket APIs.
+- **ASGI Lifespan** protocol (startup/shutdown events) is not implemented. Lambda functions are short-lived, so per-request lifespan events would add overhead without benefit.
+- **Streaming responses** are collected in memory before returning. Lambda does not support streaming HTTP responses via API Gateway.
 
 ### WebSocket Support
 
