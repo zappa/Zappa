@@ -689,3 +689,82 @@ class TestZappa(unittest.TestCase):
         self.assertIn("SCRIPT_NAME='/dev'", response["body"])
         self.assertIn("PATH_INFO='/debug/wsgi/environ'", response["body"])  # FIXED: stage stripped
         self.assertIn("/dev/debug/wsgi/environ", response["body"])  # Correct single prefix!
+
+    def test_v2_custom_domain_no_double_stage_redirect(self):
+        """
+        Reproduces double stage redirect when using custom domain with API Gateway V2.
+
+        API Gateway V2 always includes the stage in rawPath, even when the request
+        arrives via a custom domain. For direct access (amazonaws.com), SCRIPT_NAME
+        should be set to the stage. For custom domains, SCRIPT_NAME should be empty
+        and the stage should be stripped from PATH_INFO so the framework generates
+        clean URLs without the stage prefix.
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        # Simulate API Gateway V2 event arriving via custom domain
+        # rawPath INCLUDES the stage prefix (API Gateway V2 always adds it)
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/dev/return/request/url",  # Stage prefix IS in rawPath
+            "rawQueryString": "",
+            "headers": {
+                "host": "api.example.com",  # Custom domain, NOT amazonaws.com
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/dev/return/request/url",
+                },
+                "stage": "dev",
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        # The URL should NOT contain the stage prefix when accessed via custom domain
+        self.assertEqual(
+            response["body"],
+            "https://api.example.com/return/request/url",
+        )
+
+    def test_v2_custom_domain_redirect_URL_does_not_duplicate_stage(self):
+        """
+        Verifies WSGI environ values when using a custom domain with API Gateway V2.
+
+        SCRIPT_NAME should be empty and PATH_INFO should have the stage stripped,
+        so that Django/Flask generates URLs without the stage prefix.
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/dev/debug/wsgi/environ",  # Stage prefix IS in rawPath
+            "rawQueryString": "",
+            "headers": {
+                "host": "api.example.com",  # Custom domain
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/dev/debug/wsgi/environ",
+                },
+                "stage": "dev",
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        # SCRIPT_NAME should be empty (no stage prefix for custom domains)
+        self.assertIn("SCRIPT_NAME=''", response["body"])
+        # PATH_INFO should have the stage stripped
+        self.assertIn("PATH_INFO='/debug/wsgi/environ'", response["body"])
+        # The full URL should NOT contain /dev/ prefix
+        self.assertNotIn("/dev/debug/wsgi/environ", response["body"])
+
