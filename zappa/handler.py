@@ -197,7 +197,14 @@ class LambdaHandler:
             # into zappa_settings.py as WEBSOCKET_HANDLER_MODULE.
             ws_module = getattr(self.settings, "WEBSOCKET_HANDLER_MODULE", None)
             if ws_module:
-                importlib.import_module(ws_module)
+                try:
+                    importlib.import_module(ws_module)
+                except ImportError:
+                    logger.error(
+                        "Failed to import WEBSOCKET_HANDLER_MODULE '%s'. "
+                        "Verify the module is included in your deployment package.",
+                        ws_module,
+                    )
 
     def _get_boto_session(self) -> boto3.Session:
         """Return the configured boto3 session, or create a default one."""

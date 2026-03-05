@@ -2725,7 +2725,24 @@ class ZappaCLI:
         self.function_url_config = default_function_url_config
 
         # WebSocket support - explicit setting or auto-detected from zappa.websocket imports
-        self.use_websocket = self.stage_config.get("websocket_handler_module") or self._detect_websocket_usage()
+        websocket_handler_module = self.stage_config.get("websocket_handler_module")
+        if websocket_handler_module:
+            if not isinstance(websocket_handler_module, str):
+                raise ClickException(
+                    "The 'websocket_handler_module' setting must be a string dotted module path, "
+                    f"got {type(websocket_handler_module).__name__} instead."
+                )
+            if websocket_handler_module.endswith(".py"):
+                raise ClickException(
+                    "The 'websocket_handler_module' setting must be a dotted module path "
+                    "(e.g. 'my_package.ws_handlers'), not a filesystem path ending in '.py'."
+                )
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$", websocket_handler_module):
+                raise ClickException(
+                    "Invalid 'websocket_handler_module' setting. Expected a dotted module path "
+                    "(e.g. 'my_package.ws_handlers')."
+                )
+        self.use_websocket = websocket_handler_module or self._detect_websocket_usage()
 
         # Additional tags
         self.tags = self.stage_config.get("tags", {})
@@ -3430,21 +3447,30 @@ class ZappaCLI:
                     continue
                 for node in ast.walk(tree):
                     has_import = False
-                    if isinstance(node, ast.ImportFrom) and node.module and "zappa.websocket" in node.module:
+                    if (
+                        isinstance(node, ast.ImportFrom)
+                        and node.module
+                        and (node.module == "zappa.websocket" or node.module.startswith("zappa.websocket."))
+                    ):
                         has_import = True
                     elif isinstance(node, ast.Import):
                         for alias in node.names:
-                            if alias.name and "zappa.websocket" in alias.name:
+                            if alias.name and (alias.name == "zappa.websocket" or alias.name.startswith("zappa.websocket.")):
                                 has_import = True
                                 break
                     if has_import:
                         # Convert file path to dotted module name
                         # "./ws_handlers.py" -> "ws_handlers"
                         # "./pkg/ws.py" -> "pkg.ws"
+                        # "./pkg/__init__.py" -> "pkg"
                         module_path = os.path.normpath(fpath)
                         if module_path.startswith("." + os.sep):
                             module_path = module_path[2:]
                         module_path = module_path[: -len(".py")]
+                        if module_path.endswith(os.sep + "__init__") or module_path == "__init__":
+                            module_path = module_path[: -len("__init__")].rstrip(os.sep)
+                            if not module_path:
+                                continue
                         return module_path.replace(os.sep, ".")
         return None
 

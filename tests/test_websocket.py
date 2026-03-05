@@ -504,7 +504,7 @@ class TestWebSocketHandlerAutoImport(unittest.TestCase):
         zappa.websocket._registry.clear()
         zappa.websocket._validated = False
         # Remove cached handler module so re-import triggers decorators again
-        sys.modules.pop("tests.test_websocket_handlers", None)
+        sys.modules.pop("tests.test_ws_handlers_fixture", None)
 
     def test_handler_imports_websocket_module(self):
         """When WEBSOCKET_HANDLER_MODULE is set, _registry should be populated on init."""

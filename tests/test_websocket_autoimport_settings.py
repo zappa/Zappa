@@ -9,4 +9,4 @@ DJANGO_SETTINGS = None
 ENVIRONMENT_VARIABLES = {}
 PROJECT_NAME = "websocket_test"
 COGNITO_TRIGGER_MAPPING = {}
-WEBSOCKET_HANDLER_MODULE = "tests.test_websocket_handlers"
+WEBSOCKET_HANDLER_MODULE = "tests.test_ws_handlers_fixture"
