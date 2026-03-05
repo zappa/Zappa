@@ -521,6 +521,18 @@ class LambdaHandler:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
 
+        # This is a WebSocket API Gateway event
+        elif event.get("requestContext", {}).get("eventType") in ("CONNECT", "DISCONNECT", "MESSAGE"):
+            from zappa.websocket import get_handler, validate_registry
+
+            validate_registry()
+            route_key = event["requestContext"].get("routeKey", "$default")
+            handler_fn = get_handler(route_key)
+            if handler_fn:
+                result = self.run_function(handler_fn, event, context)
+                return result if result is not None else {"statusCode": 200}
+            return {"statusCode": 200}
+
         # This is an HTTP-protocol API Gateway event or Lambda url event with payload format version 2.0
         elif "version" in event and event["version"] == "2.0":
             try:
