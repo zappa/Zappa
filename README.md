@@ -1162,6 +1162,7 @@ to change Zappa's behavior. Use these at your own risk!
             "SubnetIds": [ "subnet-12345678" ], // Note: not all availability zones support Lambda!
             "SecurityGroupIds": [ "sg-12345678" ]
         },
+        "websocket_handler_module": "your_module.ws_handlers", // Optional, explicit module path for WebSocket handlers. When omitted, Zappa auto-detects modules importing from zappa.websocket.
         "xray_tracing": false // Optional, enable AWS X-Ray tracing on your lambda function.
     }
 }
@@ -1964,10 +1965,22 @@ send_message(event, "raw string payload")
 #### How It Works
 
 - On `zappa deploy` or `zappa update`, Zappa scans your project for `from zappa.websocket import ...` statements
-- When detected, it provisions a WebSocket API Gateway alongside your REST/HTTP API via CloudFormation
+- When detected, the module path is saved into the Lambda package so your handlers are imported at runtime
+- A WebSocket API Gateway is provisioned alongside your REST/HTTP API via CloudFormation
 - The WebSocket URL (`wss://...`) is printed after deployment
 - Incoming WebSocket events (`CONNECT`, `DISCONNECT`, `MESSAGE`) are routed to your registered handlers
 - CloudFormation manages the full lifecycle — `zappa undeploy` cleans up all WebSocket resources
+
+If auto-detection doesn't find your handlers (e.g. dynamic imports or unconventional project layouts), set the module path explicitly:
+
+```json
+{
+    "dev": {
+        "app_function": "your_module.app",
+        "websocket_handler_module": "your_module.ws_handlers"
+    }
+}
+```
 
 ### Endpoint Configuration
 
