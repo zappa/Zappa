@@ -835,15 +835,30 @@ class LambdaHandler:
                 request_context = event.get("requestContext", {})
                 stage = request_context.get("stage")
 
-                # For API Gateway v2, the stage is included in rawPath and we need to
-                # set script_name so it can be stripped from PATH_INFO
-                # For Function URLs (no stage), leave script_name empty
+                # API Gateway v2 always includes the stage prefix in rawPath,
+                # regardless of whether the request arrives via direct API Gateway URL
+                # or via a custom domain.
+                #
+                # For direct access (amazonaws.com host), we set SCRIPT_NAME to the
+                # stage so the framework generates URLs with the stage prefix.
+                # create_wsgi_request will also strip the stage from PATH_INFO.
+                #
+                # For custom domains, SCRIPT_NAME must remain empty so the framework
+                # generates URLs without the stage prefix (the custom domain's API
+                # Mapping already resolves the stage). But we still need to strip
+                # the stage from PATH_INFO ourselves, since create_wsgi_request
+                # only strips when script_name is set.
+                #
+                # For Function URLs (no stage), no special handling is needed.
+                script_name = ""
+                is_custom_domain = False
                 if stage:
-                    # API Gateway v2 with named stage - rawPath includes the stage
-                    script_name = f"/{stage}"
-                else:
-                    # Function URL - no stage
-                    script_name = ""
+                    headers = event.get("headers", {})
+                    host = headers.get("host", "")
+                    if "amazonaws.com" in host:
+                        script_name = f"/{stage}"
+                    else:
+                        is_custom_domain = True
 
                 # ASGI path
                 if self.app_type == "asgi":
@@ -852,6 +867,14 @@ class LambdaHandler:
                 time_start = datetime.datetime.now()
 
                 environ = self._create_lambda_wsgi_environ(event, context, script_name, settings)
+
+                # For custom domains, strip the stage prefix from PATH_INFO
+                # since rawPath includes it but SCRIPT_NAME is empty
+                if is_custom_domain:
+                    stage_prefix = f"/{stage}"
+                    path_info = environ.get("PATH_INFO", "")
+                    if path_info.startswith(stage_prefix):
+                        environ["PATH_INFO"] = path_info[len(stage_prefix):] or "/"
 
                 # Execute the application
                 with Response.from_app(self.wsgi_app, environ) as response:
