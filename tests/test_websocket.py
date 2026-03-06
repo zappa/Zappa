@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -426,7 +427,7 @@ class TestDetectWebSocketUsage(unittest.TestCase):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                self.assertTrue(ZappaCLI._detect_websocket_usage())
+                self.assertEqual(ZappaCLI._detect_websocket_usage(), "app")
             finally:
                 os.chdir(old_cwd)
 
@@ -440,7 +441,24 @@ class TestDetectWebSocketUsage(unittest.TestCase):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                self.assertTrue(ZappaCLI._detect_websocket_usage())
+                self.assertEqual(ZappaCLI._detect_websocket_usage(), "app")
+            finally:
+                os.chdir(old_cwd)
+
+    def test_detects_nested_module(self):
+        """Files in subdirectories should return dotted module paths."""
+        from zappa.cli import ZappaCLI
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = os.path.join(tmpdir, "mypackage")
+            os.makedirs(pkg_dir)
+            with open(os.path.join(pkg_dir, "ws.py"), "w") as f:
+                f.write("from zappa.websocket import on_connect\n")
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                self.assertEqual(ZappaCLI._detect_websocket_usage(), "mypackage.ws")
             finally:
                 os.chdir(old_cwd)
 
@@ -454,7 +472,7 @@ class TestDetectWebSocketUsage(unittest.TestCase):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                self.assertFalse(ZappaCLI._detect_websocket_usage())
+                self.assertIsNone(ZappaCLI._detect_websocket_usage())
             finally:
                 os.chdir(old_cwd)
 
@@ -469,9 +487,64 @@ class TestDetectWebSocketUsage(unittest.TestCase):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                self.assertFalse(ZappaCLI._detect_websocket_usage())
+                self.assertIsNone(ZappaCLI._detect_websocket_usage())
             finally:
                 os.chdir(old_cwd)
+
+
+class TestWebSocketHandlerAutoImport(unittest.TestCase):
+    """Test that LambdaHandler imports WEBSOCKET_HANDLER_MODULE to populate _registry."""
+
+    def tearDown(self):
+        LambdaHandler._LambdaHandler__instance = None
+        LambdaHandler.settings = None
+        LambdaHandler.settings_name = None
+        import zappa.websocket
+
+        zappa.websocket._registry.clear()
+        zappa.websocket._validated = False
+        # Remove cached handler module so re-import triggers decorators again
+        sys.modules.pop("tests.test_ws_handlers_fixture", None)
+
+    def test_handler_imports_websocket_module(self):
+        """When WEBSOCKET_HANDLER_MODULE is set, _registry should be populated on init."""
+        import zappa.websocket
+
+        self.assertEqual(len(zappa.websocket._registry), 0)
+
+        lh = LambdaHandler("tests.test_websocket_autoimport_settings")
+
+        # The decorators in test_websocket_handlers.py should have populated _registry
+        self.assertIn("$connect", zappa.websocket._registry)
+        self.assertIn("$disconnect", zappa.websocket._registry)
+        self.assertIn("$default", zappa.websocket._registry)
+
+    def test_handler_dispatches_after_autoimport(self):
+        """WebSocket events should be routed to the auto-imported handlers."""
+        lh = LambdaHandler("tests.test_websocket_autoimport_settings")
+
+        event = {
+            "requestContext": {
+                "eventType": "CONNECT",
+                "routeKey": "$connect",
+                "connectionId": "abc123",
+                "domainName": "test.execute-api.us-east-1.amazonaws.com",
+                "stage": "production",
+            }
+        }
+        context = MagicMock()
+        response = lh.handler(event, context)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(response["body"], "connected")
+
+    def test_no_import_when_setting_absent(self):
+        """When WEBSOCKET_HANDLER_MODULE is not set, _registry stays empty."""
+        import zappa.websocket
+
+        lh = LambdaHandler("tests.test_websocket_settings")
+
+        self.assertEqual(len(zappa.websocket._registry), 0)
 
 
 class TestWebSocketIAMPermissions(unittest.TestCase):
