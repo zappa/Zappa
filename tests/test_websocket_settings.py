@@ -1,3 +1,4 @@
+API_STAGE = "production"
 APP_MODULE = "tests.test_websocket_app"
 APP_FUNCTION = "app"
 DEBUG = "True"

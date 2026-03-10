@@ -1912,7 +1912,8 @@ def handle_message(event, context):
     body = event.get("body", "{}")
     data = json.loads(body)
     # Echo the message back to the sender
-    send_message(event, {"echo": data})
+    connection_id = event["requestContext"]["connectionId"]
+    send_message(connection_id, {"echo": data})
     return {"statusCode": 200}
 ```
 
@@ -1942,8 +1943,9 @@ class MyWebSocket(ZappaWebSocketServer):
         return {"statusCode": 200}
 
     def on_message(self, event, context):
+        connection_id = event["requestContext"]["connectionId"]
         data = json.loads(event.get("body", "{}"))
-        send_message(event, {"echo": data})
+        send_message(connection_id, {"echo": data})
         return {"statusCode": 200}
 
     # on_disconnect is optional — only overridden methods are registered
@@ -1953,13 +1955,21 @@ Both examples are complete `app.py` files. The `@on_connect` and `@on_message` h
 
 #### Sending Messages to Clients
 
-Use `send_message(event, data)` to push messages to a connected client. The data will be JSON-encoded automatically unless it is already a string or bytes:
+Use `send_message(connection_id, data)` to send a message to any connected client by its connection ID. The Zappa handler automatically sets the `REQUEST_DOMAIN_NAME` and `STAGE` environment variables, so no endpoint configuration is needed.
+
+The `data` argument accepts three types:
+- **`dict`** — JSON-encoded to a UTF-8 byte string
+- **`str`** — encoded as UTF-8 bytes
+- **`bytes`** — sent as-is (raw binary)
 
 ```python
 from zappa.websocket import send_message
 
-send_message(event, {"type": "notification", "text": "Hello!"})
-send_message(event, "raw string payload")
+connection_id = event["requestContext"]["connectionId"]
+send_message(connection_id, {"type": "notification", "text": "Hello!"})
+send_message(connection_id, "raw string payload")
+
+send_message(other_connection_id, {"type": "broadcast", "text": "Hi everyone!"})
 ```
 
 #### How It Works
