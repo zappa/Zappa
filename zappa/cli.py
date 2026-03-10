@@ -325,6 +325,10 @@ class ZappaCLI:
             "--qualifier",
             help="The qualifier (version or alias) of the lambda version to invoke. $LATEST if omitted.",
         )
+        invoke_parser.add_argument(
+            "--payload",
+            help="A JSON string of key/value pairs to include in the event passed to the function.",
+        )
         invoke_parser.add_argument("command_rest")
 
         ##
@@ -658,6 +662,7 @@ class ZappaCLI:
                 no_color=self.vargs["no_color"],
                 client_context=self.vargs["client_context"],
                 qualifier=self.vargs["qualifier"],
+                payload=self.vargs.get("payload"),
             )
         elif command == "manage":  # pragma: no cover
             if not self.vargs.get("command_rest"):
@@ -1543,7 +1548,9 @@ class ZappaCLI:
             removed_arns = self.zappa.remove_async_sns_topic(self.lambda_name)
             click.echo("SNS Topic removed: %s" % ", ".join(removed_arns))
 
-    def invoke(self, function_name, raw_python=False, command=None, no_color=False, client_context=None, qualifier=None):
+    def invoke(
+        self, function_name, raw_python=False, command=None, no_color=False, client_context=None, qualifier=None, payload=None
+    ):
         """
         Invoke a remote function.
         """
@@ -1557,6 +1564,18 @@ class ZappaCLI:
             command = {"raw_command": function_name}
         else:
             command = {key: function_name}
+
+        if payload:
+            import json as json_module
+
+            try:
+                payload_dict = json_module.loads(payload)
+            except (ValueError, TypeError) as e:
+                raise ClickException("--payload must be valid JSON: {}".format(e))
+            if not isinstance(payload_dict, dict):
+                raise ClickException("--payload must be a JSON object (dict), not {}.".format(type(payload_dict).__name__))
+            command.update(payload_dict)
+
         client_context = base64.b64encode(client_context.encode("utf-8")).decode("utf-8") if client_context else None
 
         # Can't use hjson

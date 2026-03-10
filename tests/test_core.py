@@ -2429,6 +2429,95 @@ class TestZappa(unittest.TestCase):
         colorized_string = zappa_cli.colorize_invoke_command(plain_string)
         self.assertEqual(final_string, colorized_string)
 
+    @mock.patch("zappa.cli.ZappaCLI.format_lambda_response")
+    @mock.patch("zappa.core.Zappa.invoke_lambda_function")
+    def test_invoke_with_payload(self, mock_invoke, mock_format):
+        """Test that --payload merges JSON into the invoke event."""
+        mock_invoke.return_value = {"StatusCode": 200}
+        mock_format.return_value = "ok"
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "dev"
+        zappa_cli.lambda_name = "test-func"
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.invoke_lambda_function = mock_invoke
+
+        zappa_cli.invoke(
+            "my_app.my_function",
+            payload='{"key1": "value1", "key2": "value2"}',
+        )
+
+        call_args = mock_invoke.call_args
+        sent_payload = json.loads(call_args[0][1])
+        self.assertEqual(sent_payload["command"], "my_app.my_function")
+        self.assertEqual(sent_payload["key1"], "value1")
+        self.assertEqual(sent_payload["key2"], "value2")
+
+    @mock.patch("zappa.cli.ZappaCLI.format_lambda_response")
+    @mock.patch("zappa.core.Zappa.invoke_lambda_function")
+    def test_invoke_with_payload_raw_python(self, mock_invoke, mock_format):
+        """Test that --payload works with --raw."""
+        mock_invoke.return_value = {"StatusCode": 200}
+        mock_format.return_value = "ok"
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "dev"
+        zappa_cli.lambda_name = "test-func"
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.invoke_lambda_function = mock_invoke
+
+        zappa_cli.invoke(
+            "print('hello')",
+            raw_python=True,
+            payload='{"extra": "data"}',
+        )
+
+        call_args = mock_invoke.call_args
+        sent_payload = json.loads(call_args[0][1])
+        self.assertEqual(sent_payload["raw_command"], "print('hello')")
+        self.assertEqual(sent_payload["extra"], "data")
+
+    def test_invoke_with_invalid_payload_json(self):
+        """Test that invalid JSON in --payload raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "dev"
+        zappa_cli.lambda_name = "test-func"
+        zappa_cli.zappa = mock.MagicMock()
+
+        with self.assertRaises(ClickException) as cm:
+            zappa_cli.invoke("my_app.my_function", payload="not-valid-json")
+        self.assertIn("--payload must be valid JSON", str(cm.exception))
+
+    def test_invoke_with_non_dict_payload(self):
+        """Test that a non-dict JSON payload raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "dev"
+        zappa_cli.lambda_name = "test-func"
+        zappa_cli.zappa = mock.MagicMock()
+
+        with self.assertRaises(ClickException) as cm:
+            zappa_cli.invoke("my_app.my_function", payload='["a", "b"]')
+        self.assertIn("--payload must be a JSON object", str(cm.exception))
+
+    @mock.patch("zappa.cli.ZappaCLI.format_lambda_response")
+    @mock.patch("zappa.core.Zappa.invoke_lambda_function")
+    def test_invoke_without_payload(self, mock_invoke, mock_format):
+        """Test that invoke without --payload works as before."""
+        mock_invoke.return_value = {"StatusCode": 200}
+        mock_format.return_value = "ok"
+
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "dev"
+        zappa_cli.lambda_name = "test-func"
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.invoke_lambda_function = mock_invoke
+
+        zappa_cli.invoke("my_app.my_function")
+
+        call_args = mock_invoke.call_args
+        sent_payload = json.loads(call_args[0][1])
+        self.assertEqual(sent_payload, {"command": "my_app.my_function"})
+
     @mock.patch("zappa.cli.ZappaCLI.colorize_invoke_command")
     @mock.patch("zappa.cli.ZappaCLI.format_invoke_command")
     def test_cli_format_lambda_response(self, mock_format, mock_colorize):
