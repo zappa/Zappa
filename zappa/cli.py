@@ -2106,6 +2106,9 @@ class ZappaCLI:
 
         if has_django:
             zappa_settings[env]["django_settings"] = django_settings
+            # django_settings and app_function are mutually exclusive;
+            # remove the default app_function added by _generate_settings_dict()
+            zappa_settings[env].pop("app_function", None)
         else:
             zappa_settings[env]["app_function"] = app_function
 
