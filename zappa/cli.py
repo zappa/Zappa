@@ -2106,6 +2106,7 @@ class ZappaCLI:
 
         if has_django:
             zappa_settings[env]["django_settings"] = django_settings
+            zappa_settings[env].pop("app_function", None)
         else:
             zappa_settings[env]["app_function"] = app_function
 

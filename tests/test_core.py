@@ -1606,6 +1606,61 @@ class TestZappa(unittest.TestCase):
             finally:
                 os.chdir(current_dir)
 
+    def test_zappa_init_django_excludes_app_function(self):
+        """
+        Regression test for https://github.com/zappa/Zappa/issues/1404
+        Django projects should have django_settings but NOT app_function
+        in the generated zappa_settings.json.
+        """
+        current_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="zappa_test") as tempdir:
+            try:
+                os.chdir(tempdir)
+                tempdir = Path(tempdir)
+
+                settings_filepath = tempdir / "zappa_settings.json"
+
+                zappa_cli = ZappaCLI()
+
+                # Mock Django as importable so has_django=True
+                django_mock = mock.MagicMock()
+                with mock.patch.dict("sys.modules", {"django": django_mock}), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_env", return_value="dev"
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_profile",
+                    return_value=("default", {"region": "us-east-1"}),
+                ), mock.patch(
+                    "zappa.cli.detect_django_settings",
+                    return_value=["my_project.settings"],
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_django_settings",
+                    return_value="my_project.settings",
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_bucket",
+                    return_value="my-zappa-bucket",
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_global_settings",
+                    return_value=["n", False],
+                ), mock.patch(
+                    "zappa.cli.ZappaCLI._get_init_confirm", return_value="y"
+                ):
+                    zappa_cli.init()
+
+                self.assertTrue(settings_filepath.exists())
+
+                with settings_filepath.open("r") as f:
+                    zappa_settings = json.load(f)
+
+                dev_settings = zappa_settings["dev"]
+                self.assertEqual(dev_settings["django_settings"], "my_project.settings")
+                self.assertNotIn(
+                    "app_function",
+                    dev_settings,
+                    "Django projects must not have app_function in settings (issue #1404)",
+                )
+            finally:
+                os.chdir(current_dir)
+
     def test_cli_sanity(self):
         zappa_cli = ZappaCLI()
         return
