@@ -3423,6 +3423,8 @@ class Zappa:
                     logger.info(f"Created {svc} event schedule for {function}!")
                 elif rule_response == "failed":
                     logger.error(f"Problem creating {svc} event schedule for {function}!")
+                elif rule_response == "updated":
+                    logger.info(f"Updated {svc} event schedule for {function}.")
                 elif rule_response == "exists":
                     logger.warning(f"{svc} event schedule for {function} already exists - Nothing to do here.")
                 elif rule_response == "dryrun":

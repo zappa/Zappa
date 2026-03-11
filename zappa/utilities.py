@@ -744,13 +744,13 @@ def add_event_source(
     Given an event_source dictionary, create the object and add the event source.
     """
     event_source_obj, function_arn = get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False)
-    # TODO: Detect changes in config and refine exists algorithm
     if not dry:
         if not event_source_obj.status(function_arn):
             event_source_obj.add(function_arn)
             return "successful" if event_source_obj.status(function_arn) else "failed"
         else:
-            return "exists"
+            event_source_obj.update(function_arn)
+            return "updated"
 
     return "dryrun"
 
