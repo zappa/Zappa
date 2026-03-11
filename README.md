@@ -27,6 +27,7 @@
     - [Advanced Scheduling](#advanced-scheduling)
       - [Multiple Expressions](#multiple-expressions)
       - [Disabled Event](#disabled-event)
+      - [EventBridge Rule Naming](#eventbridge-rule-naming)
   - [Undeploy](#undeploy)
   - [Package](#package)
     - [How Zappa Makes Packages](#how-zappa-makes-packages)
@@ -376,7 +377,7 @@ Zappa can be used to easily schedule functions to occur on regular intervals. Th
 These functions will be packaged and deployed along with your `app_function` and called from the handler automatically.
 Just list your functions and the expression to schedule them using [cron or rate syntax](http://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html) in your _zappa_settings.json_ file:
 
-**Note:** `function` path cannot exceed 64 characters.
+**Note:** The `function` value must match the pattern `^[._A-Za-z0-9]{0,63}$` — only letters, digits, dots, and underscores are allowed. Hyphens are **not** permitted. See [EventBridge Rule Naming](#eventbridge-rule-naming) for details.
 
 ```javascript
 {
@@ -449,6 +450,50 @@ In this case, you can disable it from running by setting `enabled` to `false` in
     }
 }
 ```
+
+##### EventBridge Rule Naming
+
+Zappa creates [EventBridge](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rules.html) (formerly CloudWatch Events) rules for each scheduled event. The rule name encodes which Python function to execute, so the naming format matters.
+
+**How it works:** The rule name is built as `{lambda_name}-{function}`. When the scheduled event fires, Zappa's handler extracts the function to call by splitting the rule name on `-` and taking the **last segment**:
+
+```python
+whole_function = event["resources"][0].split("/")[-1].split("-")[-1]
+```
+
+For example, with lambda name `my-app-prod` and function `tasks.cleanup`:
+- Rule name: `my-app-prod-tasks.cleanup`
+- Handler extracts: `tasks.cleanup` (last segment after `-`)
+- Zappa imports and executes `tasks.cleanup`
+
+**Restrictions on `function`:**
+
+| Constraint | Value |
+|---|---|
+| Allowed characters | Letters, digits, dots (`.`), underscores (`_`) |
+| Pattern | `^[._A-Za-z0-9]{0,63}$` |
+| Max length | 63 characters |
+| Hyphens | **Forbidden** — would break the `-` split extraction |
+
+If the function were `my-tasks.cleanup`, the handler would extract only `cleanup` (the segment after the last `-`), and the import would fail.
+
+**The rule name must always end with the function path as the last hyphen-delimited segment.** If it doesn't, the handler silently skips execution — the event fires but nothing happens. The `name` setting field inserts a prefix into the rule name but does not change this requirement. The rule name becomes `{lambda_name}-{name}-{function}`, and the handler still extracts `{function}` as the last segment.
+
+```javascript
+{
+    "production": {
+       "events": [{
+           "function": "tasks.cleanup",
+           "name": "nightly",
+           "expression": "cron(0 0 * * ? *)"
+       }]
+    }
+}
+```
+
+Rule name: `my-app-prod-nightly-tasks.cleanup` — handler extracts `tasks.cleanup`.
+
+**Total rule name limit:** EventBridge rule names are capped at 64 characters. If the combined name exceeds this, Zappa automatically shortens the lambda name prefix using a SHA-1 hash. If the function name portion (or `{name}-{function}`) exceeds 63 characters, Zappa raises an error.
 
 ### Undeploy
 
