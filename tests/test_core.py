@@ -335,6 +335,24 @@ class TestZappa(unittest.TestCase):
         cached_pypi_info_dir = os.path.join(tempfile.gettempdir(), "cached_pypi_info")
         os.remove(os.path.join(cached_pypi_info_dir, "markupsafe-2.1.3.json"))
 
+    def test_exclude_glob_recursive_pattern(self):
+        """Test that exclude_glob correctly handles ** recursive patterns (#1269)."""
+        mock_installed_packages = {}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.11")
+            path = z.create_lambda_zip(
+                handler_file=os.path.realpath(__file__),
+                exclude_glob=["**/*.pyc"],
+            )
+            with zipfile.ZipFile(path, "r") as zf:
+                names = zf.namelist()
+                pyc_files = [n for n in names if n.endswith(".pyc")]
+                self.assertEqual(pyc_files, [], f"Expected no .pyc files in zip but found: {pyc_files}")
+            os.remove(path)
+
     def test_get_exclude_glob__file_not_deleted(self):
         z = Zappa(runtime="python3.11")
         self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.7"))
