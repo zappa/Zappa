@@ -843,13 +843,16 @@ class LambdaHandler:
                 stage = request_context.get("stage")
 
                 # For API Gateway v2, the stage is included in rawPath and we need to
-                # set script_name so it can be stripped from PATH_INFO
-                # For Function URLs (no stage), leave script_name empty
-                if stage:
-                    # API Gateway v2 with named stage - rawPath includes the stage
+                # set script_name so it can be stripped from PATH_INFO.
+                # When using a custom domain with API mapping, API Gateway already
+                # strips the stage from rawPath, so we detect this and skip setting
+                # script_name to avoid double-stage redirects (#1409).
+                raw_path = event.get("rawPath", "")
+                if stage and raw_path.startswith(f"/{stage}"):
+                    # Direct API Gateway v2 access - rawPath includes the stage
                     script_name = f"/{stage}"
                 else:
-                    # Function URL - no stage
+                    # Function URL or custom domain (stage already stripped)
                     script_name = ""
 
                 # ASGI path
