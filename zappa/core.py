@@ -570,8 +570,10 @@ class Zappa:
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
             for glob_path in exclude_glob:
-                exclude_glob_path = temp_project_path / glob_path
-                for path in exclude_glob_path.glob("*"):
+                if Path(glob_path).is_absolute():
+                    logger.warning(f"exclude_glob: skipping absolute pattern '{glob_path}' (use relative patterns)")
+                    continue
+                for path in temp_project_path.glob(glob_path):
                     if path.exists() and path.is_file():
                         path.unlink()
                     elif path.exists() and path.is_dir():
@@ -672,8 +674,10 @@ class Zappa:
 
         # Cleanup
         for glob_path in exclude_glob:
-            exclude_glob_path = temp_project_path / glob_path
-            for path in exclude_glob_path.glob("*"):
+            if Path(glob_path).is_absolute():
+                logger.warning(f"exclude_glob: skipping absolute pattern '{glob_path}' (use relative patterns)")
+                continue
+            for path in temp_project_path.glob(glob_path):
                 if path.exists() and path.is_file():
                     path.unlink()
                 elif path.exists() and path.is_dir():
