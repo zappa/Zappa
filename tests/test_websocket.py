@@ -194,22 +194,22 @@ class TestWebSocketRegistry(unittest.TestCase):
 class TestSendMessage(unittest.TestCase):
     """Test the send_message helper."""
 
+    def setUp(self):
+        import zappa.websocket
+
+        zappa.websocket._ws_client = None
+        zappa.websocket._ws_client_endpoint = None
+
     @patch("zappa.websocket.boto3.client")
+    @patch.dict(os.environ, {"REQUEST_DOMAIN_NAME": "abc123.execute-api.us-east-1.amazonaws.com", "STAGE": "production"})
     def test_send_message_dict(self, mock_client_factory):
         from zappa.websocket import send_message
 
         mock_client = MagicMock()
         mock_client_factory.return_value = mock_client
 
-        event = {
-            "requestContext": {
-                "domainName": "abc123.execute-api.us-east-1.amazonaws.com",
-                "stage": "production",
-                "connectionId": "conn-123",
-            }
-        }
         data = {"msg": "hello"}
-        send_message(event, data)
+        send_message("conn-123", data)
 
         mock_client_factory.assert_called_once_with(
             "apigatewaymanagementapi",
@@ -221,20 +221,14 @@ class TestSendMessage(unittest.TestCase):
         )
 
     @patch("zappa.websocket.boto3.client")
+    @patch.dict(os.environ, {"REQUEST_DOMAIN_NAME": "abc123.execute-api.us-east-1.amazonaws.com", "STAGE": "dev"})
     def test_send_message_string(self, mock_client_factory):
         from zappa.websocket import send_message
 
         mock_client = MagicMock()
         mock_client_factory.return_value = mock_client
 
-        event = {
-            "requestContext": {
-                "domainName": "abc123.execute-api.us-east-1.amazonaws.com",
-                "stage": "dev",
-                "connectionId": "conn-456",
-            }
-        }
-        send_message(event, "raw string")
+        send_message("conn-456", "raw string")
 
         mock_client.post_to_connection.assert_called_once_with(
             ConnectionId="conn-456",
@@ -363,6 +357,9 @@ class TestWebSocketHandlerDispatch(unittest.TestCase):
 
         self.assertEqual(results, ["connected"])
         self.assertEqual(response["statusCode"], 200)
+        # Verify env vars required by send_message are set
+        self.assertEqual(os.environ["REQUEST_DOMAIN_NAME"], "test.execute-api.us-east-1.amazonaws.com")
+        self.assertEqual(os.environ["STAGE"], "production")
 
     def test_message_event_dispatched(self):
         import zappa.websocket
@@ -395,6 +392,9 @@ class TestWebSocketHandlerDispatch(unittest.TestCase):
 
         self.assertEqual(results, ["message"])
         self.assertEqual(response["statusCode"], 200)
+        # Verify env vars required by send_message are set
+        self.assertEqual(os.environ["REQUEST_DOMAIN_NAME"], "test.execute-api.us-east-1.amazonaws.com")
+        self.assertEqual(os.environ["STAGE"], "production")
 
     def test_no_handler_returns_200(self):
         lh = LambdaHandler("tests.test_websocket_settings")

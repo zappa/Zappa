@@ -18,7 +18,8 @@ Usage with decorators::
 
     @on_message
     def handle_message(event, context):
-        send_message(event, {"msg": "hello"})
+        connection_id = event["requestContext"]["connectionId"]
+        send_message(connection_id, {"msg": "hello"})
         return {"statusCode": 200}
 
 Usage with base class::
@@ -30,22 +31,34 @@ Usage with base class::
             return {"statusCode": 200}
 
         def on_message(self, event, context):
-            send_message(event, {"echo": event["body"]})
+            connection_id = event["requestContext"]["connectionId"]
+            send_message(connection_id, {"echo": event["body"]})
             return {"statusCode": 200}
 """
 
 import json
 import logging
+import os
 
 import boto3
 
 logger = logging.getLogger(__name__)
+
+# Environment variable names set by the Zappa handler on each request.
+# REQUEST_DOMAIN_NAME comes from event["requestContext"]["domainName"].
+# STAGE is set at handler init from settings.API_STAGE (reused here).
+ENV_REQUEST_DOMAIN_NAME = "REQUEST_DOMAIN_NAME"
+ENV_STAGE = "STAGE"
 
 # Route key -> callable mapping
 _registry = {}
 _validated = False
 
 REQUIRED_ROUTES = {"$connect", "$default"}
+
+# Cached boto3 client for the API Gateway Management API, keyed by endpoint URL.
+_ws_client = None
+_ws_client_endpoint = None
 
 
 def on_connect(func):
@@ -121,20 +134,30 @@ class ZappaWebSocketServer:
         return {"statusCode": 200}
 
 
-def send_message(event, data):
+def _get_ws_client():
+    """Return a cached boto3 API Gateway Management API client."""
+    global _ws_client, _ws_client_endpoint
+    domain = os.environ[ENV_REQUEST_DOMAIN_NAME]
+    stage = os.environ[ENV_STAGE]
+    endpoint_url = f"https://{domain}/{stage}"
+    if _ws_client is None or _ws_client_endpoint != endpoint_url:
+        _ws_client = boto3.client("apigatewaymanagementapi", endpoint_url=endpoint_url)
+        _ws_client_endpoint = endpoint_url
+    return _ws_client
+
+
+def send_message(connection_id, data):
     """Send a message to a connected WebSocket client.
 
-    Args:
-        event: The Lambda event from API Gateway WebSocket.
-        data: The data to send (will be JSON-encoded if not a string/bytes).
-    """
-    request_context = event["requestContext"]
-    domain = request_context["domainName"]
-    stage = request_context["stage"]
-    connection_id = request_context["connectionId"]
+    The endpoint is built from the ``REQUEST_DOMAIN_NAME`` and ``STAGE``
+    environment variables, set automatically by the Zappa handler.
 
-    endpoint_url = f"https://{domain}/{stage}"
-    client = boto3.client("apigatewaymanagementapi", endpoint_url=endpoint_url)
+    Args:
+        connection_id: The target client's connection ID.
+        data: The payload to send — ``dict`` is JSON-encoded, ``str`` is
+            sent as UTF-8, ``bytes`` is sent raw.
+    """
+    client = _get_ws_client()
 
     if isinstance(data, bytes):
         payload = data

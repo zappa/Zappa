@@ -817,10 +817,17 @@ class LambdaHandler:
 
         # This is a WebSocket API Gateway event
         elif event.get("requestContext", {}).get("eventType") in ("CONNECT", "DISCONNECT", "MESSAGE"):
-            from zappa.websocket import get_handler, validate_registry
+            from zappa.websocket import (
+                ENV_REQUEST_DOMAIN_NAME,
+                get_handler,
+                validate_registry,
+            )
+
+            rc = event["requestContext"]
+            os.environ[ENV_REQUEST_DOMAIN_NAME] = rc["domainName"]
 
             validate_registry()
-            route_key = event["requestContext"].get("routeKey", "$default")
+            route_key = rc.get("routeKey", "$default")
             handler_fn = get_handler(route_key)
             if handler_fn:
                 result = self.run_function(handler_fn, event, context)
