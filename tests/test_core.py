@@ -4392,6 +4392,15 @@ class TestZappa(unittest.TestCase):
 class TestUploadToS3ErrorHandling(unittest.TestCase):
     """Tests for upload_to_s3 S3 bucket error handling (#1315)"""
 
+    def setUp(self):
+        self.users_current_region_name = os.environ.get("AWS_DEFAULT_REGION", None)
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+    def tearDown(self):
+        del os.environ["AWS_DEFAULT_REGION"]
+        if self.users_current_region_name is not None:
+            os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
+
     def test_upload_to_s3_raises_on_access_denied(self):
         """upload_to_s3 should raise EnvironmentError on 403 instead of creating a new bucket."""
         z = Zappa(runtime="python3.11")
