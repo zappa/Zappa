@@ -15,6 +15,7 @@ from zappa.utilities import (
     ApacheNCSAFormatter,
     EventSourceMappingMixin,
     InvalidAwsLambdaName,
+    S3EventSource,
     conflicts_with_a_neighbouring_module,
     contains_python_files_or_subdirs,
     detect_django_settings,
@@ -424,6 +425,43 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         self.assertEqual(actual, expected)
         agent_endstring = f'"{self.agent}"'
         self.assertTrue(actual.endswith(agent_endstring))
+
+
+class S3EventSourceRetryTestCase(unittest.TestCase):
+    """Tests for S3EventSource.add() retry behavior (#1419)"""
+
+    def _make_source(self, mock_lambda_client, mock_s3_client):
+        session = mock.MagicMock()
+
+        def client_factory(service, *args, **kwargs):
+            if service == "lambda":
+                return mock_lambda_client
+            return mock_s3_client
+
+        session.client.side_effect = client_factory
+        config = {"arn": "arn:aws:s3:::my-bucket", "events": ["s3:ObjectCreated:*"]}
+        return S3EventSource(session, config)
+
+    @mock.patch("time.sleep")
+    def test_add_retries_on_validation_error(self, mock_sleep):
+        """S3EventSource.add() should retry when S3 can't validate the destination."""
+        mock_lambda = mock.MagicMock()
+        mock_s3 = mock.MagicMock()
+        mock_s3.get_bucket_notification_configuration.return_value = {}
+
+        error_response = {"Error": {"Code": "InvalidArgument", "Message": "Unable to validate the following"}}
+        # Fail twice, then succeed
+        mock_s3.put_bucket_notification_configuration.side_effect = [
+            botocore.exceptions.ClientError(error_response, "PutBucketNotificationConfiguration"),
+            botocore.exceptions.ClientError(error_response, "PutBucketNotificationConfiguration"),
+            None,
+        ]
+
+        source = self._make_source(mock_lambda, mock_s3)
+        source.add("arn:aws:lambda:us-east-1:123456789:function:my-func")
+
+        self.assertEqual(mock_s3.put_bucket_notification_configuration.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
 
 
 class EventSourceMappingStatusTestCase(unittest.TestCase):

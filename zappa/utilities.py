@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -483,8 +484,19 @@ class S3EventSource(BaseEventSource):
             # Remove ResponseMetadata if present
             config.pop("ResponseMetadata", None)
 
-            self._s3.put_bucket_notification_configuration(Bucket=self.bucket_name, NotificationConfiguration=config)
-            LOG.debug("Added S3 event source")
+            # Retry with backoff: Lambda permission may not have propagated
+            # before S3 validates the notification destination (#1419).
+            for attempt in range(4):
+                try:
+                    self._s3.put_bucket_notification_configuration(Bucket=self.bucket_name, NotificationConfiguration=config)
+                    LOG.debug("Added S3 event source")
+                    break
+                except botocore.exceptions.ClientError as e:
+                    if "Unable to validate" in str(e) and attempt < 3:
+                        LOG.debug("S3 notification validation failed, retrying in %ds...", 2**attempt)
+                        time.sleep(2**attempt)
+                    else:
+                        raise
         except Exception:
             LOG.exception("Unable to add S3 event source")
 
