@@ -7,10 +7,13 @@ from pathlib import Path
 from typing import Tuple
 from unittest import mock
 
+import botocore.exceptions
+
 from zappa.core import Zappa
 from zappa.ext.django_zappa import get_django_wsgi
 from zappa.utilities import (
     ApacheNCSAFormatter,
+    EventSourceMappingMixin,
     InvalidAwsLambdaName,
     conflicts_with_a_neighbouring_module,
     contains_python_files_or_subdirs,
@@ -421,3 +424,38 @@ class ApacheNCSAFormatterTestCase(unittest.TestCase):
         self.assertEqual(actual, expected)
         agent_endstring = f'"{self.agent}"'
         self.assertTrue(actual.endswith(agent_endstring))
+
+
+class EventSourceMappingStatusTestCase(unittest.TestCase):
+    """Tests for EventSourceMappingMixin.status() error handling (#1317)"""
+
+    def _make_mixin(self, mock_lambda_client):
+        session = mock.MagicMock()
+        session.client.return_value = mock_lambda_client
+        config = {"arn": "arn:aws:sqs:us-east-1:123456789:my-queue", "batch_size": 10, "enabled": True}
+        return EventSourceMappingMixin(session, config)
+
+    def test_status_reraises_access_denied(self):
+        """status() should propagate AccessDeniedException instead of swallowing it."""
+        mock_client = mock.MagicMock()
+        mock_client.list_event_source_mappings.return_value = {"EventSourceMappings": [{"UUID": "test-uuid"}]}
+        error_response = {"Error": {"Code": "AccessDeniedException", "Message": "Access Denied"}}
+        mock_client.get_event_source_mapping.side_effect = botocore.exceptions.ClientError(
+            error_response, "GetEventSourceMapping"
+        )
+        mixin = self._make_mixin(mock_client)
+        with self.assertRaises(botocore.exceptions.ClientError) as ctx:
+            mixin.status("arn:aws:lambda:us-east-1:123456789:function:my-func")
+        self.assertEqual(ctx.exception.response["Error"]["Code"], "AccessDeniedException")
+
+    def test_status_returns_none_for_resource_not_found(self):
+        """status() should return None when the event source mapping doesn't exist."""
+        mock_client = mock.MagicMock()
+        mock_client.list_event_source_mappings.return_value = {"EventSourceMappings": [{"UUID": "test-uuid"}]}
+        error_response = {"Error": {"Code": "ResourceNotFoundException", "Message": "Not found"}}
+        mock_client.get_event_source_mapping.side_effect = botocore.exceptions.ClientError(
+            error_response, "GetEventSourceMapping"
+        )
+        mixin = self._make_mixin(mock_client)
+        result = mixin.status("arn:aws:lambda:us-east-1:123456789:function:my-func")
+        self.assertIsNone(result)

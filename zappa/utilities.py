@@ -394,9 +394,13 @@ class EventSourceMappingMixin(BaseEventSource):
             try:
                 response = self._lambda.get_event_source_mapping(UUID=uuid)
                 LOG.debug(response)
-            except botocore.exceptions.ClientError:
-                LOG.debug("event source %s does not exist", self.arn)
-                response = None
+            except botocore.exceptions.ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "")
+                if error_code == "ResourceNotFoundException":
+                    LOG.debug("event source %s does not exist", self.arn)
+                    response = None
+                else:
+                    raise
         else:
             LOG.debug("No UUID for event source %s", self.arn)
         return response
