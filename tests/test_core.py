@@ -4389,5 +4389,41 @@ class TestZappa(unittest.TestCase):
             zappa_core.create_handler_venv()
 
 
+class TestUploadToS3ErrorHandling(unittest.TestCase):
+    """Tests for upload_to_s3 S3 bucket error handling (#1315)"""
+
+    def setUp(self):
+        self.users_current_region_name = os.environ.get("AWS_DEFAULT_REGION", None)
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+    def tearDown(self):
+        del os.environ["AWS_DEFAULT_REGION"]
+        if self.users_current_region_name is not None:
+            os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
+
+    def test_upload_to_s3_raises_on_access_denied(self):
+        """upload_to_s3 should raise EnvironmentError on 403 instead of creating a new bucket."""
+        z = Zappa(runtime="python3.11")
+        error_response = {"Error": {"Code": "403", "Message": "Forbidden"}}
+        z.s3_client = mock.MagicMock()
+        z.s3_client.head_bucket.side_effect = botocore.exceptions.ClientError(error_response, "HeadBucket")
+
+        with self.assertRaises(EnvironmentError) as ctx:
+            z.upload_to_s3("/tmp/fake.zip", "my-bucket")
+        self.assertIn("Access denied", str(ctx.exception))
+        z.s3_client.create_bucket.assert_not_called()
+
+    def test_upload_to_s3_reraises_unexpected_errors(self):
+        """upload_to_s3 should re-raise unexpected ClientErrors (not 403/404)."""
+        z = Zappa(runtime="python3.11")
+        error_response = {"Error": {"Code": "500", "Message": "Internal Server Error"}}
+        z.s3_client = mock.MagicMock()
+        z.s3_client.head_bucket.side_effect = botocore.exceptions.ClientError(error_response, "HeadBucket")
+
+        with self.assertRaises(botocore.exceptions.ClientError):
+            z.upload_to_s3("/tmp/fake.zip", "my-bucket")
+        z.s3_client.create_bucket.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
