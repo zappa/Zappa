@@ -570,6 +570,8 @@ class Zappa:
             else:
                 copytree(cwd, temp_project_path, metadata=False, symlinks=False)
             for glob_path in exclude_glob:
+                # Patterns must be relative because they're resolved against
+                # temp_project_path — absolute paths can't match the temp copy.
                 if Path(glob_path).is_absolute():
                     logger.warning(f"exclude_glob: skipping absolute pattern '{glob_path}' (use relative patterns)")
                     continue
@@ -674,6 +676,8 @@ class Zappa:
 
         # Cleanup
         for glob_path in exclude_glob:
+            # Patterns must be relative because they're resolved against
+            # temp_project_path — absolute paths can't match the temp copy.
             if Path(glob_path).is_absolute():
                 logger.warning(f"exclude_glob: skipping absolute pattern '{glob_path}' (use relative patterns)")
                 continue
