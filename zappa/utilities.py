@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -481,8 +482,6 @@ class S3EventSource(BaseEventSource):
 
             # Retry with backoff: Lambda permission may not have propagated
             # before S3 validates the notification destination (#1419).
-            import time
-
             for attempt in range(4):
                 try:
                     self._s3.put_bucket_notification_configuration(Bucket=self.bucket_name, NotificationConfiguration=config)
