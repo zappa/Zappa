@@ -930,7 +930,15 @@ class Zappa:
         """
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
-        except botocore.exceptions.ClientError:
+        except botocore.exceptions.ClientError as e:
+            error_code = int(e.response.get("Error", {}).get("Code", 0))
+            if error_code == 403:
+                raise EnvironmentError(
+                    f"Access denied for S3 bucket '{bucket_name}'. " "Check that your IAM role has s3:ListBucket permission."
+                ) from e
+            if error_code != 404:
+                raise
+
             # This is really stupid S3 quirk. Technically, us-east-1 one has no S3,
             # it's actually "US Standard", or something.
             # More here: https://github.com/boto/boto3/issues/125
