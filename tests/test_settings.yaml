@@ -60,3 +60,10 @@ snap_start_enabled:
 snap_start_disabled:
   extends: ttt888
   snap_start: None
+capacity_provider_enabled:
+  extends: ttt888
+  capacity_provider_config:
+    LambdaManagedInstancesCapacityProviderConfig:
+      CapacityProviderArn: arn:aws:lambda:us-east-1:123456789012:capacity-provider/zappa-test
+      PerExecutionEnvironmentMaxConcurrency: 5
+      ExecutionEnvironmentMemoryGiBPerVCpu: 2.0
