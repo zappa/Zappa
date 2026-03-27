@@ -3307,6 +3307,28 @@ class Zappa:
 
         return permission_response
 
+    def _add_eventbridge_wildcard_permission(self, lambda_name):
+        """
+        Add a single wildcard permission for EventBridge to invoke the Lambda function.
+        Uses a wildcard SourceArn pattern to cover all rules, preventing the resource
+        policy from exceeding AWS's 20KB limit when many scheduled events are configured.
+        """
+        account_id: str = self.sts_client.get_caller_identity().get("Account")  # type: ignore
+        region = self.boto_session.region_name
+
+        try:
+            self.lambda_client.add_permission(
+                FunctionName=lambda_name,
+                StatementId="ZappaEventBridgeWildcard",
+                Action="lambda:InvokeFunction",
+                Principal="events.amazonaws.com",
+                SourceArn=f"arn:aws:events:{region}:{account_id}:rule/*",
+                SourceAccount=account_id,
+            )
+        except self.lambda_client.exceptions.ResourceConflictException:
+            # Permission already exists
+            pass
+
     def schedule_events(self, lambda_arn, lambda_name, events, default=True):
         """
         Given a Lambda ARN, name and a list of events, schedule this as CloudWatch Events.
@@ -3332,6 +3354,13 @@ class Zappa:
             events=events,
             excluded_source_services=pull_services,
         )
+
+        # Add a single wildcard permission for all EventBridge rules instead of
+        # one per rule, to stay within the 20KB resource policy limit (#1415).
+        has_scheduled_events = any(e.get("expression") or e.get("expressions") for e in events)
+        if has_scheduled_events:
+            self._add_eventbridge_wildcard_permission(lambda_name)
+
         for event in events:
             function = event["function"]
             expression = event.get("expression", None)  # single expression
@@ -3370,9 +3399,6 @@ class Zappa:
 
                     if "RuleArn" in rule_response:
                         logger.debug("Rule created. ARN {}".format(rule_response["RuleArn"]))
-
-                    # Specific permissions are necessary for any trigger to work.
-                    self.create_event_permission(lambda_name, "events.amazonaws.com", rule_response["RuleArn"])
 
                     # Overwriting the input, supply the original values and add kwargs
                     input_template = (
