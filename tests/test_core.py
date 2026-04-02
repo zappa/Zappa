@@ -902,6 +902,27 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.yaml")
         self.assertEqual("None", zappa_cli.snap_start)
 
+    @mock.patch("botocore.client")
+    def test_snap_start_passed_to_create_lambda_function(self, client):
+        """
+        Test that snap_start is passed to create_lambda_function during deploy.
+        Regression test for https://github.com/zappa/Zappa/issues/1447
+        """
+        boto_mock = mock.MagicMock()
+        zappa_core = Zappa(
+            boto_session=boto_mock,
+            profile_name="test",
+            aws_region="test",
+            load_credentials=True,
+        )
+        zappa_core.lambda_client.create_function.return_value = {
+            "FunctionArn": "abc",
+            "Version": 1,
+        }
+        zappa_core.create_lambda_function(snap_start="PublishedVersions")
+        create_call_kwargs = zappa_core.lambda_client.create_function.call_args[1]
+        self.assertEqual(create_call_kwargs["SnapStart"], {"ApplyOn": "PublishedVersions"})
+
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
         z.credentials_arn = object()
