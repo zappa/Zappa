@@ -923,6 +923,99 @@ class TestZappa(unittest.TestCase):
         create_call_kwargs = zappa_core.lambda_client.create_function.call_args[1]
         self.assertEqual(create_call_kwargs["SnapStart"], {"ApplyOn": "PublishedVersions"})
 
+    def test_snap_start_publishes_version_after_config_update(self):
+        """
+        Test that update_lambda_configuration publishes a new version when
+        snap_start is enabled, so SnapStart creates a snapshot.
+        Regression test for https://github.com/zappa/Zappa/issues/1448
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:2",
+                "Version": "2",
+            }
+            # ALB alias does not exist
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            mock_client.publish_version.assert_called_once_with(FunctionName="test")
+
+    def test_snap_start_disabled_does_not_publish_extra_version(self):
+        """
+        Test that update_lambda_configuration does NOT publish an extra version
+        when snap_start is disabled.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start=None,
+            )
+
+            mock_client.publish_version.assert_not_called()
+
+    def test_snap_start_updates_alb_alias_after_publish(self):
+        """
+        Test that when snap_start publishes a new version, the ALB alias
+        is updated to point to the new version.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:3",
+                "Version": "3",
+            }
+            # ALB alias exists
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:current-alb-version",
+                "Name": "current-alb-version",
+                "FunctionVersion": "1",
+            }
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            mock_client.update_alias.assert_called_once_with(
+                FunctionName="test",
+                FunctionVersion="3",
+                Name="current-alb-version",
+            )
+
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
         z.credentials_arn = object()

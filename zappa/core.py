@@ -1460,6 +1460,27 @@ class Zappa:
         if self.tags:
             self.lambda_client.tag_resource(Resource=resource_arn, Tags=self.tags)
 
+        # SnapStart only creates snapshots for versions published AFTER it's
+        # enabled. During updates, the code is published before the config is
+        # updated, so we must publish an additional version here.
+        if snap_start and snap_start != "None":
+            self.wait_until_lambda_function_is_updated(function_name)
+            logger.info("Publishing new version for SnapStart snapshot creation..")
+            publish_response = self.lambda_client.publish_version(FunctionName=function_name)
+            version = publish_response["Version"]
+
+            # Update ALB alias to point to the new version if it exists
+            try:
+                self.lambda_client.get_alias(FunctionName=function_name, Name=ALB_LAMBDA_ALIAS)
+                self.lambda_client.update_alias(
+                    FunctionName=function_name,
+                    FunctionVersion=version,
+                    Name=ALB_LAMBDA_ALIAS,
+                )
+            except botocore.exceptions.ClientError as e:
+                if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                    raise e
+
         return resource_arn
 
     def invoke_lambda_function(
