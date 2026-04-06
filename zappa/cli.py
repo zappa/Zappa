@@ -3106,9 +3106,9 @@ class ZappaCLI:
 
         # If slim handler, path to project zip
         if self.stage_config.get("slim_handler", False):
-            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}_{2!s}_current_project.tar.gz'\n".format(
-                self.s3_bucket_name, self.api_stage, self.project_name
-            )
+            # Use the versioned archive name so rollback references the correct archive
+            archive_filename = os.path.basename(self.zip_path)
+            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}'\n".format(self.s3_bucket_name, archive_filename)
 
             # since includes are for slim handler add the setting here by joining arbitrary list from zappa_settings file
             # and tell the handler we are the slim_handler
