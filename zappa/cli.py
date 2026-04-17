@@ -192,6 +192,23 @@ class ZappaCLI:
         self._stage_config_overrides = getattr(self, "_stage_config_overrides", {})
         self._stage_config_overrides.setdefault(self.api_stage, {})[key] = val
 
+    # slim_handler writes an ARCHIVE_PATH into zappa_settings.py, which causes
+    # the container handler to overlay stale S3 code on the image code. See #1341.
+    DOCKER_INCOMPATIBLE_SETTINGS = ("slim_handler",)
+
+    def _get_slim_handler_archive_name(self):
+        return "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+
+    def _check_docker_settings_conflicts(self):
+        conflicts = [key for key in self.DOCKER_INCOMPATIBLE_SETTINGS if self.stage_config.get(key)]
+        if conflicts:
+            raise ClickException(
+                click.style("Invalid Zappa settings for Docker deployment", fg="red", bold=True)
+                + ": the following setting(s) are not compatible with Docker deployments and must be removed or disabled: "
+                + click.style(", ".join(conflicts), bold=True)
+                + ".\nSee the 'Docker Workflows' section of the README for details."
+            )
+
     def handle(self, argv=None):
         """
         Main function.
@@ -722,6 +739,9 @@ class ZappaCLI:
         print("Generating Zappa settings Python file and saving to {}".format(settings_path))
         if not settings_path.endswith("zappa_settings.py"):
             raise ValueError("Settings file must be named zappa_settings.py")
+        # save-python-settings-file is only used for Docker-based deployments,
+        # so surface conflicting settings (e.g. slim_handler) before writing the file.
+        self._check_docker_settings_conflicts()
         zappa_settings_s = self.get_zappa_settings_string()
         with open(settings_path, "w") as f_out:
             f_out.write(zappa_settings_s)
@@ -796,6 +816,9 @@ class ZappaCLI:
         Package your project, upload it to S3, register the Lambda function
         and create the API Gateway routes.
         """
+
+        if docker_image_uri:
+            self._check_docker_settings_conflicts()
 
         if not source_zip or docker_image_uri:
             # Make sure the necessary IAM execution roles are available
@@ -879,7 +902,7 @@ class ZappaCLI:
                     raise ClickException("Unable to upload handler to S3. Quitting.")
 
                 # Copy the project zip to the current project zip
-                current_project_name = "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+                current_project_name = self._get_slim_handler_archive_name()
                 success = self.zappa.copy_on_s3(
                     src_file_name=self.zip_path,
                     dst_file_name=current_project_name,
@@ -1041,6 +1064,9 @@ class ZappaCLI:
         Repackage and update the function code.
         """
 
+        if docker_image_uri:
+            self._check_docker_settings_conflicts()
+
         if not source_zip and not docker_image_uri:
             # Make sure we're in a venv.
             self.check_venv()
@@ -1142,7 +1168,7 @@ class ZappaCLI:
                         raise ClickException("Unable to upload handler to S3. Quitting.")
 
                     # Copy the project zip to the current project zip
-                    current_project_name = "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+                    current_project_name = self._get_slim_handler_archive_name()
                     success = self.zappa.copy_on_s3(
                         src_file_name=self.zip_path,
                         dst_file_name=current_project_name,
@@ -1404,6 +1430,13 @@ class ZappaCLI:
         self.zappa.delete_lambda_function(self.lambda_name)
         if remove_logs:
             self.zappa.remove_lambda_function_logs(self.lambda_name)
+
+        # Remove the slim_handler project archive from S3 so a subsequent
+        # redeploy does not load stale code. See issue #1341.
+        if self.stage_config.get("slim_handler", False):
+            current_project_name = self._get_slim_handler_archive_name()
+            click.echo("Removing slim_handler project archive from S3: " + click.style(current_project_name, bold=True))
+            self.zappa.remove_from_s3(current_project_name, self.s3_bucket_name)
 
         # Delete auto-created EFS resources
         # Check if any EFS entries were auto-created (no Arn in original config)
@@ -3106,8 +3139,8 @@ class ZappaCLI:
 
         # If slim handler, path to project zip
         if self.stage_config.get("slim_handler", False):
-            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}_{2!s}_current_project.tar.gz'\n".format(
-                self.s3_bucket_name, self.api_stage, self.project_name
+            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}'\n".format(
+                self.s3_bucket_name, self._get_slim_handler_archive_name()
             )
 
             # since includes are for slim handler add the setting here by joining arbitrary list from zappa_settings file

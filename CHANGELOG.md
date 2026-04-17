@@ -1,5 +1,12 @@
 # Zappa Changelog
 
+## Unreleased
+
+* Clarify Docker deployment handling for `slim_handler` (#1341)
+  - `zappa deploy`, `zappa update`, and `zappa save-python-settings-file` now fail fast with a clear error when `--docker-image-uri` is used with a stage that sets `slim_handler` (this combination writes a stale `ARCHIVE_PATH` into `zappa_settings.py` and causes the container handler to load old code from S3).
+  - `zappa undeploy` now removes the `<stage>_<project>_current_project.tar.gz` archive from the configured S3 bucket when `slim_handler` was enabled, so a later redeploy cannot load stale code.
+  - README: documented which `zappa_settings` keys should not be used with Docker deployments.
+
 ## 0.61.4
 
 * Fix manylinux wheel matching to support multiple PEP 600 platform tags (#1411)

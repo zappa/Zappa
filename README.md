@@ -426,6 +426,15 @@ Update Example:
 
 Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
 
+##### Settings that should NOT be used with Docker deployments
+
+When deploying with `--docker-image-uri`, the Docker image is responsible for bundling your application code and runtime. A few `zappa_settings` keys only make sense for zip-based deployments and will cause problems if left enabled for a Docker deployment:
+
+- `slim_handler`: This option splits the package into a slim handler and a separate project archive uploaded to S3. When enabled, Zappa writes an `ARCHIVE_PATH` into the generated `zappa_settings.py`, which makes the Lambda handler attempt to download the project archive from S3 at cold start and overlay it on your container's code. With a Docker deployment this either loads stale code from a previous zip deploy, or fails entirely if the archive is missing. **Do not set `slim_handler` for Docker deployments.** See [issue #1341](https://github.com/zappa/Zappa/issues/1341).
+- `runtime`: The Python runtime is determined by the Docker image, so this value is ignored for Docker deployments.
+
+Running `zappa deploy`, `zappa update`, or `zappa save-python-settings-file` with a Docker-targeted configuration will now fail fast when any incompatible setting above is detected. Undeploying a stage that previously used `slim_handler` will also remove the leftover `_current_project.tar.gz` archive from the configured S3 bucket.
+
 If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
 
     $ export ZAPPA_RUNNING_IN_DOCKER=True
