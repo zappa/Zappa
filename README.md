@@ -26,6 +26,7 @@
   - [Initial Deployments](#initial-deployments)
   - [Updates](#updates)
     - [Docker Workflows](#docker-workflows)
+      - [Settings that should NOT be used with Docker deployments](#settings-that-should-not-be-used-with-docker-deployments)
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
