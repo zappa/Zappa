@@ -57,7 +57,7 @@
 - [Advanced Settings](#advanced-settings)
     - [YAML Settings](#yaml-settings)
 - [Advanced Usage](#advanced-usage)
-  - [Keeping The Server Warm](#keeping-the-server-warm)
+  - [Keeping The Server Warm (Deprecated)](#keeping-the-server-warm-deprecated)
     - [Serving Static Files / Binary Uploads](#serving-static-files--binary-uploads)
   - [Enabling CORS](#enabling-cors)
   - [Large Projects](#large-projects)

@@ -4558,6 +4558,15 @@ class TestUploadToS3ErrorHandling(unittest.TestCase):
 
 
 class TestKeepWarmDeprecation(unittest.TestCase):
+    def setUp(self):
+        self.users_current_region_name = os.environ.get("AWS_DEFAULT_REGION", None)
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+    def tearDown(self):
+        del os.environ["AWS_DEFAULT_REGION"]
+        if self.users_current_region_name is not None:
+            os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
+
     def test_keep_warm_default_false(self):
         """keep_warm should default to false after deprecation."""
         zappa_cli = ZappaCLI()
