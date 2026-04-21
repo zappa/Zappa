@@ -57,7 +57,7 @@
 - [Advanced Settings](#advanced-settings)
     - [YAML Settings](#yaml-settings)
 - [Advanced Usage](#advanced-usage)
-  - [Keeping The Server Warm](#keeping-the-server-warm)
+  - [Keeping The Server Warm (Deprecated)](#keeping-the-server-warm-deprecated)
     - [Serving Static Files / Binary Uploads](#serving-static-files--binary-uploads)
   - [Enabling CORS](#enabling-cors)
   - [Large Projects](#large-projects)
@@ -1239,8 +1239,8 @@ to change Zappa's behavior. Use these at your own risk!
             "token_header": "Authorization", // Optional. Default 'Authorization'. The name of a custom authorization header containing the token that clients submit as part of their requests.
             "validation_expression": "^Bearer \\w+$", // Optional. A validation expression for the incoming token, specify a regular expression.
         },
-        "keep_warm": true, // Create CloudWatch events to keep the server warm. Default true. To remove, set to false and then `unschedule`.
-        "keep_warm_expression": "rate(4 minutes)", // How often to execute the keep-warm, in cron and rate format. Default 4 minutes.
+        "keep_warm": false, // Deprecated. Create CloudWatch events to keep the server warm. Default false. Does not reduce cold start duration. Consider snap_start or provisioned_concurrency instead. See #1451.
+        "keep_warm_expression": "rate(4 minutes)", // How often to execute the keep-warm, in cron and rate format. Default 4 minutes. Only used when keep_warm is true.
         "lambda_description": "Your Description", // However you want to describe your project for the AWS console. Default "Zappa Deployment".
         "lambda_handler": "your_custom_handler", // The name of Lambda handler. Default: handler.lambda_handler
         "layers": ["arn:aws:lambda:<region>:<account_id>:layer:<layer_name>:<layer_version>"], // optional lambda layers
@@ -1317,9 +1317,11 @@ Similarly, you can supply a `zappa_settings.toml` file:
 
 ## Advanced Usage
 
-### Keeping The Server Warm
+### Keeping The Server Warm (Deprecated)
 
-Zappa will automatically set up a regularly occurring execution of your application in order to keep the Lambda function warm. This can be disabled via the `keep_warm` setting.
+> **Deprecated**: `keep_warm` is disabled by default and will be removed in a future version. Investigation ([#1445](https://github.com/zappa/Zappa/issues/1445)) found that `keep_warm` does not reduce cold start duration — only frequency for a single execution environment. Use `snap_start` (45-72% faster cold starts, ~$1.95/mo) or `provisioned_concurrency` (eliminates cold starts entirely, ~$5.40/mo) instead. See [#1451](https://github.com/zappa/Zappa/issues/1451).
+
+Zappa can set up a regularly occurring execution of your application in order to keep the Lambda function warm. This can be enabled via the `keep_warm` setting.
 
 #### Serving Static Files / Binary Uploads
 
