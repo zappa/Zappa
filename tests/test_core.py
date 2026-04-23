@@ -3420,6 +3420,69 @@ class TestZappa(unittest.TestCase):
 
         zappa_cli.remove_local_zip()
 
+    def test_docker_deploy_rejects_slim_handler(self):
+        # Issue #1341: slim_handler + Docker produces a stale ARCHIVE_PATH in
+        # the generated zappa_settings.py, so deploy must fail fast.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with self.assertRaises(ClickException) as exc_ctx:
+            zappa_cli.deploy(docker_image_uri="1234.dkr.ecr.us-east-1.amazonaws.com/repo:latest")
+        self.assertIn("slim_handler", str(exc_ctx.exception.message))
+
+    def test_docker_update_rejects_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with self.assertRaises(ClickException) as exc_ctx:
+            zappa_cli.update(docker_image_uri="1234.dkr.ecr.us-east-1.amazonaws.com/repo:latest")
+        self.assertIn("slim_handler", str(exc_ctx.exception.message))
+
+    def test_save_python_settings_file_rejects_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "zappa_settings.py")
+            with self.assertRaises(ClickException) as exc_ctx:
+                zappa_cli.save_python_settings_file(out)
+            self.assertIn("slim_handler", str(exc_ctx.exception.message))
+            self.assertFalse(os.path.exists(out))
+
+    def test_docker_deploy_ok_without_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertFalse(zappa_cli.stage_config.get("slim_handler"))
+        zappa_cli._check_docker_settings_conflicts()
+
+    def test_undeploy_removes_slim_handler_archive(self):
+        # Issue #1341: undeploy must clean up the S3 project archive so a
+        # later redeploy does not load stale code.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.use_alb = False
+        zappa_cli.use_apigateway = False
+
+        zappa_cli.undeploy(no_confirm=True)
+
+        expected_key = "{0}_{1}_current_project.tar.gz".format(zappa_cli.api_stage, zappa_cli.project_name)
+        zappa_cli.zappa.remove_from_s3.assert_called_once_with(expected_key, zappa_cli.s3_bucket_name)
+
+    def test_undeploy_skips_archive_cleanup_without_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.use_alb = False
+        zappa_cli.use_apigateway = False
+
+        zappa_cli.undeploy(no_confirm=True)
+
+        zappa_cli.zappa.remove_from_s3.assert_not_called()
+
     def test_settings_py_generation(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
