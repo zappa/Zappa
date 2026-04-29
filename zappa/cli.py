@@ -1485,7 +1485,21 @@ class ZappaCLI:
         for event in events:
             self.collision_warning(event.get("function"))
 
-        if self.stage_config.get("keep_warm", True):
+        keep_warm = self.stage_config.get("keep_warm", False)
+        if keep_warm:
+            click.echo(
+                click.style("Warning!", fg="yellow", bold=True)
+                + " keep_warm is "
+                + click.style("deprecated", bold=True)
+                + " and disabled by default."
+                + " It does not reduce cold start duration — only frequency for a single execution environment."
+                + " Consider using "
+                + click.style("snap_start", bold=True)
+                + " or "
+                + click.style("provisioned_concurrency", bold=True)
+                + " instead."
+                + " See https://github.com/zappa/Zappa/issues/1451"
+            )
             if not events:
                 events = []
 

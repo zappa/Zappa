@@ -4620,5 +4620,78 @@ class TestUploadToS3ErrorHandling(unittest.TestCase):
         z.s3_client.create_bucket.assert_not_called()
 
 
+class TestKeepWarmDeprecation(unittest.TestCase):
+    def setUp(self):
+        self.users_current_region_name = os.environ.get("AWS_DEFAULT_REGION", None)
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+    def tearDown(self):
+        del os.environ["AWS_DEFAULT_REGION"]
+        if self.users_current_region_name is not None:
+            os.environ["AWS_DEFAULT_REGION"] = self.users_current_region_name
+
+    def test_keep_warm_default_false(self):
+        """keep_warm should default to false after deprecation."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        # Default should be False when not explicitly set
+        self.assertFalse(zappa_cli.stage_config.get("keep_warm", False))
+
+    def test_keep_warm_deprecation_warning(self):
+        """schedule() should emit a deprecation warning when keep_warm is enabled."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.override_stage_config_setting("keep_warm", True)
+        zappa_cli.override_stage_config_setting("events", [])
+        zappa_cli.lambda_name = "test-lambda"
+
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.lambda_client.get_function.return_value = {
+            "Configuration": {"FunctionArn": "arn:aws:lambda:us-east-1:123:function:test"}
+        }
+
+        with mock.patch("click.echo") as mock_echo:
+            zappa_cli.schedule()
+
+        echo_calls = " ".join(str(c) for c in mock_echo.call_args_list)
+        self.assertIn("deprecated", echo_calls)
+        self.assertIn("snap_start", echo_calls)
+        self.assertIn("provisioned_concurrency", echo_calls)
+
+    def test_keep_warm_no_warning_when_disabled(self):
+        """schedule() should not emit a deprecation warning when keep_warm is false."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.override_stage_config_setting("keep_warm", False)
+        zappa_cli.override_stage_config_setting("events", [])
+        zappa_cli.lambda_name = "test-lambda"
+
+        with mock.patch("click.echo") as mock_echo:
+            zappa_cli.schedule()
+
+        echo_calls = " ".join(str(c) for c in mock_echo.call_args_list)
+        self.assertNotIn("deprecated", echo_calls)
+
+    def test_keep_warm_callback_deprecation_warning(self):
+        """keep_warm_callback should emit a DeprecationWarning."""
+        import warnings
+
+        from zappa.handler import keep_warm_callback
+
+        mock_context = mock.MagicMock()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with mock.patch("zappa.handler.lambda_handler"):
+                keep_warm_callback(event={}, context=mock_context)
+
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[0].category, DeprecationWarning))
+            self.assertIn("deprecated", str(w[0].message))
+
+
 if __name__ == "__main__":
     unittest.main()
