@@ -1170,6 +1170,15 @@ to change Zappa's behavior. Use these at your own risk!
         // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
         // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
         // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
+        //
+        // NOTE: When `function_url_enabled` is true with `authorizer: "NONE"`, Zappa attaches TWO
+        // resource-policy statements with `Principal: "*"`: `FunctionURLAllowPublicAccess` for
+        // `lambda:InvokeFunctionUrl` and `FunctionURLAllowPublicAccessInvoke` for `lambda:InvokeFunction`.
+        // Both are required for unsigned calls to succeed; the AWS docs example at
+        // https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html only shows the first statement,
+        // but in practice the URL returns 403 AccessDeniedException without the second (see #1393).
+        // If you are adding a Function URL manually (e.g. outside Zappa) and seeing 403s with NONE
+        // auth, this two-statement shape is the missing piece.
         "apigateway_version": "v1", // optional, API Gateway version to use. Can be "v1" or "v2". Default "v1".
         "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
