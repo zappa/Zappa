@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* Change default of `num_retained_versions` from `null` (keep all) to `5` (#1453)
+  - Lambda code storage and SnapStart snapshot-cache cost now have a sane default upper bound.
+  - On the first `zappa update` after upgrade, published versions older than the newest 5 are deleted; versions referenced by an alias (e.g. ALB) and `$LATEST` are unaffected, but versions referenced by other aliases can still raise `ResourceConflictException` (see #960).
+  - To preserve previous behavior (keep all versions) set `"num_retained_versions": null` in `zappa_settings.json`.
+  - Pruned versions are now logged in the deploy output.
+  - `zappa init` / `zappa settings` now include `num_retained_versions` in generated `zappa_settings.json`.
 * Clarify Docker deployment handling for `slim_handler` (#1341)
   - `zappa deploy`, `zappa update`, and `zappa save-python-settings-file` now fail fast with a clear error when `--docker-image-uri` is used with a stage that sets `slim_handler` (this combination writes a stale `ARCHIVE_PATH` into `zappa_settings.py` and causes the container handler to load old code from S3).
   - `zappa undeploy` now removes the `<stage>_<project>_current_project.tar.gz` archive from the configured S3 bucket when `slim_handler` was enabled, so a later redeploy cannot load stale code.

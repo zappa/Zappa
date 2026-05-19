@@ -1370,8 +1370,16 @@ class Zappa:
                 for version in versions["Versions"]:
                     versions_in_lambda.append(version["Version"])
             versions_in_lambda.remove("$LATEST")
-            # Delete older revisions if their number exceeds the specified limit
-            for version in versions_in_lambda[::-1][num_revisions:]:
+            versions_to_delete = versions_in_lambda[::-1][num_revisions:]
+            if versions_to_delete:
+                logger.info(
+                    "Pruning %d Lambda function version(s) for %s (retaining latest %d): %s",
+                    len(versions_to_delete),
+                    function_name,
+                    num_revisions,
+                    ", ".join(versions_to_delete),
+                )
+            for version in versions_to_delete:
                 self.lambda_client.delete_function(FunctionName=function_name, Qualifier=version)
 
         self.wait_until_lambda_function_is_updated(function_name)

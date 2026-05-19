@@ -70,6 +70,7 @@ CUSTOM_SETTINGS = [
 BOTO3_CONFIG_DOCS_URL = "https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration"
 DEFAULT_APP_FUNCTION = "app.app"
 DEFAULT_EXCLUDES = ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+DEFAULT_NUM_RETAINED_VERSIONS = 5
 
 
 ##
@@ -2322,6 +2323,7 @@ class ZappaCLI:
                 "runtime": get_venv_from_python_version(),
                 "project_name": self.get_project_name(),
                 "exclude": DEFAULT_EXCLUDES,
+                "num_retained_versions": DEFAULT_NUM_RETAINED_VERSIONS,
             }
         }
 
@@ -2704,13 +2706,13 @@ class ZappaCLI:
         dead_letter_arn = self.stage_config.get("dead_letter_arn", "")
         self.dead_letter_config = {"TargetArn": dead_letter_arn} if dead_letter_arn else {}
         self.cognito = self.stage_config.get("cognito", None)
-        self.num_retained_versions = self.stage_config.get("num_retained_versions", None)
+        # Default bounds Lambda code-storage and SnapStart snapshot-cache cost; null retains all versions.
+        self.num_retained_versions = self.stage_config.get("num_retained_versions", DEFAULT_NUM_RETAINED_VERSIONS)
         self.architecture = self.stage_config.get("architecture", "x86_64")
-        # Check for valid values of num_retained_versions
         if self.num_retained_versions is not None and type(self.num_retained_versions) is not int:
             raise ClickException(
-                "Please supply either an integer or null for num_retained_versions in the zappa_settings.json. Found %s"
-                % type(self.num_retained_versions)
+                "Please supply either an integer or null for num_retained_versions in the zappa_settings.json. "
+                "Use null to retain all published versions. Found %s" % type(self.num_retained_versions)
             )
         elif type(self.num_retained_versions) is int and self.num_retained_versions < 1:
             raise ClickException("The value for num_retained_versions in the zappa_settings.json should be greater than 0.")

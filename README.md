@@ -1270,7 +1270,7 @@ to change Zappa's behavior. Use these at your own risk!
         "memory_size": 512, // Lambda function memory in MB. Default 512.
         "ephemeral_storage": { "Size": 512 }, // Lambda function ephemeral_storage size in MB, Default 512, Max 10240
         "efs_config": [{ "Arn": "arn:aws:elasticfilesystem:...:access-point/fsap-...", "LocalMountPath": "/mnt/data" }], // Optional EFS configuration. See EFS section for details.
-        "num_retained_versions":null, // Indicates the number of old versions to retain for the lambda. If absent, keeps all the versions of the function.
+        "num_retained_versions":5, // Number of published Lambda versions to retain. Default 5. Older versions are deleted on `zappa update` to bound code-storage and (when SnapStart is enabled) snapshot-cache cost. Set to `null` to keep all versions.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
         "prebuild_script": "your_module.your_function", // Function to execute before uploading code

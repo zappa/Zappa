@@ -1820,6 +1820,8 @@ class TestZappa(unittest.TestCase):
             self.assertIn("dev", settings)
             self.assertEqual(settings["dev"]["app_function"], "app.app")
             self.assertEqual(settings["dev"]["aws_region"], "us-east-1")
+            # Generated settings should include num_retained_versions default
+            self.assertEqual(settings["dev"]["num_retained_versions"], 5)
 
             # Test settings command with custom stage (no ZAPPA_* env vars)
             with redirect_stdout(io.StringIO()) as f:
@@ -2295,6 +2297,43 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(ClickException) as context:
             zappa_cli.load_settings("test_settings.json")
         self.assertIn("not unique", str(context.exception))
+
+    def test_load_settings__num_retained_versions_default(self):
+        """Default num_retained_versions is 5 when not set in zappa_settings.json."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_default"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(5, zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_null(self):
+        """num_retained_versions: null preserves the opt-out (keep all versions)."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_null"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertIsNone(zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_explicit(self):
+        """An explicit integer value overrides the default."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_explicit"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(10, zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_invalid_type(self):
+        """A non-int, non-null value raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_invalid_type"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("num_retained_versions", str(context.exception))
+
+    def test_load_settings__num_retained_versions_invalid_value(self):
+        """A value less than 1 raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_invalid_value"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("greater than 0", str(context.exception))
 
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
