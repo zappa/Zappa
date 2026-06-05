@@ -715,8 +715,13 @@ class LambdaHandler:
                 # When using a custom domain with API mapping, API Gateway already
                 # strips the stage from rawPath, so we detect this and skip setting
                 # script_name to avoid double-stage redirects (#1409).
+                # Match the stage on a path-segment boundary, not a bare string prefix,
+                # so a custom-domain route that merely shares a leading substring with
+                # the stage name (e.g. stage "prod" + path "/products") is not mistaken
+                # for direct access.
                 raw_path = event.get("rawPath", "")
-                if stage and raw_path.startswith(f"/{stage}"):
+                stage_prefix = f"/{stage}"
+                if stage and (raw_path == stage_prefix or raw_path.startswith(f"{stage_prefix}/")):
                     # Direct API Gateway v2 access - rawPath includes the stage
                     script_name = f"/{stage}"
                 else:
