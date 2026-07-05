@@ -542,6 +542,28 @@ class S3EventSource(BaseEventSource):
         self.add(function_arn)
 
 
+def merge_sns_filter_policies(
+    existing: Optional[Dict[str, Any]], new: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """Merge two SNS filter policies into one broader policy.
+
+    Rules:
+    - Either is None → result is None (match all)
+    - Key in only one filter → omit from merged (omission = match all for that attribute)
+    - Key in both → union the value lists
+    """
+    if existing is None or new is None:
+        return None
+
+    all_keys = set(existing) | set(new)
+    merged = {}
+    for key in all_keys:
+        if key in existing and key in new:
+            merged[key] = list(set(existing[key]) | set(new[key]))
+        # Key in only one → omit (match all for that attribute)
+    return merged if merged else None
+
+
 class SNSEventSource(BaseEventSource):
     """SNS event source implementation"""
 
@@ -616,18 +638,35 @@ class SNSEventSource(BaseEventSource):
             return None
 
     def update(self, function_arn: str) -> None:
-        # For SNS, update means updating filters if they exist
-        if self.filters:
-            subscription = self.status(function_arn)
-            if subscription:
-                try:
-                    self._sns.set_subscription_attributes(
-                        SubscriptionArn=subscription["SubscriptionArn"],
-                        AttributeName="FilterPolicy",
-                        AttributeValue=json.dumps(self.filters),
-                    )
-                except Exception:
-                    LOG.exception("Unable to update SNS filters")
+        # Merge new filters with existing filters on the subscription
+        subscription = self.status(function_arn)
+        if not subscription:
+            return
+
+        try:
+            attrs = self._sns.get_subscription_attributes(SubscriptionArn=subscription["SubscriptionArn"])
+            existing_policy_str = attrs.get("Attributes", {}).get("FilterPolicy")
+            existing_policy = json.loads(existing_policy_str) if existing_policy_str else None
+        except Exception:
+            LOG.exception("Unable to get existing SNS filter policy")
+            existing_policy = None
+
+        merged = merge_sns_filter_policies(existing_policy, self.filters)
+        try:
+            if merged is None:
+                self._sns.set_subscription_attributes(
+                    SubscriptionArn=subscription["SubscriptionArn"],
+                    AttributeName="FilterPolicy",
+                    AttributeValue="",
+                )
+            else:
+                self._sns.set_subscription_attributes(
+                    SubscriptionArn=subscription["SubscriptionArn"],
+                    AttributeName="FilterPolicy",
+                    AttributeValue=json.dumps(merged),
+                )
+        except Exception:
+            LOG.exception("Unable to update SNS filters")
 
 
 class CloudWatchEventSource(BaseEventSource):
@@ -760,13 +799,13 @@ def add_event_source(
     Given an event_source dictionary, create the object and add the event source.
     """
     event_source_obj, function_arn = get_event_source(event_source, lambda_arn, target_function, boto_session, dry=False)
-    # TODO: Detect changes in config and refine exists algorithm
     if not dry:
         if not event_source_obj.status(function_arn):
             event_source_obj.add(function_arn)
             return "successful" if event_source_obj.status(function_arn) else "failed"
         else:
-            return "exists"
+            event_source_obj.update(function_arn)
+            return "updated"
 
     return "dryrun"
 

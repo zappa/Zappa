@@ -639,14 +639,14 @@ class LambdaHandler:
         """
         if "s3" in record:
             if ":" in record["s3"]["configurationId"]:
-                return record["s3"]["configurationId"].split(":")[-1]
+                return [record["s3"]["configurationId"].split(":")[-1]]
 
         arn = None
         if "Sns" in record:
             try:
                 message = json.loads(record["Sns"]["Message"])
                 if message.get("command"):
-                    return message["command"]
+                    return [message["command"]]
             except ValueError:
                 pass
             arn = record["Sns"].get("TopicArn")
@@ -658,9 +658,15 @@ class LambdaHandler:
             arn = record["s3"]["bucket"]["arn"]
 
         if arn:
-            return self.settings.AWS_EVENT_MAPPING.get(arn)
+            value = self.settings.AWS_EVENT_MAPPING.get(arn)
+            if value is None:
+                return []
+            # Backward compat: old format stores a single string
+            if isinstance(value, str):
+                return [value]
+            return value
 
-        return None
+        return []
 
     def get_function_from_bot_intent_trigger(self, event):
         """
@@ -936,11 +942,12 @@ class LambdaHandler:
         elif event.get("Records", None):
             records = event.get("Records")
             result = None
-            whole_function = self.get_function_for_aws_event(records[0])
-            if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
-                result = self.run_function(app_function, event, context)
-                logger.debug(result)
+            functions = self.get_function_for_aws_event(records[0])
+            if functions:
+                for whole_function in functions:
+                    app_function = self.import_module_and_get_function(whole_function)
+                    result = self.run_function(app_function, event, context)
+                    logger.debug(result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
             return result
