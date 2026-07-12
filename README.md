@@ -1187,7 +1187,7 @@ to change Zappa's behavior. Use these at your own risk!
         "async_response_table_read_capacity": 1,  // DynamoDB table read capacity; defaults to 1
         "async_response_table_write_capacity": 1,  // DynamoDB table write capacity; defaults to 1
         "aws_endpoint_urls": { "aws_service_name": "endpoint_url" }, // a dictionary of endpoint_urls that emulate the appropriate service.  Usually used for testing, for instance with `localstack`.
-        "aws_environment_variables" : {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app via AWS Lambdas native environment variables. See also "environment_variables" and "remote_env" . Default {}.
+        "aws_environment_variables" : {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app via AWS Lambdas native environment variables. Unlike "environment_variables", these ARE synced on `zappa update` and visible in the AWS Console/CLI. See also "environment_variables" and "remote_env" . Default {}.
         "aws_kms_key_arn": "your_aws_kms_key_arn", // Your AWS KMS Key ARN
         "aws_region": "aws-region-name", // optional, uses region set in profile or environment variables if not set here,
         "binary_support": true, // Enable automatic MIME-type based response encoding through API Gateway. Default true.
@@ -1223,7 +1223,7 @@ to change Zappa's behavior. Use these at your own risk!
         "django_settings": "your_project.production_settings", // The modular path to your Django project's settings. For Django projects only.
         "domain": "yourapp.yourdomain.com", // Required if you're using a domain
         "base_path": "your-base-path", // Optional base path for API gateway custom domain base path mapping. Default None. Not supported for use with Application Load Balancer event sources.
-        "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. See also "remote_env" and "aws_environment_variables". Default {}.
+        "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. NOT synced to the Lambda's native AWS config on `zappa update` (invisible in the console/CLI) - see "Setting Environment Variables" section below. See also "remote_env" and "aws_environment_variables". Default {}.
         "events": [
             {   // Recurring events
                 "function": "your_module.your_recurring_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
