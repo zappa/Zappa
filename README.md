@@ -1487,6 +1487,8 @@ your_value = os.environ.get('your_key')
 
 If your project needs to be aware of the type of environment you're deployed to, you'll also be able to get `SERVERTYPE` (AWS Lambda), `FRAMEWORK` (Zappa), `PROJECT` (your project name) and `STAGE` (_dev_, _production_, etc.) variables at any time.
 
+> **Note:** `environment_variables` are baked into the deployed `zappa_settings.py` file and only exported to `os.environ` by Zappa's own handler at request time. They are **not** synchronized with the Lambda's native AWS config on `zappa update` — a key added here won't show up in the AWS Console or `aws lambda get-function-configuration`. Use `aws_environment_variables` if you need that.
+
 #### Remote AWS Environment Variables
 
 If you want to use native AWS Lambda environment variables you can use the `aws_environment_variables` configuration setting. These are useful as you can easily change them via the AWS Lambda console or cli at runtime. They are also useful for storing sensitive credentials and to take advantage of KMS encryption of environment variables.
