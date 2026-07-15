@@ -542,9 +542,7 @@ class S3EventSource(BaseEventSource):
         self.add(function_arn)
 
 
-def merge_sns_filter_policies(
-    existing: Optional[Dict[str, Any]], new: Optional[Dict[str, Any]]
-) -> Optional[Dict[str, Any]]:
+def merge_sns_filter_policies(existing: Optional[Dict[str, Any]], new: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Merge two SNS filter policies into one broader policy.
 
     Rules:
