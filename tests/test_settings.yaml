@@ -60,3 +60,28 @@ snap_start_enabled:
 snap_start_disabled:
   extends: ttt888
   snap_start: None
+apigateway_lambda_qualifier_enabled:
+  extends: ttt888
+  apigateway_lambda_qualifier: live
+snap_start_enabled_no_qualifier:
+  extends: ttt888
+  snap_start: PublishedVersions
+snap_start_enabled_explicit_qualifier:
+  extends: ttt888
+  snap_start: PublishedVersions
+  apigateway_lambda_qualifier: custom-alias
+provisioned_concurrency_enabled_no_qualifier:
+  extends: ttt888
+  provisioned_concurrency: 5
+provisioned_concurrency_enabled_explicit_qualifier:
+  extends: ttt888
+  provisioned_concurrency: 5
+  apigateway_lambda_qualifier: custom-alias
+provisioned_concurrency_and_snap_start_conflict:
+  extends: ttt888
+  provisioned_concurrency: 5
+  snap_start: PublishedVersions
+provisioned_concurrency_exceeds_reserved:
+  extends: ttt888
+  provisioned_concurrency: 10
+  lambda_concurrency: 5

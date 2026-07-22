@@ -37,7 +37,13 @@ from click.globals import push_context
 from dateutil import parser
 
 from . import __version__
-from .core import API_GATEWAY_REGIONS, DEFAULT_AWS_REGION, Zappa
+from .core import (
+    API_GATEWAY_REGIONS,
+    DEFAULT_AWS_REGION,
+    PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+    SNAPSTART_LAMBDA_ALIAS,
+    Zappa,
+)
 from .utilities import (
     DEFAULT_EFS_MOUNT_POINT,
     check_new_version_available,
@@ -107,6 +113,7 @@ class ZappaCLI:
     lambda_name = None
     lambda_description = None
     lambda_concurrency = None
+    provisioned_concurrency = None
     s3_bucket_name = None
     settings_file = None
     zip_path = None
@@ -116,6 +123,7 @@ class ZappaCLI:
     memory_size = None
     ephemeral_storage = None
     use_apigateway = None
+    apigateway_lambda_qualifier = None
     lambda_handler = None
     django_settings = None
     manage_roles = True
@@ -797,6 +805,7 @@ class ZappaCLI:
             endpoint_configuration=self.endpoint_configuration,
             apigateway_version=self.apigateway_version,
             stage_name=self.api_stage,
+            lambda_qualifier=self.apigateway_lambda_qualifier,
         )
 
         if not output:
@@ -945,6 +954,7 @@ class ZappaCLI:
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
+                provisioned_concurrency=self.provisioned_concurrency,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -998,6 +1008,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                lambda_qualifier=self.apigateway_lambda_qualifier,
                 websocket=self.use_websocket,
             )
 
@@ -1189,6 +1200,7 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
+            provisioned_concurrency=self.provisioned_concurrency,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1254,6 +1266,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                lambda_qualifier=self.apigateway_lambda_qualifier,
                 websocket=self.use_websocket,
             )
             self.zappa.update_stack(
@@ -2725,6 +2738,12 @@ class ZappaCLI:
             self.use_apigateway = self.stage_config.get("apigateway_enabled", True)
         self.apigateway_description = self.stage_config.get("apigateway_description", None)
         self.apigateway_version = self.stage_config.get("apigateway_version", "v1")
+        self.apigateway_lambda_qualifier = self.stage_config.get("apigateway_lambda_qualifier", None)
+        if self.apigateway_lambda_qualifier is not None and not isinstance(self.apigateway_lambda_qualifier, str):
+            raise ClickException(
+                "The 'apigateway_lambda_qualifier' setting must be a string "
+                "(Lambda alias or version), or null."
+            )
 
         self.lambda_handler = self.stage_config.get("lambda_handler", "handler.lambda_handler")
         # DEPRECATED. https://github.com/Miserlou/Zappa/issues/456
@@ -2742,6 +2761,19 @@ class ZappaCLI:
         self.cors = self.stage_config.get("cors", False)
         self.lambda_description = self.stage_config.get("lambda_description", "Zappa Deployment")
         self.lambda_concurrency = self.stage_config.get("lambda_concurrency", None)
+        self.provisioned_concurrency = self.stage_config.get("provisioned_concurrency", None)
+        if self.provisioned_concurrency is not None:
+            if (
+                not isinstance(self.provisioned_concurrency, int)
+                or isinstance(self.provisioned_concurrency, bool)
+                or self.provisioned_concurrency < 1
+            ):
+                raise ClickException("The 'provisioned_concurrency' setting must be a positive integer, or null.")
+            if self.lambda_concurrency is not None and self.provisioned_concurrency > self.lambda_concurrency:
+                raise ClickException(
+                    "The 'provisioned_concurrency' setting cannot exceed 'lambda_concurrency' "
+                    "(reserved concurrency)."
+                )
         self.environment_variables = self.stage_config.get("environment_variables", {})
         self.aws_environment_variables = self.stage_config.get("aws_environment_variables", {})
         self.check_environment(self.environment_variables)
@@ -2749,6 +2781,20 @@ class ZappaCLI:
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.snap_start = self.stage_config.get("snap_start", "None")
+        if self.provisioned_concurrency is not None and self.snap_start and self.snap_start != "None":
+            raise ClickException(
+                "'snap_start' and 'provisioned_concurrency' cannot both be enabled on the same "
+                "function (AWS Lambda does not support SnapStart with provisioned concurrency)."
+            )
+        # SnapStart and provisioned concurrency both require invoking a
+        # version/alias rather than $LATEST. Zappa manages a dedicated alias
+        # for whichever one is enabled (see SNAPSTART_LAMBDA_ALIAS /
+        # PROVISIONED_CONCURRENCY_LAMBDA_ALIAS in zappa/core.py); default API
+        # Gateway to it unless the user opted into their own qualifier.
+        if self.apigateway_lambda_qualifier is None and self.snap_start and self.snap_start != "None":
+            self.apigateway_lambda_qualifier = SNAPSTART_LAMBDA_ALIAS
+        elif self.apigateway_lambda_qualifier is None and self.provisioned_concurrency is not None:
+            self.apigateway_lambda_qualifier = PROVISIONED_CONCURRENCY_LAMBDA_ALIAS
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
