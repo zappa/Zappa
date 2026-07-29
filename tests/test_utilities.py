@@ -312,12 +312,16 @@ USE_TZ = True
     def test_merge_headers_joins_cookie_with_semicolon(self):
         # HTTP/2 clients may send the cookie header as multiple field lines;
         # they must be re-joined with "; ", not ", ", for WSGI frameworks to parse them.
-        event = {
-            "headers": {"Cookie": "csrftoken=AAAA"},
-            "multiValueHeaders": {"Cookie": ["csrftoken=AAAA", "sessionid=BBBB"]},
-        }
-        merged = merge_headers(event)
-        self.assertEqual(merged["Cookie"], "csrftoken=AAAA; sessionid=BBBB")
+        for header_name in ("Cookie", "cookie"):
+            with self.subTest(header_name=header_name):
+                event = {
+                    "headers": {header_name: "csrftoken=AAAA"},
+                    "multiValueHeaders": {
+                        header_name: ["csrftoken=AAAA", "sessionid=BBBB"]
+                    },
+                }
+                merged = merge_headers(event)
+                self.assertEqual(merged[header_name], "csrftoken=AAAA; sessionid=BBBB")
 
     def test_merge_headers_joins_other_headers_with_comma(self):
         event = {
