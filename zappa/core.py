@@ -1345,7 +1345,6 @@ class Zappa:
         local_zip=None,
         num_revisions=None,
         concurrency=None,
-        provisioned_concurrency=None,
         docker_image_uri=None,
     ):
         """
@@ -1373,34 +1372,6 @@ class Zappa:
         # Related: https://github.com/Miserlou/Zappa/pull/1730
         #          https://github.com/Miserlou/Zappa/issues/1823
         self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
-
-        if provisioned_concurrency is not None:
-            # Provisioned concurrency can only be configured on a published
-            # version, and initializing it takes time. Configure it on the
-            # version just published here (no need for SnapStart's "extra
-            # publish after config update" dance, since PC has no such
-            # before-publish ordering requirement), wait for it to become
-            # ready, then migrate the alias so callers never hit a cold,
-            # unprovisioned version.
-            self.wait_until_lambda_function_version_is_active(function_name, version)
-            self.lambda_client.put_provisioned_concurrency_config(
-                FunctionName=function_name,
-                Qualifier=version,
-                ProvisionedConcurrentExecutions=provisioned_concurrency,
-            )
-            self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
-            old_version = self.migrate_lambda_alias(
-                function_name, PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, version, create_if_missing=True
-            )
-            if old_version is not None and old_version != version:
-                try:
-                    self.lambda_client.delete_provisioned_concurrency_config(
-                        FunctionName=function_name,
-                        Qualifier=old_version,
-                    )
-                except botocore.exceptions.ClientError as e:
-                    if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
-                        raise e
 
         if concurrency is not None:
             self.lambda_client.put_function_concurrency(
@@ -1457,6 +1428,7 @@ class Zappa:
         aws_kms_key_arn=None,
         layers=None,
         snap_start=None,
+        provisioned_concurrency=None,
         wait=True,
     ):
         """
@@ -1523,27 +1495,56 @@ class Zappa:
             self.lambda_client.tag_resource(Resource=resource_arn, Tags=self.tags)
 
         # SnapStart only creates snapshots for versions published AFTER it's
-        # enabled. During updates, the code is published before the config is
-        # updated, so we must publish an additional version here.
-        if snap_start and snap_start != "None":
+        # enabled, and provisioned concurrency can only be configured on a
+        # published version. Either way, the code is published before the
+        # config is updated, so we must publish an additional version here
+        # to capture the new config (UpdateFunctionConfiguration has no
+        # Publish parameter of its own).
+        needs_extra_publish = (snap_start and snap_start != "None") or provisioned_concurrency is not None
+        if needs_extra_publish:
             self.wait_until_lambda_function_is_updated(function_name)
-            logger.info("Publishing new version for SnapStart snapshot creation..")
+            logger.info("Publishing new version to capture updated configuration..")
             publish_response = self.lambda_client.publish_version(FunctionName=function_name)
             version = publish_response["Version"]
 
-            # SnapStart snapshots are created asynchronously after a version
-            # is published. Wait for this version to become active before
-            # repointing any alias at it, so callers never hit a version
-            # whose snapshot isn't ready yet.
+            # SnapStart snapshots/provisioned concurrency are both configured
+            # asynchronously after a version is published. Wait for this
+            # version to become active before repointing any alias at it, so
+            # callers never hit a version that isn't ready yet.
             self.wait_until_lambda_function_version_is_active(function_name, version)
 
             # Update ALB alias to point to the new version if it exists
             self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
 
-            # Migrate the SnapStart alias to the new version, creating it
-            # first if it doesn't exist yet (e.g. SnapStart was just enabled
-            # on a function Zappa had already deployed).
-            self.migrate_lambda_alias(function_name, SNAPSTART_LAMBDA_ALIAS, version, create_if_missing=True)
+            if snap_start and snap_start != "None":
+                # Migrate the SnapStart alias to the new version, creating it
+                # first if it doesn't exist yet (e.g. SnapStart was just
+                # enabled on a function Zappa had already deployed).
+                self.migrate_lambda_alias(function_name, SNAPSTART_LAMBDA_ALIAS, version, create_if_missing=True)
+
+            if provisioned_concurrency is not None:
+                self.lambda_client.put_provisioned_concurrency_config(
+                    FunctionName=function_name,
+                    Qualifier=version,
+                    ProvisionedConcurrentExecutions=provisioned_concurrency,
+                )
+                self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
+                # Migrate the provisioned-concurrency alias to the new
+                # version, creating it first if it doesn't exist yet, then
+                # clean up the old version's provisioned concurrency so
+                # nobody keeps paying for capacity nothing routes to.
+                old_version = self.migrate_lambda_alias(
+                    function_name, PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, version, create_if_missing=True
+                )
+                if old_version is not None and old_version != version:
+                    try:
+                        self.lambda_client.delete_provisioned_concurrency_config(
+                            FunctionName=function_name,
+                            Qualifier=old_version,
+                        )
+                    except botocore.exceptions.ClientError as e:
+                        if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                            raise e
 
         return resource_arn
 
@@ -1573,7 +1574,9 @@ class Zappa:
 
         return self.lambda_client.invoke(**invoke_kwargs)
 
-    def rollback_lambda_function_version(self, function_name, versions_back=1, publish=True):
+    def rollback_lambda_function_version(
+        self, function_name, versions_back=1, publish=True, snap_start=None, provisioned_concurrency=None
+    ):
         """
         Rollback the lambda function code 'versions_back' number of revisions.
         Returns the Function ARN.
@@ -1608,6 +1611,41 @@ class Zappa:
         response = self.lambda_client.update_function_code(
             FunctionName=function_name, ZipFile=response.content, Publish=publish
         )  # pragma: no cover
+
+        if publish:
+            version = response["Version"]
+            if (snap_start and snap_start != "None") or provisioned_concurrency is not None:
+                self.wait_until_lambda_function_version_is_active(function_name, version)
+
+            # Migrate Zappa-managed aliases so alias-routed traffic (ALB,
+            # SnapStart, provisioned concurrency, and API Gateway via
+            # apigateway_lambda_qualifier) actually reflects the rollback,
+            # instead of continuing to serve whatever version they last
+            # pointed to.
+            self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
+
+            if snap_start and snap_start != "None":
+                self.migrate_lambda_alias(function_name, SNAPSTART_LAMBDA_ALIAS, version, create_if_missing=True)
+
+            if provisioned_concurrency is not None:
+                self.lambda_client.put_provisioned_concurrency_config(
+                    FunctionName=function_name,
+                    Qualifier=version,
+                    ProvisionedConcurrentExecutions=provisioned_concurrency,
+                )
+                self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
+                old_version = self.migrate_lambda_alias(
+                    function_name, PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, version, create_if_missing=True
+                )
+                if old_version is not None and old_version != version:
+                    try:
+                        self.lambda_client.delete_provisioned_concurrency_config(
+                            FunctionName=function_name,
+                            Qualifier=old_version,
+                        )
+                    except botocore.exceptions.ClientError as e:
+                        if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                            raise e
 
         return response["FunctionArn"]
 

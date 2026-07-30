@@ -849,9 +849,7 @@ class TestZappa(unittest.TestCase):
         )
         parsable_template = json.loads(z.cf_template.to_json())
         expected_v1_uri = (
-            "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/"
-            + qualified_lambda_arn
-            + "/invocations"
+            "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/" + qualified_lambda_arn + "/invocations"
         )
         self.assertEqual(
             expected_v1_uri,
@@ -1223,6 +1221,48 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(ClickException):
             zappa_cli.load_settings("tests/test_settings.yaml")
 
+    def test_snap_start_with_low_num_retained_versions_raises(self):
+        """
+        Test that num_retained_versions < 2 raises when snap_start is
+        enabled, since pruning could otherwise delete the version the
+        SnapStart alias still points to.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_num_retained_versions_too_low"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_provisioned_concurrency_with_low_num_retained_versions_raises(self):
+        """
+        Test that num_retained_versions < 2 raises when provisioned
+        concurrency is enabled, for the same pruning-conflict reason.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_enabled_num_retained_versions_too_low"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_snap_start_with_num_retained_versions_of_two_is_allowed(self):
+        """
+        Test that num_retained_versions == 2 is the minimum accepted value
+        when snap_start is enabled.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_num_retained_versions_ok"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(2, zappa_cli.num_retained_versions)
+
+    def test_low_num_retained_versions_allowed_without_managed_alias(self):
+        """
+        Test that num_retained_versions == 1 is still fine when neither
+        snap_start nor provisioned_concurrency is enabled, since the
+        pruning-conflict scenario doesn't apply.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_one_without_managed_alias"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(1, zappa_cli.num_retained_versions)
+
     def test_wait_until_provisioned_concurrency_is_ready_polls_until_ready(self):
         """
         Test that the provisioned-concurrency wait helper polls
@@ -1300,9 +1340,51 @@ class TestZappa(unittest.TestCase):
             self.assertIn(create_alias_call, calls)
             self.assertLess(calls.index(ready_call), calls.index(create_alias_call))
 
+    def test_provisioned_concurrency_publishes_version_after_config_update(self):
+        """
+        Test that update_lambda_configuration publishes the provisioned-
+        concurrency version AFTER the config update lands, so alias-routed
+        traffic sees the new config (env vars, memory, timeout, etc.)
+        instead of being frozen at the pre-update state.
+        update_lambda_function's code-only version can't guarantee this,
+        since UpdateFunctionConfiguration has no Publish parameter of its
+        own.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            config_call = mock.call.update_function_configuration(**mock_client.update_function_configuration.call_args[1])
+            publish_call = mock.call.publish_version(FunctionName="test")
+            calls = mock_client.mock_calls
+            self.assertIn(config_call, calls)
+            self.assertIn(publish_call, calls)
+            self.assertLess(calls.index(config_call), calls.index(publish_call))
+
     def test_provisioned_concurrency_migrates_alias_after_update(self):
         """
-        Test that update_lambda_function waits for the newly published
+        Test that update_lambda_configuration waits for the newly published
         version to be active and its provisioned concurrency to be ready
         before migrating the provisioned-concurrency alias to it.
         """
@@ -1310,8 +1392,12 @@ class TestZappa(unittest.TestCase):
         z.credentials_arn = object()
 
         with mock.patch.object(z, "lambda_client") as mock_client:
-            mock_client.update_function_code.return_value = {
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
                 "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
                 "Version": "4",
             }
             # No alias exists yet (ALB or provisioned-concurrency)
@@ -1321,10 +1407,10 @@ class TestZappa(unittest.TestCase):
             )
             mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
 
-            z.update_lambda_function(
-                bucket="test-bucket",
-                function_name="test",
-                s3_key="test.zip",
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
                 provisioned_concurrency=5,
             )
 
@@ -1357,8 +1443,12 @@ class TestZappa(unittest.TestCase):
         z.credentials_arn = object()
 
         with mock.patch.object(z, "lambda_client") as mock_client:
-            mock_client.update_function_code.return_value = {
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
                 "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:1",
                 "Version": "1",
             }
             mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
@@ -1367,10 +1457,10 @@ class TestZappa(unittest.TestCase):
             )
             mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
 
-            z.update_lambda_function(
-                bucket="test-bucket",
-                function_name="test",
-                s3_key="test.zip",
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
                 provisioned_concurrency=5,
             )
 
@@ -1378,7 +1468,7 @@ class TestZappa(unittest.TestCase):
 
     def test_provisioned_concurrency_cleans_up_old_version(self):
         """
-        Test that update_lambda_function deletes the previous version's
+        Test that update_lambda_configuration deletes the previous version's
         provisioned-concurrency config after migrating the alias to the new
         version, so nobody keeps paying for capacity nothing routes to.
         """
@@ -1386,8 +1476,12 @@ class TestZappa(unittest.TestCase):
         z.credentials_arn = object()
 
         with mock.patch.object(z, "lambda_client") as mock_client:
-            mock_client.update_function_code.return_value = {
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
                 "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
                 "Version": "4",
             }
             # The provisioned-concurrency alias already exists, pointed at version 2
@@ -1398,10 +1492,10 @@ class TestZappa(unittest.TestCase):
             }
             mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
 
-            z.update_lambda_function(
-                bucket="test-bucket",
-                function_name="test",
-                s3_key="test.zip",
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
                 provisioned_concurrency=5,
             )
 
@@ -1409,6 +1503,139 @@ class TestZappa(unittest.TestCase):
                 FunctionName="test",
                 Qualifier="2",
             )
+
+    def _mock_rollback_prerequisites(self, mock_client, requests_get_mock, new_version="5"):
+        """
+        Configure the lambda_client/requests mocks shared by every
+        rollback_lambda_function_version test: three published versions
+        (plus $LATEST) exist, and rolling back one revision republishes the
+        code as `new_version`.
+        """
+        mock_client.list_versions_by_function.return_value = {
+            "Versions": [
+                {"Version": "1"},
+                {"Version": "2"},
+                {"Version": "3"},
+                {"Version": "$LATEST"},
+            ]
+        }
+        mock_client.get_function.return_value = {"Code": {"Location": "https://example.com/code.zip"}}
+        requests_get_mock.return_value = mock.Mock(status_code=200, content=b"zip-bytes")
+        mock_client.update_function_code.return_value = {
+            "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            "Version": new_version,
+        }
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_migrates_alb_alias(self, requests_get_mock):
+        """
+        Test that rolling back republishes the old code and migrates the
+        ALB alias to the newly republished version, so ALB-routed traffic
+        actually reflects the rollback.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:current-alb-version",
+                "Name": ALB_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+
+            z.rollback_lambda_function_version("test", versions_back=1)
+
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="5",
+                Name=ALB_LAMBDA_ALIAS,
+            )
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_waits_then_migrates_snap_start_alias(self, requests_get_mock):
+        """
+        Test that rolling back with snap_start enabled waits for the
+        republished version to be active before migrating the SnapStart
+        alias to it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+
+            z.rollback_lambda_function_version("test", versions_back=1, snap_start="PublishedVersions")
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="5")
+            alias_call = mock.call.create_alias(FunctionName="test", FunctionVersion="5", Name=SNAPSTART_LAMBDA_ALIAS)
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            self.assertIn(alias_call, calls)
+            self.assertLess(calls.index(wait_call), calls.index(alias_call))
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_configures_provisioned_concurrency_then_migrates_alias(self, requests_get_mock):
+        """
+        Test that rolling back with provisioned concurrency enabled
+        configures PC on the republished version, waits for it to become
+        ready, migrates the provisioned-concurrency alias to it, and cleans
+        up the old version's PC config.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:provisioned-concurrency",
+                "Name": PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.rollback_lambda_function_version("test", versions_back=1, provisioned_concurrency=5)
+
+            mock_client.put_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="5",
+                ProvisionedConcurrentExecutions=5,
+            )
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="5",
+                Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+            )
+            mock_client.delete_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="3",
+            )
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_with_publish_false_skips_alias_migration(self, requests_get_mock):
+        """
+        Test that rolling back with publish=False doesn't touch any alias,
+        wait, or provisioned-concurrency config, since there's no new
+        version for them to point at.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+
+            z.rollback_lambda_function_version(
+                "test", versions_back=1, publish=False, snap_start="PublishedVersions", provisioned_concurrency=5
+            )
+
+            mock_client.get_alias.assert_not_called()
+            mock_client.update_alias.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+            mock_client.put_provisioned_concurrency_config.assert_not_called()
 
     def test_update_empty_aws_env_hash(self):
         z = Zappa()

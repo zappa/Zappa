@@ -1200,7 +1200,6 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
-            provisioned_concurrency=self.provisioned_concurrency,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1246,6 +1245,7 @@ class ZappaCLI:
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
             snap_start=self.snap_start,
+            provisioned_concurrency=self.provisioned_concurrency,
             wait=False,
         )
 
@@ -1366,7 +1366,12 @@ class ZappaCLI:
 
         print("Rolling back..")
 
-        self.zappa.rollback_lambda_function_version(self.lambda_name, versions_back=revision)
+        self.zappa.rollback_lambda_function_version(
+            self.lambda_name,
+            versions_back=revision,
+            snap_start=self.snap_start,
+            provisioned_concurrency=self.provisioned_concurrency,
+        )
         print("Done!")
 
     def tail(
@@ -2741,8 +2746,7 @@ class ZappaCLI:
         self.apigateway_lambda_qualifier = self.stage_config.get("apigateway_lambda_qualifier", None)
         if self.apigateway_lambda_qualifier is not None and not isinstance(self.apigateway_lambda_qualifier, str):
             raise ClickException(
-                "The 'apigateway_lambda_qualifier' setting must be a string "
-                "(Lambda alias or version), or null."
+                "The 'apigateway_lambda_qualifier' setting must be a string " "(Lambda alias or version), or null."
             )
 
         self.lambda_handler = self.stage_config.get("lambda_handler", "handler.lambda_handler")
@@ -2771,8 +2775,7 @@ class ZappaCLI:
                 raise ClickException("The 'provisioned_concurrency' setting must be a positive integer, or null.")
             if self.lambda_concurrency is not None and self.provisioned_concurrency > self.lambda_concurrency:
                 raise ClickException(
-                    "The 'provisioned_concurrency' setting cannot exceed 'lambda_concurrency' "
-                    "(reserved concurrency)."
+                    "The 'provisioned_concurrency' setting cannot exceed 'lambda_concurrency' " "(reserved concurrency)."
                 )
         self.environment_variables = self.stage_config.get("environment_variables", {})
         self.aws_environment_variables = self.stage_config.get("aws_environment_variables", {})
@@ -2795,6 +2798,22 @@ class ZappaCLI:
             self.apigateway_lambda_qualifier = SNAPSTART_LAMBDA_ALIAS
         elif self.apigateway_lambda_qualifier is None and self.provisioned_concurrency is not None:
             self.apigateway_lambda_qualifier = PROVISIONED_CONCURRENCY_LAMBDA_ALIAS
+        # Each deploy publishes an extra version to capture SnapStart/PC's
+        # config, one cycle behind the code-only version; the managed alias
+        # still points at the *previous* cycle's extra version when this
+        # cycle's pruning runs. Retaining fewer than 2 versions can delete
+        # the version that alias still references, causing Lambda to reject
+        # the deletion with a ResourceConflictException.
+        if (
+            self.num_retained_versions is not None
+            and self.num_retained_versions < 2
+            and ((self.snap_start and self.snap_start != "None") or self.provisioned_concurrency is not None)
+        ):
+            raise ClickException(
+                "'num_retained_versions' must be null or at least 2 when 'snap_start' or "
+                "'provisioned_concurrency' is enabled — otherwise version pruning can delete "
+                "the version Zappa's managed alias still points to."
+            )
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")

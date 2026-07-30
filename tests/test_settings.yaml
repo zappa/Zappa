@@ -85,3 +85,18 @@ provisioned_concurrency_exceeds_reserved:
   extends: ttt888
   provisioned_concurrency: 10
   lambda_concurrency: 5
+snap_start_enabled_num_retained_versions_too_low:
+  extends: ttt888
+  snap_start: PublishedVersions
+  num_retained_versions: 1
+provisioned_concurrency_enabled_num_retained_versions_too_low:
+  extends: ttt888
+  provisioned_concurrency: 5
+  num_retained_versions: 1
+snap_start_enabled_num_retained_versions_ok:
+  extends: ttt888
+  snap_start: PublishedVersions
+  num_retained_versions: 2
+num_retained_versions_one_without_managed_alias:
+  extends: ttt888
+  num_retained_versions: 1
