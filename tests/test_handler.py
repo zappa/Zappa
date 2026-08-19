@@ -763,3 +763,39 @@ class TestZappa(unittest.TestCase):
             response["body"],
             "https://api.example.com/devices/list",
         )
+
+    def test_keep_warm_scheduled_event_without_handler_module(self):
+        """
+        Keep-warm EventBridge rules encode handler.keep_warm_callback.
+        LambdaHandler construction already loaded the app, so this must
+        not import a top-level handler module (#1469).
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+        event = {
+            "account": "123456789012",
+            "region": "us-east-1",
+            "detail": {},
+            "detail-type": "Scheduled Event",
+            "source": "aws.events",
+            "version": "0",
+            "time": "2026-08-18T18:04:39Z",
+            "id": "c6c1bea9-5846-4008-9947-57c1c5fb03d5",
+            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-zappa-keep-warm-handler.keep_warm_callback"],
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertIsNone(response)
+
+    def test_scheduled_event_invokes_target_function(self):
+        """User-configured scheduled events still import and run the target."""
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+        event = {
+            "detail-type": "Scheduled Event",
+            "source": "aws.events",
+            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-tests.test_app.schedule_me"],
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response, "Hello!")
