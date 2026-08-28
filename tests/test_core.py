@@ -18,6 +18,7 @@ from functools import partial
 from io import BytesIO
 from pathlib import Path
 from subprocess import check_output
+from urllib.parse import parse_qs
 
 import botocore
 import botocore.stub
@@ -4599,6 +4600,89 @@ class TestZappa(unittest.TestCase):
         request = create_wsgi_request(event)
         expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
         self.assertEqual(request["QUERY_STRING"], expected)
+
+    @staticmethod
+    def _v2_event(**overrides):
+        """Minimal API Gateway payload format 2.0 event, for query string tests."""
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/path/path1",
+            "rawQueryString": "",
+            "headers": {"host": "example.com"},
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/path/path1",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                },
+                "stage": "$default",
+            },
+            "isBase64Encoded": False,
+        }
+        event.update(overrides)
+        return event
+
+    def test_wsgi_v2_repeated_query_params_preserved(self):
+        """
+        API Gateway v2 flattens ?id=18&id=19&id=20 into
+        queryStringParameters {"id": "18,19,20"}. rawQueryString keeps the
+        original repetition and must be what reaches the application.
+        https://github.com/zappa/Zappa/issues/1472
+        """
+        event = self._v2_event(
+            rawQueryString="id=18&id=19&id=20",
+            queryStringParameters={"id": "18,19,20"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "id=18&id=19&id=20")
+        self.assertEqual(parse_qs(request["QUERY_STRING"]), {"id": ["18", "19", "20"]})
+
+    def test_wsgi_v2_literal_comma_in_value_preserved(self):
+        """
+        A comma inside a single value must not be mistaken for a separator.
+        queryStringParameters cannot express the difference; rawQueryString can.
+        """
+        event = self._v2_event(
+            rawQueryString="tags=a%2Cb&tags=c",
+            queryStringParameters={"tags": "a,b,c"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(parse_qs(request["QUERY_STRING"]), {"tags": ["a,b", "c"]})
+
+    def test_wsgi_v2_query_string_not_double_encoded(self):
+        """rawQueryString arrives percent-encoded and must be passed through as-is."""
+        event = self._v2_event(
+            rawQueryString="test=M%26M&query=C%23D&utf=caf%C3%A9",
+            queryStringParameters={"test": "M&M", "query": "C#D", "utf": "café"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M&query=C%23D&utf=caf%C3%A9")
+        self.assertEqual(
+            parse_qs(request["QUERY_STRING"]),
+            {"test": ["M&M"], "query": ["C#D"], "utf": ["café"]},
+        )
+
+    def test_wsgi_v2_empty_query_string(self):
+        """An empty rawQueryString must not fall back to queryStringParameters."""
+        request = create_wsgi_request(self._v2_event())
+        self.assertEqual(request["QUERY_STRING"], "")
+
+    def test_wsgi_v2_without_raw_query_string_falls_back(self):
+        """
+        Invokers other than API Gateway may send a v2-shaped event with no
+        rawQueryString. Fall back to queryStringParameters, honouring lists.
+        """
+        event = self._v2_event(queryStringParameters={"a": "1", "b": "C#D"})
+        del event["rawQueryString"]
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=1&b=C%23D")
+
+        event = self._v2_event(queryStringParameters={"a": ["1", "2"]})
+        del event["rawQueryString"]
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=1&a=2")
 
     @mock.patch("subprocess.Popen")
     def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):
