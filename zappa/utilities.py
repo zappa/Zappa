@@ -963,7 +963,10 @@ def merge_headers(event: Dict[str, Any]) -> Dict[str, str]:
         if h not in multi_headers:
             multi_headers[h] = [headers[h]]
     for h in multi_headers.keys():
-        multi_headers[h] = ", ".join(multi_headers[h])
+        # Cookies are joined with "; ", not ", " (RFC 6265).
+        # HTTP/2 clients may send the cookie header as multiple field lines.
+        separator = "; " if h.lower() == "cookie" else ", "
+        multi_headers[h] = separator.join(multi_headers[h])
     return multi_headers
 
 
