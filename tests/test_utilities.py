@@ -316,9 +316,7 @@ USE_TZ = True
             with self.subTest(header_name=header_name):
                 event = {
                     "headers": {header_name: "csrftoken=AAAA"},
-                    "multiValueHeaders": {
-                        header_name: ["csrftoken=AAAA", "sessionid=BBBB"]
-                    },
+                    "multiValueHeaders": {header_name: ["csrftoken=AAAA", "sessionid=BBBB"]},
                 }
                 merged = merge_headers(event)
                 self.assertEqual(merged[header_name], "csrftoken=AAAA; sessionid=BBBB")
