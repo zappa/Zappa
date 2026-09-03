@@ -1039,6 +1039,65 @@ class TestZappa(unittest.TestCase):
             self.assertIn(create_alias_call, calls)
             self.assertLess(calls.index(wait_call), calls.index(create_alias_call))
 
+    def test_container_snap_start_creates_alias_after_version_is_active(self):
+        """Test that container-image SnapStart waits before creating the aliases."""
+        z = Zappa()
+        z.credentials_arn = object()
+        image_uri = "123456789.dkr.ecr.us-east-1.amazonaws.com/test:latest"
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.create_lambda_function(
+                function_name="test",
+                handler=None,
+                docker_image_uri=image_uri,
+                snap_start="PublishedVersions",
+                use_alb=True,
+            )
+
+            create_call_kwargs = mock_client.create_function.call_args.kwargs
+            self.assertEqual({"ApplyOn": "PublishedVersions"}, create_call_kwargs["SnapStart"])
+            self.assertEqual("Image", create_call_kwargs["PackageType"])
+            self.assertEqual({"ImageUri": image_uri}, create_call_kwargs["Code"])
+            self.assertNotIn("Handler", create_call_kwargs)
+            self.assertNotIn("Runtime", create_call_kwargs)
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="1")
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            for alias_name in (ALB_LAMBDA_ALIAS, SNAPSTART_LAMBDA_ALIAS):
+                alias_call = mock.call.create_alias(
+                    FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                    FunctionVersion="1",
+                    Name=alias_name,
+                )
+                self.assertIn(alias_call, calls)
+                self.assertLess(calls.index(wait_call), calls.index(alias_call))
+
+    def test_container_snap_start_defers_alb_alias_until_final_version(self):
+        """Test that an image update does not move ALB before SnapStart is ready."""
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.update_function_code.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.update_lambda_function(
+                bucket="bucket",
+                function_name="test",
+                docker_image_uri="123456789.dkr.ecr.us-east-1.amazonaws.com/test:latest",
+                snap_start="PublishedVersions",
+            )
+
+            mock_client.update_alias.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+
     def test_snap_start_disabled_does_not_create_alias(self):
         """
         Test that no SnapStart alias is created when SnapStart is disabled.
@@ -1177,6 +1236,48 @@ class TestZappa(unittest.TestCase):
                 calls.index(wait_call),
                 calls.index(mock.call.update_alias(FunctionName="test", FunctionVersion="3", Name="current-alb-version")),
             )
+
+    def test_container_snap_start_updates_both_aliases_after_publish(self):
+        """Test that an image update moves ALB and SnapStart aliases after readiness."""
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Image"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:alias",
+                "Name": ALB_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            update_kwargs = mock_client.update_function_configuration.call_args.kwargs
+            self.assertEqual({"ApplyOn": "PublishedVersions"}, update_kwargs["SnapStart"])
+            self.assertNotIn("Handler", update_kwargs)
+            self.assertNotIn("Runtime", update_kwargs)
+            self.assertNotIn("Layers", update_kwargs)
+
+            mock_client.update_alias.assert_any_call(FunctionName="test", FunctionVersion="4", Name=ALB_LAMBDA_ALIAS)
+            mock_client.update_alias.assert_any_call(FunctionName="test", FunctionVersion="4", Name=SNAPSTART_LAMBDA_ALIAS)
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="4")
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            for alias_name in (ALB_LAMBDA_ALIAS, SNAPSTART_LAMBDA_ALIAS):
+                alias_call = mock.call.update_alias(FunctionName="test", FunctionVersion="4", Name=alias_name)
+                self.assertLess(calls.index(wait_call), calls.index(alias_call))
 
     def test_apigateway_lambda_qualifier_defaults_to_provisioned_concurrency_alias(self):
         """

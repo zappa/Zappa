@@ -1346,6 +1346,7 @@ class Zappa:
         num_revisions=None,
         concurrency=None,
         docker_image_uri=None,
+        snap_start=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1367,11 +1368,13 @@ class Zappa:
         resource_arn = response["FunctionArn"]
         version = response["Version"]
 
-        # If the lambda has an ALB alias, let's update the alias
-        # to point to the newest version of the function.
+        # If SnapStart is enabled, update_lambda_configuration will publish
+        # and validate the final version before moving the ALB alias. The
+        # code-only version returned here is not the version ALB should use.
         # Related: https://github.com/Miserlou/Zappa/pull/1730
         #          https://github.com/Miserlou/Zappa/issues/1823
-        self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
+        if not snap_start or snap_start == "None":
+            self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
 
         if concurrency is not None:
             self.lambda_client.put_function_concurrency(
