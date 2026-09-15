@@ -887,6 +887,12 @@ class LambdaHandler:
         elif event.get("detail-type") == "Scheduled Event":
             whole_function = event["resources"][0].split("/")[-1].split("-")[-1]
 
+            # Keep-warm is scheduled as handler.keep_warm_callback, but that
+            # module only exists when the zip-root handler.py copy is packaged.
+            # LambdaHandler construction already loaded the app. See #1469.
+            if whole_function.rsplit(".", 1)[-1] == "keep_warm_callback":
+                return
+
             # This is a scheduled function.
             if "." in whole_function:
                 app_function = self.import_module_and_get_function(whole_function)
@@ -894,7 +900,7 @@ class LambdaHandler:
                 # Execute the function!
                 return self.run_function(app_function, event, context)
 
-            # Keep-warm / recertify: initialization already done by singleton
+            # Recertify: initialization already done by singleton
 
         # This is a direct command invocation.
         elif event.get("command", None):

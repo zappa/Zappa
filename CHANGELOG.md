@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* Fix keep-warm `ModuleNotFoundError: No module named 'handler'` when there is no zip-root `handler.py` (#1469)
+  - Scheduled keep-warm events no longer import `handler.keep_warm_callback`.
+  - That import only works for classic zip deploys that copy `handler.py` to the archive root; custom `lambda_handler` / container images do not have that module.
+  - `LambdaHandler` construction already loads the app, so the extra import is unnecessary.
 * Change default of `num_retained_versions` from `null` (keep all) to `5` (#1453)
   - Lambda code storage and SnapStart snapshot-cache cost now have a sane default upper bound.
   - On the first `zappa update` after upgrade, published versions older than the newest 5 are deleted; versions referenced by an alias (e.g. ALB) and `$LATEST` are unaffected, but versions referenced by other aliases can still raise `ResourceConflictException` (see #960).
