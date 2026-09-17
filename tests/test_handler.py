@@ -176,6 +176,42 @@ class TestZappa(unittest.TestCase):
             "https://example.com/return/request/url?multi=value&multi=qs",
         )
 
+    def test_wsgi_script_name_on_v2_event_with_multi_value_querystring(self):
+        """
+        API Gateway payload format 2.0 has no multiValueQueryStringParameters
+        and collapses repeats into a comma-joined queryStringParameters value.
+        The application must still see the repeated parameters.
+        https://github.com/zappa/Zappa/issues/1472
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/return/request/url",
+            "rawQueryString": "multi=value&multi=qs",
+            # This is the lossy value API Gateway v2 actually sends alongside it.
+            "queryStringParameters": {"multi": "value,qs"},
+            "headers": {
+                "host": "example.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(
+            response["body"],
+            "https://example.com/return/request/url?multi=value&multi=qs",
+        )
+
     def test_wsgi_script_name_on_test_request(self):
         """
         Ensure that requests sent by the "Send test request" button behaves
