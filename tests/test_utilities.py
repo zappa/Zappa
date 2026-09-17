@@ -23,6 +23,7 @@ from zappa.utilities import (
     get_venv_from_python_version,
     human_size,
     is_valid_bucket_name,
+    merge_headers,
     parse_s3_url,
     string_to_timestamp,
     titlecase_keys,
@@ -307,6 +308,26 @@ USE_TZ = True
 
         self.assertTrue(is_valid_bucket_name("valid-formed-s3-bucket-name"))
         self.assertTrue(is_valid_bucket_name("worst.bucket.ever"))
+
+    def test_merge_headers_joins_cookie_with_semicolon(self):
+        # HTTP/2 clients may send the cookie header as multiple field lines;
+        # they must be re-joined with "; ", not ", ", for WSGI frameworks to parse them.
+        for header_name in ("Cookie", "cookie"):
+            with self.subTest(header_name=header_name):
+                event = {
+                    "headers": {header_name: "csrftoken=AAAA"},
+                    "multiValueHeaders": {header_name: ["csrftoken=AAAA", "sessionid=BBBB"]},
+                }
+                merged = merge_headers(event)
+                self.assertEqual(merged[header_name], "csrftoken=AAAA; sessionid=BBBB")
+
+    def test_merge_headers_joins_other_headers_with_comma(self):
+        event = {
+            "headers": {},
+            "multiValueHeaders": {"Accept": ["text/html", "application/json"]},
+        }
+        merged = merge_headers(event)
+        self.assertEqual(merged["Accept"], "text/html, application/json")
 
 
 class ApacheNCSAFormatterTestCase(unittest.TestCase):
