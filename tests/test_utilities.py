@@ -490,7 +490,7 @@ class EventSourceMappingStatusTestCase(unittest.TestCase):
     """Tests for EventSourceMappingMixin.status() error handling (#1317)"""
 
     def _make_mixin(self, mock_lambda_client):
-        session = mock.MagicMock()<<<<<<< fix/cookie-header-merge
+        session = mock.MagicMock()
         session.client.return_value = mock_lambda_client
         config = {"arn": "arn:aws:sqs:us-east-1:123456789:my-queue", "batch_size": 10, "enabled": True}
         return EventSourceMappingMixin(session, config)
