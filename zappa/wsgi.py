@@ -164,8 +164,13 @@ def process_lambda_payload_v2(event_info):
     if event_info.get("cookies"):
         headers["Cookie"] = "; ".join(event_info["cookies"])
     path = unquote(event_info["rawPath"])
-    query = event_info.get("queryStringParameters", {})
-    query_string = urlencode(query) if query else ""
+    # queryStringParameters comma-joins repeated params; rawQueryString does not.
+    # https://github.com/zappa/Zappa/issues/1472
+    if "rawQueryString" in event_info:
+        query_string = event_info["rawQueryString"] or ""
+    else:
+        query = event_info.get("queryStringParameters", {})
+        query_string = urlencode(query, doseq=True) if query else ""
     # Systems calling the Lambda (other than API Gateway) may not provide the field requestContext
     # Extract remote_user, authorizer if Authorizer is enabled
     remote_user = None
