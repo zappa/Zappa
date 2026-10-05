@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Fix API Gateway v2 (HTTP API) collapsing repeated query parameters such as `?id=1&id=2` into a single comma-joined value; `QUERY_STRING` is now built from the event's `rawQueryString`, which also fixes ASGI apps and Lambda Function URLs (#1472)
 * Change default of `num_retained_versions` from `null` (keep all) to `5` (#1453)
   - Lambda code storage and SnapStart snapshot-cache cost now have a sane default upper bound.
   - On the first `zappa update` after upgrade, published versions older than the newest 5 are deleted; versions referenced by an alias (e.g. ALB) and `$LATEST` are unaffected, but versions referenced by other aliases can still raise `ResourceConflictException` (see #960).
