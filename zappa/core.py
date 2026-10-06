@@ -126,6 +126,15 @@ ZIP_EXCLUDES = [
 # the Lambda.
 # See: https://github.com/Miserlou/Zappa/pull/1730
 ALB_LAMBDA_ALIAS = "current-alb-version"
+# SnapStart snapshots are only usable when a function is invoked via a
+# published version or alias (never $LATEST), so Zappa maintains this alias
+# and repoints it to each new version once its snapshot is confirmed ready.
+SNAPSTART_LAMBDA_ALIAS = "snapstart"
+# Provisioned concurrency likewise can only be configured on a published
+# version or alias, and initializing it takes time. Zappa maintains this
+# alias, repointing it to each new version only once its provisioned
+# concurrency is confirmed ready.
+PROVISIONED_CONCURRENCY_LAMBDA_ALIAS = "provisioned-concurrency"
 X86_ARCHITECTURE = "x86_64"
 ARM_ARCHITECTURE = "arm64"
 VALID_ARCHITECTURES = (X86_ARCHITECTURE, ARM_ARCHITECTURE)
@@ -1206,6 +1215,7 @@ class Zappa:
         use_alb=False,
         layers=None,
         concurrency=None,
+        provisioned_concurrency=None,
         docker_image_uri=None,
     ):
         """
@@ -1267,6 +1277,13 @@ class Zappa:
         resource_arn = response["FunctionArn"]
         version = response["Version"]
 
+        # SnapStart snapshots are created asynchronously after a version is
+        # published, and provisioned concurrency can't be configured on a
+        # version until it's active. Any alias we create below must not
+        # point at this version until it's confirmed ready.
+        if (snap_start and snap_start != "None") or provisioned_concurrency is not None:
+            self.wait_until_lambda_function_version_is_active(function_name, version)
+
         # If we're using an ALB, let's create an alias mapped to the newly
         # created function. This allows clean, no downtime association when
         # using application load balancers as an event source.
@@ -1277,6 +1294,32 @@ class Zappa:
                 FunctionName=resource_arn,
                 FunctionVersion=version,
                 Name=ALB_LAMBDA_ALIAS,
+            )
+
+        # Maintain a dedicated alias for SnapStart-invoking callers (e.g. API
+        # Gateway), so they never target $LATEST, which SnapStart can't
+        # snapshot.
+        if snap_start and snap_start != "None":
+            self.lambda_client.create_alias(
+                FunctionName=resource_arn,
+                FunctionVersion=version,
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+
+        # Maintain a dedicated alias for provisioned-concurrency-invoking
+        # callers, only pointed at this version once its provisioned
+        # concurrency has finished initializing.
+        if provisioned_concurrency is not None:
+            self.lambda_client.put_provisioned_concurrency_config(
+                FunctionName=resource_arn,
+                Qualifier=version,
+                ProvisionedConcurrentExecutions=provisioned_concurrency,
+            )
+            self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
+            self.lambda_client.create_alias(
+                FunctionName=resource_arn,
+                FunctionVersion=version,
+                Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
             )
 
         if self.tags:
@@ -1303,6 +1346,7 @@ class Zappa:
         num_revisions=None,
         concurrency=None,
         docker_image_uri=None,
+        snap_start=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1324,29 +1368,13 @@ class Zappa:
         resource_arn = response["FunctionArn"]
         version = response["Version"]
 
-        # If the lambda has an ALB alias, let's update the alias
-        # to point to the newest version of the function. We have to use a GET
-        # here, as there's no HEAD-esque call to retrieve metadata about a
-        # function alias.
+        # If SnapStart is enabled, update_lambda_configuration will publish
+        # and validate the final version before moving the ALB alias. The
+        # code-only version returned here is not the version ALB should use.
         # Related: https://github.com/Miserlou/Zappa/pull/1730
         #          https://github.com/Miserlou/Zappa/issues/1823
-        try:
-            response = self.lambda_client.get_alias(
-                FunctionName=function_name,
-                Name=ALB_LAMBDA_ALIAS,
-            )
-            alias_exists = True
-        except botocore.exceptions.ClientError as e:  # pragma: no cover
-            if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
-                raise e
-            alias_exists = False
-
-        if alias_exists:
-            self.lambda_client.update_alias(
-                FunctionName=function_name,
-                FunctionVersion=version,
-                Name=ALB_LAMBDA_ALIAS,
-            )
+        if not snap_start or snap_start == "None":
+            self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
 
         if concurrency is not None:
             self.lambda_client.put_function_concurrency(
@@ -1403,6 +1431,7 @@ class Zappa:
         aws_kms_key_arn=None,
         layers=None,
         snap_start=None,
+        provisioned_concurrency=None,
         wait=True,
     ):
         """
@@ -1469,25 +1498,56 @@ class Zappa:
             self.lambda_client.tag_resource(Resource=resource_arn, Tags=self.tags)
 
         # SnapStart only creates snapshots for versions published AFTER it's
-        # enabled. During updates, the code is published before the config is
-        # updated, so we must publish an additional version here.
-        if snap_start and snap_start != "None":
+        # enabled, and provisioned concurrency can only be configured on a
+        # published version. Either way, the code is published before the
+        # config is updated, so we must publish an additional version here
+        # to capture the new config (UpdateFunctionConfiguration has no
+        # Publish parameter of its own).
+        needs_extra_publish = (snap_start and snap_start != "None") or provisioned_concurrency is not None
+        if needs_extra_publish:
             self.wait_until_lambda_function_is_updated(function_name)
-            logger.info("Publishing new version for SnapStart snapshot creation..")
+            logger.info("Publishing new version to capture updated configuration..")
             publish_response = self.lambda_client.publish_version(FunctionName=function_name)
             version = publish_response["Version"]
 
+            # SnapStart snapshots/provisioned concurrency are both configured
+            # asynchronously after a version is published. Wait for this
+            # version to become active before repointing any alias at it, so
+            # callers never hit a version that isn't ready yet.
+            self.wait_until_lambda_function_version_is_active(function_name, version)
+
             # Update ALB alias to point to the new version if it exists
-            try:
-                self.lambda_client.get_alias(FunctionName=function_name, Name=ALB_LAMBDA_ALIAS)
-                self.lambda_client.update_alias(
+            self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
+
+            if snap_start and snap_start != "None":
+                # Migrate the SnapStart alias to the new version, creating it
+                # first if it doesn't exist yet (e.g. SnapStart was just
+                # enabled on a function Zappa had already deployed).
+                self.migrate_lambda_alias(function_name, SNAPSTART_LAMBDA_ALIAS, version, create_if_missing=True)
+
+            if provisioned_concurrency is not None:
+                self.lambda_client.put_provisioned_concurrency_config(
                     FunctionName=function_name,
-                    FunctionVersion=version,
-                    Name=ALB_LAMBDA_ALIAS,
+                    Qualifier=version,
+                    ProvisionedConcurrentExecutions=provisioned_concurrency,
                 )
-            except botocore.exceptions.ClientError as e:
-                if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
-                    raise e
+                self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
+                # Migrate the provisioned-concurrency alias to the new
+                # version, creating it first if it doesn't exist yet, then
+                # clean up the old version's provisioned concurrency so
+                # nobody keeps paying for capacity nothing routes to.
+                old_version = self.migrate_lambda_alias(
+                    function_name, PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, version, create_if_missing=True
+                )
+                if old_version is not None and old_version != version:
+                    try:
+                        self.lambda_client.delete_provisioned_concurrency_config(
+                            FunctionName=function_name,
+                            Qualifier=old_version,
+                        )
+                    except botocore.exceptions.ClientError as e:
+                        if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                            raise e
 
         return resource_arn
 
@@ -1517,7 +1577,9 @@ class Zappa:
 
         return self.lambda_client.invoke(**invoke_kwargs)
 
-    def rollback_lambda_function_version(self, function_name, versions_back=1, publish=True):
+    def rollback_lambda_function_version(
+        self, function_name, versions_back=1, publish=True, snap_start=None, provisioned_concurrency=None
+    ):
         """
         Rollback the lambda function code 'versions_back' number of revisions.
         Returns the Function ARN.
@@ -1553,6 +1615,41 @@ class Zappa:
             FunctionName=function_name, ZipFile=response.content, Publish=publish
         )  # pragma: no cover
 
+        if publish:
+            version = response["Version"]
+            if (snap_start and snap_start != "None") or provisioned_concurrency is not None:
+                self.wait_until_lambda_function_version_is_active(function_name, version)
+
+            # Migrate Zappa-managed aliases so alias-routed traffic (ALB,
+            # SnapStart, provisioned concurrency, and API Gateway via
+            # apigateway_lambda_qualifier) actually reflects the rollback,
+            # instead of continuing to serve whatever version they last
+            # pointed to.
+            self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
+
+            if snap_start and snap_start != "None":
+                self.migrate_lambda_alias(function_name, SNAPSTART_LAMBDA_ALIAS, version, create_if_missing=True)
+
+            if provisioned_concurrency is not None:
+                self.lambda_client.put_provisioned_concurrency_config(
+                    FunctionName=function_name,
+                    Qualifier=version,
+                    ProvisionedConcurrentExecutions=provisioned_concurrency,
+                )
+                self.wait_until_lambda_function_provisioned_concurrency_is_ready(function_name, version)
+                old_version = self.migrate_lambda_alias(
+                    function_name, PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, version, create_if_missing=True
+                )
+                if old_version is not None and old_version != version:
+                    try:
+                        self.lambda_client.delete_provisioned_concurrency_config(
+                            FunctionName=function_name,
+                            Qualifier=old_version,
+                        )
+                    except botocore.exceptions.ClientError as e:
+                        if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                            raise e
+
         return response["FunctionArn"]
 
     def wait_until_lambda_function_is_active(self, function_name):
@@ -1572,6 +1669,89 @@ class Zappa:
         waiter = self.lambda_client.get_waiter("function_updated")
         logger.info(f"Waiting for lambda function [{function_name}] to be updated...")
         waiter.wait(FunctionName=function_name)
+
+    def wait_until_lambda_function_version_is_active(self, function_name, version):
+        """
+        Wait until the given published Lambda version's State=Active.
+
+        SnapStart snapshots are created asynchronously after a version is
+        published; invoking the version (directly, or via an alias) before
+        its snapshot is ready will fail. Provisioned concurrency can't be
+        configured on a version until it's active either. This must be
+        called before migrating any alias to a newly published version when
+        SnapStart or provisioned concurrency is enabled.
+        """
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/lambda.html#waiters
+        waiter = self.lambda_client.get_waiter("published_version_active")
+        logger.info(f"Waiting for lambda function [{function_name}] version [{version}] to become active...")
+        waiter.wait(FunctionName=function_name, Qualifier=version)
+
+    def wait_until_lambda_function_provisioned_concurrency_is_ready(
+        self, function_name, qualifier, poll_interval=5, timeout=600, sleep_func=time.sleep
+    ):
+        """
+        Wait until the given version/alias's provisioned concurrency has
+        finished initializing (Status=READY).
+
+        boto3 has no waiter for this, so it's polled manually. Invoking a
+        version/alias before its provisioned concurrency is ready falls back
+        to an on-demand cold start, defeating the point of enabling it, so
+        this must be called before migrating any alias to a newly
+        provisioned version.
+        """
+        elapsed = 0
+        while True:
+            response = self.lambda_client.get_provisioned_concurrency_config(
+                FunctionName=function_name,
+                Qualifier=qualifier,
+            )
+            status = response["Status"]
+            if status == "READY":
+                return
+            if status == "FAILED":
+                raise RuntimeError(
+                    f"Provisioned concurrency failed for lambda function [{function_name}] "
+                    f"qualifier [{qualifier}]: {response.get('StatusReason')}"
+                )
+            if elapsed >= timeout:
+                raise RuntimeError(
+                    f"Timed out waiting for provisioned concurrency on lambda function "
+                    f"[{function_name}] qualifier [{qualifier}]"
+                )
+            logger.info(
+                f"Waiting for provisioned concurrency on lambda function [{function_name}] "
+                f"qualifier [{qualifier}] to become ready..."
+            )
+            sleep_func(poll_interval)
+            elapsed += poll_interval
+
+    def migrate_lambda_alias(self, function_name, alias_name, version, create_if_missing=True):
+        """
+        Repoint `alias_name` to `version`. If the alias doesn't exist yet and
+        create_if_missing is True, create it instead of updating it.
+
+        Returns the alias's previous FunctionVersion, or None if it didn't
+        already exist.
+        """
+        try:
+            existing_alias = self.lambda_client.get_alias(FunctionName=function_name, Name=alias_name)
+        except botocore.exceptions.ClientError as e:
+            if "ResourceNotFoundException" not in e.response["Error"]["Code"]:
+                raise e
+            if create_if_missing:
+                self.lambda_client.create_alias(
+                    FunctionName=function_name,
+                    FunctionVersion=version,
+                    Name=alias_name,
+                )
+            return None
+
+        self.lambda_client.update_alias(
+            FunctionName=function_name,
+            FunctionVersion=version,
+            Name=alias_name,
+        )
+        return existing_alias["FunctionVersion"]
 
     def get_lambda_function(self, function_name):
         """
@@ -2040,9 +2220,30 @@ class Zappa:
     # API Gateway
     ##
 
+    @staticmethod
+    def _get_qualified_lambda_arn(lambda_arn: str, lambda_qualifier: Optional[str] = None) -> str:
+        """
+        Return a Lambda function ARN qualified with a version or alias.
+        """
+        if not lambda_qualifier:
+            return lambda_arn
+
+        qualifier = lambda_qualifier.strip()
+        if not qualifier:
+            return lambda_arn
+
+        parts = lambda_arn.split(":")
+        # Function ARN without qualifier has 7 parts:
+        # arn:partition:lambda:region:account:function:function-name
+        if len(parts) >= 8 and parts[5] == "function":
+            return ":".join(parts[:7] + [qualifier])
+
+        return f"{lambda_arn}:{qualifier}"
+
     def create_api_gateway_v2_routes(  # type: ignore[no-untyped-def]
         self,
         lambda_arn: str,
+        lambda_qualifier: Optional[str] = None,
         api_name: Optional[str] = None,
         api_key_required: bool = False,
         authorization_type: str = "NONE",
@@ -2056,6 +2257,8 @@ class Zappa:
         Returns the new Api CF resource.
         """
         import troposphere.apigatewayv2 as apigwv2
+
+        qualified_lambda_arn = self._get_qualified_lambda_arn(lambda_arn, lambda_qualifier)
 
         # Create the HTTP API
         http_api = apigwv2.Api("ApiV2")
@@ -2084,7 +2287,7 @@ class Zappa:
         integration = apigwv2.Integration("IntegrationV2")
         integration.ApiId = troposphere.Ref(http_api)
         integration.IntegrationType = "AWS_PROXY"
-        integration.IntegrationUri = lambda_arn
+        integration.IntegrationUri = qualified_lambda_arn
         integration.PayloadFormatVersion = "2.0"
         self.cf_template.add_resource(integration)
 
@@ -2112,7 +2315,7 @@ class Zappa:
 
         # Add Lambda permission for API Gateway v2 to invoke the function
         permission = troposphere.awslambda.Permission("ApiInvokePermissionV2")
-        permission.FunctionName = lambda_arn
+        permission.FunctionName = qualified_lambda_arn
         permission.Action = "lambda:InvokeFunction"
         permission.Principal = "apigateway.amazonaws.com"
         permission.SourceArn = troposphere.Join(
@@ -2134,6 +2337,7 @@ class Zappa:
     def create_websocket_api(
         self,
         lambda_arn: str,
+        lambda_qualifier: Optional[str] = None,
         api_name: Optional[str] = None,
         stage_name: str = "production",
     ):
@@ -2142,6 +2346,8 @@ class Zappa:
         Returns the new Api CF resource.
         """
         import troposphere.apigatewayv2 as apigwv2
+
+        qualified_lambda_arn = self._get_qualified_lambda_arn(lambda_arn, lambda_qualifier)
 
         ws_api = apigwv2.Api("WsApi")
         ws_api.Name = (api_name or lambda_arn.split(":")[-1]) + "-ws"
@@ -2159,7 +2365,7 @@ class Zappa:
                 "arn:aws:apigateway:",
                 troposphere.Ref("AWS::Region"),
                 ":lambda:path/2015-03-31/functions/",
-                lambda_arn,
+                qualified_lambda_arn,
                 "/invocations",
             ],
         )
@@ -2182,7 +2388,7 @@ class Zappa:
 
         # Lambda invoke permission
         permission = troposphere.awslambda.Permission("WsInvokePermission")
-        permission.FunctionName = lambda_arn
+        permission.FunctionName = qualified_lambda_arn
         permission.Action = "lambda:InvokeFunction"
         permission.Principal = "apigateway.amazonaws.com"
         permission.SourceArn = troposphere.Join(
@@ -2204,6 +2410,7 @@ class Zappa:
     def create_api_gateway_routes(  # type: ignore[no-untyped-def]
         self,
         lambda_arn: str,
+        lambda_qualifier: Optional[str] = None,
         api_name: Optional[str] = None,
         api_key_required: bool = False,
         authorization_type: str = "NONE",
@@ -2222,6 +2429,7 @@ class Zappa:
         if apigateway_version == "v2":
             return self.create_api_gateway_v2_routes(
                 lambda_arn=lambda_arn,
+                lambda_qualifier=lambda_qualifier,
                 api_name=api_name,
                 api_key_required=api_key_required,
                 authorization_type=authorization_type,
@@ -2252,13 +2460,14 @@ class Zappa:
 
         root_id = troposphere.GetAtt(restapi, "RootResourceId")
         invocation_prefix = "aws" if self.boto_session.region_name != "us-gov-west-1" else "aws-us-gov"
+        qualified_lambda_arn = self._get_qualified_lambda_arn(lambda_arn, lambda_qualifier)
         invocations_uri = (
             "arn:"
             + invocation_prefix
             + ":apigateway:"
             + self.boto_session.region_name
             + ":lambda:path/2015-03-31/functions/"
-            + lambda_arn
+            + qualified_lambda_arn
             + "/invocations"
         )
 
@@ -2267,7 +2476,7 @@ class Zappa:
         ##
         authorizer_resource = None
         if authorizer:
-            authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
+            authorizer_lambda_arn = authorizer.get("arn", qualified_lambda_arn)
             lambda_uri = (
                 f"arn:{invocation_prefix}:apigateway:{self.boto_session.region_name}:"
                 f"lambda:path/2015-03-31/functions/{authorizer_lambda_arn}/invocations"
@@ -2784,6 +2993,7 @@ class Zappa:
         endpoint_configuration=None,
         apigateway_version=DEFAULT_APIGATEWAY_VERSION,
         stage_name=None,
+        lambda_qualifier=None,
         websocket=False,
         websocket_stage_name=None,
     ):
@@ -2813,6 +3023,7 @@ class Zappa:
 
         self.create_api_gateway_routes(
             lambda_arn,
+            lambda_qualifier=lambda_qualifier,
             api_name=lambda_name,
             api_key_required=api_key_required,
             authorization_type=auth_type,
@@ -2827,6 +3038,7 @@ class Zappa:
         if websocket:
             self.create_websocket_api(
                 lambda_arn=lambda_arn,
+                lambda_qualifier=lambda_qualifier,
                 api_name=lambda_name,
                 stage_name=websocket_stage_name or stage_name or "production",
             )

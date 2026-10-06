@@ -313,6 +313,48 @@ class TestWebSocketCFTemplate(unittest.TestCase):
         ]:
             self.assertNotIn(name, resources, f"Unexpected WS resource: {name}")
 
+    def test_websocket_lambda_qualifier_is_applied(self):
+        from zappa.core import Zappa
+
+        z = Zappa.__new__(Zappa)
+        z.boto_session = MagicMock()
+        z.boto_session.region_name = "us-east-1"
+        z.cf_api_resources = []
+        z.cf_parameters = {}
+
+        qualified_lambda_arn = "arn:aws:lambda:us-east-1:123456789:function:my-func:live"
+        template = z.create_stack_template(
+            lambda_arn="arn:aws:lambda:us-east-1:123456789:function:my-func",
+            lambda_name="my-func",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            apigateway_version="v2",
+            websocket=True,
+            websocket_stage_name="production",
+            lambda_qualifier="live",
+        )
+
+        resources = template.to_dict()["Resources"]
+        integration_uri = resources["WsIntegration"]["Properties"]["IntegrationUri"]
+        self.assertIn("Fn::Join", integration_uri)
+        self.assertEqual(
+            "",
+            integration_uri["Fn::Join"][0],
+        )
+        self.assertEqual(
+            qualified_lambda_arn,
+            integration_uri["Fn::Join"][1][3],
+        )
+        self.assertEqual(
+            "/invocations",
+            integration_uri["Fn::Join"][1][4],
+        )
+        self.assertEqual(
+            qualified_lambda_arn,
+            resources["WsInvokePermission"]["Properties"]["FunctionName"],
+        )
+
 
 class TestWebSocketHandlerDispatch(unittest.TestCase):
     """Test WebSocket event dispatch through LambdaHandler."""
