@@ -512,7 +512,9 @@ class Zappa:
         import pip  # noqa: 547
 
         if not venv:
-            venv = self.get_current_venv()
+            # Without a virtualenv (`--no_venv`), package the running interpreter's environment.
+            # Related: https://github.com/zappa/Zappa/issues/850
+            venv = self.get_current_venv() or Path(sys.prefix)
 
         build_time = str(int(time.time()))
         cwd = Path.cwd()
