@@ -1,22 +1,62 @@
 # Zappa Changelog
 
-## Unreleased
+## 0.63.0
 
-* Fix API Gateway v2 (HTTP API) collapsing repeated query parameters such as `?id=1&id=2` into a single comma-joined value; `QUERY_STRING` is now built from the event's `rawQueryString`, which also fixes ASGI apps and Lambda Function URLs (#1472)
-* Fix keep-warm `ModuleNotFoundError: No module named 'handler'` when there is no zip-root `handler.py` (#1469)
-  - Scheduled keep-warm events no longer import `handler.keep_warm_callback`.
-  - That import only works for classic zip deploys that copy `handler.py` to the archive root; custom `lambda_handler` / container images do not have that module.
-  - `LambdaHandler` construction already loads the app, so the extra import is unnecessary.
+* Add full SnapStart and provisioned concurrency support via managed Lambda aliases (#1463, #1468)
+  - With `snap_start` enabled, Zappa maintains a `snapstart` alias: each `zappa deploy`/`update` publishes a new version, waits for its snapshot to be Active, then repoints the alias.
+  - New `provisioned_concurrency` setting: Zappa maintains a `provisioned-concurrency` alias, configures provisioned concurrency on the new version, waits for it to be Ready, repoints the alias, and removes the old version's config.
+  - New `apigateway_lambda_qualifier` setting: Lambda version or alias used for API Gateway (REST, HTTP API, WebSocket) integrations. Defaults to the managed alias when `snap_start` or `provisioned_concurrency` is enabled.
+  - Behavior change for existing `snap_start` users: the first `zappa update` after upgrading points API Gateway at the `snapstart` alias instead of the unqualified function.
+  - `snap_start` and `provisioned_concurrency` are mutually exclusive; `provisioned_concurrency` cannot exceed `lambda_concurrency`; `num_retained_versions` must be `null` or at least 2 when either is enabled.
+* Support multiple functions per AWS event source ARN, and merge SNS filter policies (#1462)
+  - `AWS_EVENT_MAPPING` maps an ARN to a list of functions (the previous single-function format is still read).
+  - `SNSEventSource.update()` merges the new filter policy with the subscription's existing policy instead of overwriting it.
 * Change default of `num_retained_versions` from `null` (keep all) to `5` (#1453)
   - Lambda code storage and SnapStart snapshot-cache cost now have a sane default upper bound.
   - On the first `zappa update` after upgrade, published versions older than the newest 5 are deleted; versions referenced by an alias (e.g. ALB) and `$LATEST` are unaffected, but versions referenced by other aliases can still raise `ResourceConflictException` (see #960).
   - To preserve previous behavior (keep all versions) set `"num_retained_versions": null` in `zappa_settings.json`.
   - Pruned versions are now logged in the deploy output.
   - `zappa init` / `zappa settings` now include `num_retained_versions` in generated `zappa_settings.json`.
+* Fix API Gateway v2 (HTTP API) collapsing repeated query parameters such as `?id=1&id=2` into a single comma-joined value; `QUERY_STRING` is now built from the event's `rawQueryString`, which also fixes ASGI apps and Lambda Function URLs (#1472)
+* Fix `merge_headers()` joining multiple `Cookie` headers with `", "` instead of `"; "` (#1466, #1467)
+  - HTTP/2 clients may split cookies across header lines; the comma-joined result dropped cookies such as `sessionid` and broke session auth.
+* Fix API Gateway v2 custom-domain double-stage redirect; stage detection now matches on a path-segment boundary (#1409, #1460)
+* Fix keep-warm `ModuleNotFoundError: No module named 'handler'` when there is no zip-root `handler.py` (#1469)
+  - Scheduled keep-warm events no longer import `handler.keep_warm_callback`.
+  - That import only works for classic zip deploys that copy `handler.py` to the archive root; custom `lambda_handler` / container images do not have that module.
+  - `LambdaHandler` construction already loads the app, so the extra import is unnecessary.
+* Fix SnapStart on deploy and update (#1448, #1449, #1450)
+  - `zappa deploy` now passes `snap_start` to the initial Lambda function creation.
+  - `zappa update` publishes a new version after the SnapStart configuration update.
 * Clarify Docker deployment handling for `slim_handler` (#1341)
   - `zappa deploy`, `zappa update`, and `zappa save-python-settings-file` now fail fast with a clear error when `--docker-image-uri` is used with a stage that sets `slim_handler` (this combination writes a stale `ARCHIVE_PATH` into `zappa_settings.py` and causes the container handler to load old code from S3).
   - `zappa undeploy` now removes the `<stage>_<project>_current_project.tar.gz` archive from the configured S3 bucket when `slim_handler` was enabled, so a later redeploy cannot load stale code.
   - README: documented which `zappa_settings` keys should not be used with Docker deployments.
+* Fix S3 event notification race condition: retry `put_bucket_notification_configuration` on "Unable to validate" errors (#1419, #1441)
+* Fix `upload_to_s3()` attempting to create the bucket on 403 AccessDenied; it now raises a clear error (#1315, #1437)
+* Fix SQS event source `status()` swallowing all `ClientError`s, which caused duplicate mapping creation attempts (#1317, #1436)
+* Fix `exclude_glob` to support `**` recursive patterns (#1269, #1435)
+* Optimize handler hot-path performance (#1443, #1444)
+  - HTTP event routing checked first, cached log formatters and mimetypes, lazy `boto3` import.
+  - `run_function` replaces `inspect.getfullargspec` with a `TypeError` fallback, which also fixes `TypeError: unsupported callable` on Python 3.14 with stub-only annotations (#1474).
+* Docs
+  - README: Quick Reference section (#1446), two-statement resource policy for Function URLs (#1455), `environment_variables` not synced to AWS on `zappa update` (#1465).
+
+## 0.62.1
+
+* Refactor `send_message` to accept `connection_id` directly (#1433)
+* Docs: EventBridge rule naming format and restrictions
+
+## 0.62.0
+
+* Add ASGI support and refactor codebase (#1422)
+* Add WebSocket API Gateway support (#1428)
+* Fix WebSocket handler registry empty at runtime (#1430)
+* Add `--payload` option to `zappa invoke` (#1412, #1432)
+* Fix `zappa init` including `app_function` for Django projects (#1431)
+* Fix `zappa update` failing in regions without Lambda Function URL support (#1425, #1426)
+* Remove special S3 function ARN handling, fixing an event-source regression from 0.61 (#1414)
+* Update setuptools version constraint in Pipfile (#1423)
 
 ## 0.61.4
 
