@@ -228,7 +228,20 @@ class LambdaHandler:
             # Download zip file from S3
             remote_bucket, remote_file = parse_s3_url(project_zip_path)
             s3 = boto_session.resource("s3")
-            archive_on_s3 = s3.Object(remote_bucket, remote_file).get()
+            from botocore.exceptions import ClientError
+
+            try:
+                archive_on_s3 = s3.Object(remote_bucket, remote_file).get()
+            except ClientError as e:
+                if e.response.get("Error", {}).get("Code") not in ("NoSuchKey", "404"):
+                    raise
+                # Related: https://github.com/zappa/Zappa/issues/1475
+                stage = getattr(self.settings, "API_STAGE", "<stage>")
+                raise RuntimeError(
+                    f"slim_handler project archive not found: s3://{remote_bucket}/{remote_file}. "
+                    "The archive is downloaded on every cold start and must be retained while the stage is deployed. "
+                    f"Run `zappa update {stage}` to re-upload it."
+                ) from e
 
             with tarfile.open(fileobj=archive_on_s3["Body"], mode="r|gz") as t:
                 t.extractall(project_folder)

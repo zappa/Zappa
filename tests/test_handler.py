@@ -1,6 +1,9 @@
 import unittest
+import uuid
+from types import SimpleNamespace
 from typing import Any, Tuple
 
+from botocore.exceptions import ClientError
 from mock import Mock
 
 from zappa.handler import LambdaHandler
@@ -890,3 +893,26 @@ class TestZappa(unittest.TestCase):
         response = lh.handler(event, None)
 
         self.assertEqual(response, "Hello!")
+
+    def _slim_handler_with_get_error(self, code):
+        # Bypass the LambdaHandler singleton; only settings and session are used here
+        lh = object.__new__(LambdaHandler)
+        lh.settings = SimpleNamespace(PROJECT_NAME=f"missing-archive-{uuid.uuid4().hex}", API_STAGE="dev")
+        lh.session = Mock()
+        error = ClientError({"Error": {"Code": code, "Message": "error"}}, "GetObject")
+        lh.session.resource.return_value.Object.return_value.get.side_effect = error
+        return lh
+
+    def test_load_remote_project_archive_missing(self):
+        lh = self._slim_handler_with_get_error("NoSuchKey")
+        with self.assertRaises(RuntimeError) as cm:
+            lh.load_remote_project_archive("s3://bucket/dev_proj_current_project.tar.gz")
+        message = str(cm.exception)
+        self.assertIn("s3://bucket/dev_proj_current_project.tar.gz", message)
+        self.assertIn("zappa update dev", message)
+        self.assertIsInstance(cm.exception.__cause__, ClientError)
+
+    def test_load_remote_project_archive_other_error(self):
+        lh = self._slim_handler_with_get_error("AccessDenied")
+        with self.assertRaises(ClientError):
+            lh.load_remote_project_archive("s3://bucket/dev_proj_current_project.tar.gz")

@@ -1362,6 +1362,8 @@ You can also simply handle CORS directly in your application. Your web framework
 
 AWS currently limits Lambda zip sizes to 50 megabytes. If your project is larger than that, set `slim_handler: true` in your `zappa_settings.json`. In this case, your fat application package will be replaced with a small handler-only package. The handler file then pulls the rest of the large project down from S3 at run time! The initial load of the large project may add to startup overhead, but the difference should be minimal on a warm lambda function. Note that this will also eat into the storage space of your application function. Note that AWS [supports](https://aws.amazon.com/blogs/compute/using-larger-ephemeral-storage-for-aws-lambda/) custom `/tmp` directory storage size in a range of 512 - 10240 MB. Use `ephemeral_storage` in `zappa_settings.json` to adjust to your needs if your project is larger than default 512 MB.
 
+The project archive (`s3://<s3_bucket>/<stage>_<project_name>_current_project.tar.gz`) is a runtime dependency: it is downloaded on every cold start for as long as the stage is deployed. Do not apply an age-based S3 lifecycle expiration rule to the deploy bucket, as it will eventually delete the archive of a deployed stage and every cold start will fail. To limit storage growth, enable bucket versioning and expire only *noncurrent* versions. If the archive is missing, run `zappa update <stage>` to re-upload it.
+
 ### Enabling Bash Completion
 
 Bash completion can be enabled by adding the following to your .bashrc:
