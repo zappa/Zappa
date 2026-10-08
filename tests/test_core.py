@@ -109,6 +109,16 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_create_lambda_package_without_venv(self):
+        # `--no_venv`: no virtualenv detected, so the running interpreter's environment is packaged
+        with mock.patch("zappa.core.Zappa.get_current_venv", return_value=None), mock.patch(
+            "zappa.core.Zappa.get_installed_packages", return_value={}
+        ):
+            z = Zappa(runtime="python3.13")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
     def test_get_manylinux_python39(self):
         z = Zappa(runtime="python3.9")
         self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg2-binary", "2.9.1"))
