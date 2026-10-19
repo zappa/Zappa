@@ -1217,6 +1217,7 @@ class Zappa:
         concurrency=None,
         provisioned_concurrency=None,
         docker_image_uri=None,
+        pre_promotion_hook=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -1283,6 +1284,14 @@ class Zappa:
         # point at this version until it's confirmed ready.
         if (snap_start and snap_start != "None") or provisioned_concurrency is not None:
             self.wait_until_lambda_function_version_is_active(function_name, version)
+
+            # Gate the aliases below on the caller's release commands and
+            # health check. Deliberately runs before any alias is created and
+            # before provisioned concurrency is configured, so a failure here
+            # leaves no alias pointing at unvalidated code and no provisioned
+            # capacity to pay for. Exceptions propagate to abort the deploy.
+            if pre_promotion_hook:
+                pre_promotion_hook(version)
 
         # If we're using an ALB, let's create an alias mapped to the newly
         # created function. This allows clean, no downtime association when
@@ -1385,30 +1394,7 @@ class Zappa:
             self.lambda_client.delete_function_concurrency(FunctionName=function_name)
 
         if num_revisions:
-            # Find the existing revision IDs for the given function
-            # Related: https://github.com/Miserlou/Zappa/issues/1402
-            versions_in_lambda = []
-            versions = self.lambda_client.list_versions_by_function(FunctionName=function_name)
-            for version in versions["Versions"]:
-                versions_in_lambda.append(version["Version"])
-            while "NextMarker" in versions:
-                versions = self.lambda_client.list_versions_by_function(
-                    FunctionName=function_name, Marker=versions["NextMarker"]
-                )
-                for version in versions["Versions"]:
-                    versions_in_lambda.append(version["Version"])
-            versions_in_lambda.remove("$LATEST")
-            versions_to_delete = versions_in_lambda[::-1][num_revisions:]
-            if versions_to_delete:
-                logger.info(
-                    "Pruning %d Lambda function version(s) for %s (retaining latest %d): %s",
-                    len(versions_to_delete),
-                    function_name,
-                    num_revisions,
-                    ", ".join(versions_to_delete),
-                )
-            for version in versions_to_delete:
-                self.lambda_client.delete_function(FunctionName=function_name, Qualifier=version)
+            self.prune_lambda_function_versions(function_name, num_revisions)
 
         self.wait_until_lambda_function_is_updated(function_name)
 
@@ -1432,6 +1418,7 @@ class Zappa:
         layers=None,
         snap_start=None,
         provisioned_concurrency=None,
+        pre_promotion_hook=None,
         wait=True,
     ):
         """
@@ -1515,6 +1502,15 @@ class Zappa:
             # version to become active before repointing any alias at it, so
             # callers never hit a version that isn't ready yet.
             self.wait_until_lambda_function_version_is_active(function_name, version)
+
+            # Gate every alias migration below on the caller's release
+            # commands and health check. Deliberately runs before any alias
+            # moves and before provisioned concurrency is configured, so a
+            # failure here leaves the previous version serving and no
+            # provisioned capacity to pay for. Exceptions propagate to abort
+            # the update.
+            if pre_promotion_hook:
+                pre_promotion_hook(version)
 
             # Update ALB alias to point to the new version if it exists
             self.migrate_lambda_alias(function_name, ALB_LAMBDA_ALIAS, version, create_if_missing=False)
@@ -1724,6 +1720,108 @@ class Zappa:
             )
             sleep_func(poll_interval)
             elapsed += poll_interval
+
+    def prune_lambda_function_versions(self, function_name, num_revisions):
+        """
+        Delete all but the newest `num_revisions` published versions of
+        `function_name`, never touching $LATEST or a version an alias points
+        to.
+
+        Best-effort by design. This runs *after* the new code has been
+        uploaded and published, and it only exists to bound code-storage and
+        snapshot-cache cost - so a failure here warns and moves on rather
+        than failing a deploy that has otherwise succeeded.
+        """
+        try:
+            # Find the existing revision IDs for the given function
+            # Related: https://github.com/Miserlou/Zappa/issues/1402
+            versions_in_lambda = []
+            versions = self.lambda_client.list_versions_by_function(FunctionName=function_name)
+            for version in versions["Versions"]:
+                versions_in_lambda.append(version["Version"])
+            while "NextMarker" in versions:
+                versions = self.lambda_client.list_versions_by_function(
+                    FunctionName=function_name, Marker=versions["NextMarker"]
+                )
+                for version in versions["Versions"]:
+                    versions_in_lambda.append(version["Version"])
+            versions_in_lambda.remove("$LATEST")
+            versions_to_delete = versions_in_lambda[::-1][num_revisions:]
+        except botocore.exceptions.ClientError as e:
+            # Pruning is a cost optimization, not part of the deployment.
+            logger.warning(
+                "Could not list versions for %s (%s); skipping version pruning.",
+                function_name,
+                e.response["Error"].get("Code", "Unknown"),
+            )
+            return
+
+        # Never prune a version an alias still points to. Lambda rejects such
+        # a deletion with ResourceConflictException, and with a managed alias
+        # (ALB/SnapStart/provisioned concurrency) the alias can legitimately
+        # lag several versions behind $LATEST - every aborted promotion
+        # leaves it pinned while newer versions pile up.
+        # Related: https://github.com/zappa/Zappa/issues/960
+        aliased_versions = self.get_aliased_lambda_function_versions(function_name)
+        if aliased_versions:
+            skipped = [version for version in versions_to_delete if version in aliased_versions]
+            if skipped:
+                logger.info(
+                    "Retaining Lambda function version(s) still referenced by an alias for %s: %s",
+                    function_name,
+                    ", ".join(skipped),
+                )
+            versions_to_delete = [version for version in versions_to_delete if version not in aliased_versions]
+
+        if versions_to_delete:
+            logger.info(
+                "Pruning %d Lambda function version(s) for %s (retaining latest %d): %s",
+                len(versions_to_delete),
+                function_name,
+                num_revisions,
+                ", ".join(versions_to_delete),
+            )
+
+        for version in versions_to_delete:
+            try:
+                self.lambda_client.delete_function(FunctionName=function_name, Qualifier=version)
+            except botocore.exceptions.ClientError as e:
+                # Per-version so one refusal doesn't strand the rest. Lambda
+                # refuses to delete a version an alias points to, which can
+                # still happen here if alias lookup was unavailable or if the
+                # alias moved after it ran.
+                logger.warning(
+                    "Could not delete version %s of %s (%s); leaving it in place.",
+                    version,
+                    function_name,
+                    e.response["Error"].get("Code", "Unknown"),
+                )
+
+    def get_aliased_lambda_function_versions(self, function_name):
+        """
+        Return the set of published version numbers that at least one alias of
+        `function_name` currently points to.
+
+        Returns an empty set if the deploying credentials can't list aliases.
+        This is only used to make version pruning safer, so a missing
+        lambda:ListAliases permission degrades to the previous behavior rather
+        than failing the deploy over a cost optimization.
+        """
+        aliased_versions = set()
+        try:
+            paginator = self.lambda_client.get_paginator("list_aliases")
+            for page in paginator.paginate(FunctionName=function_name):
+                for alias in page.get("Aliases", []):
+                    aliased_versions.add(alias["FunctionVersion"])
+        except botocore.exceptions.ClientError as e:
+            logger.warning(
+                "Could not list aliases for %s (%s); pruning cannot skip aliased versions. "
+                "Grant lambda:ListAliases to avoid deleting a version an alias still points to.",
+                function_name,
+                e.response["Error"].get("Code", "Unknown"),
+            )
+            return set()
+        return aliased_versions
 
     def migrate_lambda_alias(self, function_name, alias_name, version, create_if_missing=True):
         """

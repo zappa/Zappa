@@ -260,6 +260,89 @@ def get_runtime_from_python_version() -> str:
     return f"python{major}.{minor}"
 
 
+def build_synthetic_http_event(
+    path: str = "/",
+    apigateway_version: str = "v1",
+    stage: str = "dev",
+    host: Optional[str] = None,
+    method: str = "GET",
+) -> Dict[str, Any]:
+    """
+    Build a synthetic API Gateway event for a GET of `path`, shaped so that
+    LambdaHandler.handler routes it as an HTTP request rather than a command.
+
+    Used to smoke-test a freshly published Lambda version by direct qualified
+    invoke, before any alias is pointed at it. The version isn't reachable over
+    HTTP yet at that point - the alias still serves the previous version - so a
+    real request can't be used.
+
+    `host` decides the SCRIPT_NAME the handler derives: a custom domain yields
+    "", an execute-api host yields "/<stage>". Pass None when the API Gateway
+    host isn't known yet (first deploy); the handler derives the same
+    SCRIPT_NAME as the execute-api case from the absent Host header.
+
+    X-Forwarded-Proto/Port are always set, because real API Gateway always
+    sends them and create_wsgi_request falls back to http/80 without them.
+    Without https here, an app with SECURE_SSL_REDIRECT (or Flask-Talisman,
+    or force_ssl) answers with a 301 and never runs the view - which would
+    make the health check pass without validating anything.
+    """
+    if not path.startswith("/"):
+        path = f"/{path}"
+
+    if apigateway_version == "v2":
+        # The handler dispatches v2 on event["version"] == "2.0", and matches
+        # the stage prefix in rawPath on a path-segment boundary, so rawPath
+        # must carry the stage the way direct API Gateway v2 access does.
+        headers = {"x-forwarded-proto": "https", "x-forwarded-port": "443"}
+        if host:
+            headers["host"] = host
+        return {
+            "version": "2.0",
+            "routeKey": f"{method} {path}",
+            "rawPath": f"/{stage}{path}".rstrip("/") or "/",
+            "rawQueryString": "",
+            "headers": headers,
+            "requestContext": {
+                "stage": stage,
+                "http": {
+                    "method": method,
+                    "path": f"/{stage}{path}",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "127.0.0.1",
+                    "userAgent": "Zappa-Health-Check",
+                },
+            },
+            "body": None,
+            "isBase64Encoded": False,
+        }
+
+    # The handler dispatches v1/REST on the presence of event["httpMethod"].
+    # Real v1 events exclude the stage from "path", so it is not added here.
+    headers = {"X-Forwarded-Proto": "https", "X-Forwarded-Port": "443"}
+    if host:
+        headers["Host"] = host
+    return {
+        "httpMethod": method,
+        "path": path,
+        "resource": path,
+        "headers": headers,
+        "multiValueHeaders": {},
+        "queryStringParameters": None,
+        "pathParameters": None,
+        "stageVariables": None,
+        "requestContext": {
+            "stage": stage,
+            "path": f"/{stage}{path}",
+            "resourcePath": path,
+            "httpMethod": method,
+            "identity": {"sourceIp": "127.0.0.1", "userAgent": "Zappa-Health-Check"},
+        },
+        "body": None,
+        "isBase64Encoded": False,
+    }
+
+
 ##
 # Async Tasks
 ##

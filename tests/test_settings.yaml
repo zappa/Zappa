@@ -100,3 +100,75 @@ snap_start_enabled_num_retained_versions_ok:
 num_retained_versions_one_without_managed_alias:
   extends: ttt888
   num_retained_versions: 1
+release_commands_enabled:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_commands:
+    - migrate --noinput
+    - collectstatic --noinput
+  release_health_check: /health
+release_commands_with_provisioned_concurrency:
+  extends: ttt888
+  provisioned_concurrency: 5
+  release_commands:
+    - migrate --noinput
+release_commands_without_managed_alias:
+  extends: ttt888
+  release_commands:
+    - migrate --noinput
+release_commands_invalid_type:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_commands: migrate --noinput
+release_commands_invalid_entry:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_commands:
+    - migrate --noinput
+    - "  "
+release_health_check_disabled:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check: false
+release_health_check_dict:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check:
+    path: /health
+    retries: 1
+    interval: 2
+    delay: 3
+release_health_check_string:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check: /health
+release_health_check_partial_dict:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check:
+    path: /health
+    retries: 0
+release_health_check_unknown_key:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check:
+    path: /health
+    retrys: 5
+release_health_check_true_without_path:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check: true
+release_health_check_missing_path:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check:
+    retries: 1
+release_health_check_invalid_retries:
+  extends: ttt888
+  snap_start: PublishedVersions
+  release_health_check:
+    path: /health
+    retries: -1
+release_health_check_without_managed_alias:
+  extends: ttt888
+  release_health_check: /health

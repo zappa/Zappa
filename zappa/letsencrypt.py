@@ -204,8 +204,12 @@ def get_boulder_header(key_bytes):
     Use regular expressions to find crypto values from parsed account key,
     and return a header we can send to our Boulder instance.
     """
+    # The leading "00:" is the DER sign byte, prepended to keep the modulus a
+    # positive ASN.1 INTEGER - it is not part of the modulus, so it is matched
+    # outside the capture group and discarded. OpenSSL < 4 prints it; OpenSSL 4
+    # does not, hence the optional group. Don't "tidy" it back to a literal.
     pub_hex, pub_exp = re.search(
-        r"modulus:\n\s+00:([a-f0-9\:\s]+?)\npublicExponent: ([0-9]+)",
+        r"modulus:\n\s+(?:00:)?([a-f0-9\:\s]+?)\npublicExponent: ([0-9]+)",
         key_bytes.decode("utf8"),
         re.MULTILINE | re.DOTALL,
     ).groups()

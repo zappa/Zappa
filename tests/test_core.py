@@ -42,6 +42,7 @@ from zappa.letsencrypt import (
     create_domain_csr,
     create_domain_key,
     encode_certificate,
+    get_boulder_header,
     get_cert_and_update_domain,
     gettempdir,
     parse_account_key,
@@ -1365,6 +1366,435 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.yaml")
         self.assertEqual(1, zappa_cli.num_retained_versions)
 
+    def test_load_settings__release_commands(self):
+        """
+        Test that release_commands loads as an ordered list of strings.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(["migrate --noinput", "collectstatic --noinput"], zappa_cli.release_commands)
+        self.assertTrue(zappa_cli.release_health_check)
+        self.assertTrue(zappa_cli.has_managed_alias)
+
+    def test_load_settings__release_commands_with_provisioned_concurrency(self):
+        """
+        Test that provisioned concurrency also satisfies the managed-alias
+        requirement for release_commands.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_with_provisioned_concurrency"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(["migrate --noinput"], zappa_cli.release_commands)
+        self.assertTrue(zappa_cli.has_managed_alias)
+
+    def test_load_settings__release_commands_default_is_empty(self):
+        """
+        Test that release_commands defaults to empty and leaves the deploy
+        ungated.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual([], zappa_cli.release_commands)
+        self.assertFalse(zappa_cli.has_managed_alias)
+
+    def test_load_settings__release_commands_without_managed_alias_raises(self):
+        """
+        Test that release_commands without snap_start or
+        provisioned_concurrency raises, since there is no held-back version
+        to gate.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_without_managed_alias"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("requires 'snap_start' or 'provisioned_concurrency'", str(context.exception))
+
+    def test_load_settings__release_commands_invalid_type_raises(self):
+        """
+        Test that a bare string for release_commands is rejected rather than
+        being iterated character by character.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_invalid_type"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("must be a list of strings", str(context.exception))
+
+    def test_load_settings__release_commands_invalid_entry_raises(self):
+        """
+        Test that a blank release command is rejected.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_invalid_entry"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("non-empty string", str(context.exception))
+
+    def test_load_settings__release_health_check_disabled(self):
+        """
+        Test that release_health_check can be turned off.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_disabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertFalse(zappa_cli.release_health_check)
+
+    def test_load_settings__release_health_check_dict(self):
+        """Test that the dict form is normalized, carrying its own path."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_dict"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual({"path": "/health", "retries": 1, "interval": 2, "delay": 3}, zappa_cli.release_health_check)
+
+    def test_load_settings__release_health_check_string_shorthand(self):
+        """Test that a bare path string enables the check with defaults."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_string"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        expected = dict(ZappaCLI.RELEASE_HEALTH_CHECK_DEFAULTS, path="/health")
+        self.assertEqual(expected, zappa_cli.release_health_check)
+
+    def test_load_settings__release_health_check_is_off_by_default(self):
+        """
+        Test that an existing snap_start user who never asked for a gate
+        doesn't get one - the check is opt-in and does not reuse touch_path.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIsNone(zappa_cli.release_health_check)
+        self.assertEqual([], zappa_cli.release_commands)
+        self.assertTrue(zappa_cli.has_managed_alias)
+        self.assertIsNone(zappa_cli.get_pre_promotion_hook())
+
+    def test_load_settings__release_health_check_does_not_touch_touch_path(self):
+        """Test that enabling the gate leaves touch_path alone."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_string"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual("/health", zappa_cli.release_health_check["path"])
+        self.assertEqual("/", zappa_cli.stage_config.get("touch_path", "/"))
+
+    def test_load_settings__release_health_check_true_without_path_raises(self):
+        """Test that `true` is rejected, since there is no path to fall back to."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_true_without_path"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("needs a path", str(context.exception))
+
+    def test_load_settings__release_health_check_missing_path_raises(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_missing_path"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("path", str(context.exception))
+
+    def test_load_settings__release_health_check_without_managed_alias_raises(self):
+        """
+        Test that the gate requires snap_start or provisioned_concurrency,
+        the same as release_commands - without a managed alias there is no
+        held-back version to check.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_without_managed_alias"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("requires 'snap_start' or 'provisioned_concurrency'", str(context.exception))
+
+    def test_load_settings__release_health_check_partial_dict_merges_defaults(self):
+        """Test that unspecified keys keep their defaults."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_partial_dict"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(0, zappa_cli.release_health_check["retries"])
+        self.assertEqual(ZappaCLI.RELEASE_HEALTH_CHECK_DEFAULTS["interval"], zappa_cli.release_health_check["interval"])
+        self.assertEqual(ZappaCLI.RELEASE_HEALTH_CHECK_DEFAULTS["delay"], zappa_cli.release_health_check["delay"])
+        self.assertEqual("/health", zappa_cli.release_health_check["path"])
+
+    def test_load_settings__release_health_check_unknown_key_raises(self):
+        """
+        Test that a typo is rejected rather than silently ignored - quietly
+        doing nothing is the failure mode this whole gate exists to avoid.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_unknown_key"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("retrys", str(context.exception))
+
+    def test_load_settings__release_health_check_invalid_retries_raises(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_invalid_retries"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIn("retries", str(context.exception))
+
+    def test_get_pre_promotion_hook__none_without_managed_alias(self):
+        """
+        Test that no hook is produced when there is no alias to gate, so the
+        default deploy path is untouched.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIsNone(zappa_cli.get_pre_promotion_hook())
+
+    def test_get_pre_promotion_hook__none_when_nothing_to_gate_on(self):
+        """
+        Test that no hook is produced when there are no release commands and
+        the health check is disabled, even with a managed alias.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_disabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual([], zappa_cli.release_commands)
+        self.assertIsNone(zappa_cli.get_pre_promotion_hook())
+
+    def test_get_pre_promotion_hook__returned_when_gated(self):
+        """
+        Test that a hook is produced when release commands are configured.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertIsNotNone(zappa_cli.get_pre_promotion_hook())
+
+    def test_build_release_command_payload(self):
+        """
+        Test that release commands map onto the same payloads the existing
+        `zappa manage` and `zappa invoke` verbs send.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        zappa_cli.django_settings = "my_project.settings"
+        self.assertEqual({"manage": "migrate --noinput"}, zappa_cli.build_release_command_payload("migrate --noinput"))
+
+        zappa_cli.django_settings = None
+        self.assertEqual({"command": "myapp.release.run"}, zappa_cli.build_release_command_payload("myapp.release.run"))
+
+    def test_run_release_commands__invokes_each_against_new_version(self):
+        """
+        Test that every release command is invoked in order, qualified to the
+        new version so it runs the new code rather than $LATEST.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        zappa_cli.django_settings = "my_project.settings"
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.invoke_lambda_function.return_value = {}
+            zappa_cli.run_release_commands("7")
+
+        self.assertEqual(2, mock_zappa.invoke_lambda_function.call_count)
+        first, second = mock_zappa.invoke_lambda_function.call_args_list
+        self.assertEqual('{"manage": "migrate --noinput"}', first.args[1])
+        self.assertEqual("7", first.kwargs["qualifier"])
+        self.assertEqual("RequestResponse", first.kwargs["invocation_type"])
+        self.assertEqual('{"manage": "collectstatic --noinput"}', second.args[1])
+
+    def test_run_release_commands__raises_and_stops_on_failure(self):
+        """
+        Test that a failing release command aborts immediately, so later
+        commands don't run against a half-migrated database.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        zappa_cli.django_settings = "my_project.settings"
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.invoke_lambda_function.return_value = {"FunctionError": "Unhandled"}
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.run_release_commands("7")
+
+        self.assertIn("migrate --noinput", str(context.exception))
+        self.assertEqual(1, mock_zappa.invoke_lambda_function.call_count)
+
+    @staticmethod
+    def _health_response(status=None, function_error=False, body=None):
+        """
+        One invoke_lambda_function return value. Built fresh per call because
+        the Payload stream is consumed on read, so a retry must not be handed
+        an already-exhausted BytesIO.
+        """
+        if function_error:
+            return {"FunctionError": "Unhandled", "Payload": io.BytesIO(b'{"errorMessage": "boom"}')}
+        if body is None:
+            body = json.dumps({"statusCode": status}).encode()
+        return {"Payload": io.BytesIO(body)}
+
+    def test_health_check_version__passes_on_2xx(self):
+        """
+        Test that a 2xx from the synthetic invoke passes, and that the event
+        is addressed to the new version over HTTPS.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = "abc123"
+            mock_zappa.boto_session.region_name = "us-east-1"
+            mock_zappa.invoke_lambda_function.return_value = self._health_response(200)
+            zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(1, mock_zappa.invoke_lambda_function.call_count)
+        call = mock_zappa.invoke_lambda_function.call_args
+        self.assertEqual("7", call.kwargs["qualifier"])
+        event = json.loads(call.args[1])
+        self.assertEqual("GET", event["httpMethod"])
+        self.assertEqual("abc123.execute-api.us-east-1.amazonaws.com", event["headers"]["Host"])
+        self.assertEqual("https", event["headers"]["X-Forwarded-Proto"])
+
+    def test_health_check_version__retries_5xx_then_passes(self):
+        """
+        Test the case retries exist for: a connection opened before the
+        migration errors once, then recovers.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.side_effect = [
+                self._health_response(500),
+                self._health_response(200),
+            ]
+            zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(2, mock_zappa.invoke_lambda_function.call_count)
+
+    def test_health_check_version__retries_function_error_then_passes(self):
+        """Test that an unhandled exception is retried rather than fatal."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.side_effect = [
+                self._health_response(function_error=True),
+                self._health_response(204),
+            ]
+            zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(2, mock_zappa.invoke_lambda_function.call_count)
+
+    def test_health_check_version__fails_after_exhausting_retries(self):
+        """
+        Test that a persistent 5xx blocks the promotion after retries+1
+        attempts, sleeping the configured interval between them.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_dict"  # retries 1, interval 2, delay 3
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        sleeps = []
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.side_effect = lambda *a, **kw: self._health_response(502)
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.health_check_version("7", sleep_func=sleeps.append)
+
+        self.assertEqual(2, mock_zappa.invoke_lambda_function.call_count)
+        self.assertIn("502", str(context.exception))
+        # delay before the first attempt, then one interval between the two.
+        self.assertEqual([3, 2], sleeps)
+
+    def test_health_check_version__honours_delay_before_first_attempt(self):
+        """Test that the configured delay is waited out before invoking."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_dict"  # delay 3
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        sleeps = []
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.return_value = self._health_response(200)
+            zappa_cli.health_check_version("7", sleep_func=sleeps.append)
+
+        self.assertEqual([3], sleeps)
+
+    def test_health_check_version__does_not_retry_redirect(self):
+        """
+        Test that a 3xx fails immediately. The view never ran, so the check
+        proved nothing, and a retry would return the same redirect.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.return_value = self._health_response(
+                body=json.dumps({"statusCode": 301, "headers": {"Location": "https://x/health/"}}).encode()
+            )
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(1, mock_zappa.invoke_lambda_function.call_count)
+        self.assertIn("redirected", str(context.exception))
+        self.assertIn("https://x/health/", str(context.exception))
+
+    def test_health_check_version__does_not_retry_404(self):
+        """
+        Test that a 404 fails immediately and the message names the fix,
+        since the 2xx bar makes a misconfigured path a hard failure.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.return_value = self._health_response(404)
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(1, mock_zappa.invoke_lambda_function.call_count)
+        self.assertIn("release_health_check", str(context.exception))
+        self.assertIn("/health", str(context.exception))
+
+    def test_health_check_version__does_not_retry_other_4xx(self):
+        """Test that a 4xx fails immediately - the app refused the request."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_commands_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.return_value = self._health_response(403)
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertEqual(1, mock_zappa.invoke_lambda_function.call_count)
+        self.assertIn("403", str(context.exception))
+
+    def test_health_check_version__raises_when_no_status_code(self):
+        """
+        Test that a response without a statusCode - e.g. touch_path routed to
+        a command handler rather than the app - blocks the promotion instead
+        of silently passing.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "release_health_check_dict"  # retries 1
+        zappa_cli.load_settings("tests/test_settings.yaml")
+
+        with mock.patch.object(zappa_cli, "zappa") as mock_zappa:
+            mock_zappa.get_api_id.return_value = None
+            mock_zappa.invoke_lambda_function.side_effect = lambda *a, **kw: self._health_response(body=b"{}")
+            with self.assertRaises(ClickException) as context:
+                zappa_cli.health_check_version("7", sleep_func=lambda s: None)
+
+        self.assertIn("did not return an HTTP response", str(context.exception))
+
     def test_wait_until_provisioned_concurrency_is_ready_polls_until_ready(self):
         """
         Test that the provisioned-concurrency wait helper polls
@@ -1627,6 +2057,365 @@ class TestZappa(unittest.TestCase):
             "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
             "Version": new_version,
         }
+
+    ##
+    # Blue/green promotion gate
+    ##
+
+    def test_pre_promotion_hook_runs_before_create_alias(self):
+        """
+        Test that create_lambda_function runs the pre-promotion hook after the
+        new version is active but before any alias points at it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+        calls_at_hook_time = []
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            def hook(version):
+                calls_at_hook_time.append(version)
+                calls_at_hook_time.append(list(mock_client.mock_calls))
+
+            z.create_lambda_function(
+                function_name="test",
+                handler="handler.lambda_handler",
+                snap_start="PublishedVersions",
+                pre_promotion_hook=hook,
+            )
+
+            # The hook saw the new version, and no alias had been created yet.
+            self.assertEqual("1", calls_at_hook_time[0])
+            self.assertNotIn("create_alias", [call[0] for call in calls_at_hook_time[1]])
+            # The wait had already happened by then.
+            self.assertIn(
+                mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="1"),
+                calls_at_hook_time[1],
+            )
+            # ..and the alias was created afterwards.
+            mock_client.create_alias.assert_any_call(
+                FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                FunctionVersion="1",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+
+    def test_pre_promotion_hook_failure_prevents_create_alias(self):
+        """
+        Test that a raising pre-promotion hook aborts create_lambda_function
+        without creating any alias, so nothing routes to unvalidated code.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            def hook(version):
+                raise RuntimeError("migration failed")
+
+            with self.assertRaises(RuntimeError):
+                z.create_lambda_function(
+                    function_name="test",
+                    handler="handler.lambda_handler",
+                    snap_start="PublishedVersions",
+                    pre_promotion_hook=hook,
+                )
+
+            mock_client.create_alias.assert_not_called()
+
+    def test_pre_promotion_hook_runs_before_provisioned_concurrency_is_configured(self):
+        """
+        Test that the pre-promotion hook runs before provisioned concurrency
+        is put on the new version, so a failed promotion leaves no capacity
+        to pay for.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            def hook(version):
+                raise RuntimeError("health check failed")
+
+            with self.assertRaises(RuntimeError):
+                z.create_lambda_function(
+                    function_name="test",
+                    handler="handler.lambda_handler",
+                    provisioned_concurrency=5,
+                    pre_promotion_hook=hook,
+                )
+
+            mock_client.put_provisioned_concurrency_config.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+
+    def test_pre_promotion_hook_runs_before_alias_migration_on_update(self):
+        """
+        Test that update_lambda_configuration runs the pre-promotion hook
+        after publishing and waiting, but before migrating any alias.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+        seen = {}
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.return_value = {"FunctionVersion": "3"}
+
+            def hook(version):
+                seen["version"] = version
+                seen["calls"] = [call[0] for call in mock_client.mock_calls]
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+                pre_promotion_hook=hook,
+            )
+
+            self.assertEqual("4", seen["version"])
+            self.assertNotIn("update_alias", seen["calls"])
+            self.assertNotIn("create_alias", seen["calls"])
+            self.assertIn("publish_version", seen["calls"])
+            # The alias moved to the validated version afterwards.
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="4",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+
+    def test_pre_promotion_hook_failure_leaves_alias_on_previous_version(self):
+        """
+        Test that a raising pre-promotion hook aborts the update without
+        migrating any alias, so the previous version keeps serving traffic.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.return_value = {"FunctionVersion": "3"}
+
+            def hook(version):
+                raise RuntimeError("migration failed")
+
+            with self.assertRaises(RuntimeError):
+                z.update_lambda_configuration(
+                    "arn:aws:lambda:us-east-1:123:function:test",
+                    "test",
+                    "handler.lambda_handler",
+                    snap_start="PublishedVersions",
+                    pre_promotion_hook=hook,
+                )
+
+            mock_client.update_alias.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+            mock_client.put_provisioned_concurrency_config.assert_not_called()
+
+    def test_no_pre_promotion_hook_still_migrates_alias(self):
+        """
+        Test that omitting the pre-promotion hook leaves the existing
+        publish-and-promote behavior untouched.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.return_value = {"FunctionVersion": "3"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="4",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+
+    ##
+    # Alias-aware version pruning
+    ##
+
+    def test_version_pruning_skips_aliased_versions(self):
+        """
+        Test that pruning never deletes a version an alias still points to,
+        which Lambda would reject with a ResourceConflictException.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_code.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "5",
+            }
+            mock_client.list_versions_by_function.return_value = {
+                "Versions": [
+                    {"Version": "$LATEST"},
+                    {"Version": "1"},
+                    {"Version": "2"},
+                    {"Version": "3"},
+                    {"Version": "4"},
+                    {"Version": "5"},
+                ]
+            }
+            # The managed alias lags behind, pinned on version 2, which falls
+            # inside the delete window for num_revisions=2 (keeps 5 and 4).
+            mock_client.get_paginator.return_value.paginate.return_value = [
+                {"Aliases": [{"Name": SNAPSTART_LAMBDA_ALIAS, "FunctionVersion": "2"}]}
+            ]
+
+            z.update_lambda_function(bucket="test", function_name="test", num_revisions=2)
+
+            deleted = [
+                call.kwargs["Qualifier"] for call in mock_client.delete_function.call_args_list if "Qualifier" in call.kwargs
+            ]
+            self.assertNotIn("2", deleted)
+            self.assertIn("1", deleted)
+            self.assertIn("3", deleted)
+
+    def test_version_pruning_survives_a_refused_delete(self):
+        """
+        Test that a version Lambda refuses to delete doesn't fail the deploy,
+        and doesn't strand the versions after it. Reachable when alias lookup
+        was unavailable, or when the alias moved after it ran.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.list_versions_by_function.return_value = {
+                "Versions": [{"Version": v} for v in ["$LATEST", "1", "2", "3", "4", "5"]]
+            }
+            mock_client.get_paginator.return_value.paginate.return_value = [{"Aliases": []}]
+
+            def delete(FunctionName, Qualifier):
+                if Qualifier == "2":
+                    raise botocore.exceptions.ClientError(
+                        {"Error": {"Code": "ResourceConflictException", "Message": ""}},
+                        "DeleteFunction",
+                    )
+
+            mock_client.delete_function.side_effect = delete
+
+            z.prune_lambda_function_versions("test", 2)
+
+            attempted = [call.kwargs["Qualifier"] for call in mock_client.delete_function.call_args_list]
+            # 2 was refused, but 1 and 3 were still attempted.
+            self.assertEqual(["1", "2", "3"], sorted(attempted))
+
+    def test_version_pruning_skipped_when_versions_cannot_be_listed(self):
+        """
+        Test that pruning is skipped rather than fatal when the deploying
+        credentials can't list versions. It runs after the new code is
+        already published, so it must not fail the deploy.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.list_versions_by_function.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "AccessDeniedException", "Message": ""}},
+                "ListVersionsByFunction",
+            )
+
+            z.prune_lambda_function_versions("test", 2)
+
+            mock_client.delete_function.assert_not_called()
+
+    def test_update_lambda_function_prunes_without_raising(self):
+        """
+        Test the end-to-end path: a refused delete during an update does not
+        propagate out of update_lambda_function.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_code.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "5",
+            }
+            mock_client.list_versions_by_function.return_value = {
+                "Versions": [{"Version": v} for v in ["$LATEST", "1", "2", "3", "4", "5"]]
+            }
+            mock_client.get_paginator.return_value.paginate.return_value = [{"Aliases": []}]
+            mock_client.delete_function.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceConflictException", "Message": ""}},
+                "DeleteFunction",
+            )
+
+            resource_arn = z.update_lambda_function(bucket="test", function_name="test", num_revisions=2)
+
+        self.assertEqual("arn:aws:lambda:us-east-1:123:function:test", resource_arn)
+
+    def test_get_aliased_lambda_function_versions__degrades_without_permission(self):
+        """
+        Test that a missing lambda:ListAliases permission degrades to the
+        previous pruning behavior instead of failing the deploy.
+        """
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_paginator.return_value.paginate.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "AccessDeniedException", "Message": ""}},
+                "ListAliases",
+            )
+
+            self.assertEqual(set(), z.get_aliased_lambda_function_versions("test"))
+
+    def test_get_aliased_lambda_function_versions(self):
+        """
+        Test that every alias's target version is collected, across pages.
+        """
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_paginator.return_value.paginate.return_value = [
+                {"Aliases": [{"Name": "a", "FunctionVersion": "1"}, {"Name": "b", "FunctionVersion": "2"}]},
+                {"Aliases": [{"Name": "c", "FunctionVersion": "2"}]},
+            ]
+
+            self.assertEqual({"1", "2"}, z.get_aliased_lambda_function_versions("test"))
 
     @mock.patch("zappa.core.requests.get")
     def test_rollback_migrates_alb_alias(self, requests_get_mock):
@@ -3620,6 +4409,54 @@ class TestZappa(unittest.TestCase):
     ##
     # Let's Encrypt / ACME
     ##
+
+    # Two renderings of the same 2048-bit modulus. OpenSSL < 4 prints the DER
+    # sign byte ("00:") that keeps the ASN.1 INTEGER positive; OpenSSL 4 does
+    # not. Both must yield the same JWK, since that byte is not part of the
+    # modulus. Built from one hex string so they cannot drift apart.
+    # 2 + 508 + 2 = 512 hex chars = 256 bytes = 2048 bits, leading byte 0xb8
+    # so the high bit is set (which is what makes the sign byte apply at all).
+    _MODULUS_HEX = "b8" + "a1" * 254 + "cd"
+
+    @classmethod
+    def _openssl_text(cls, with_sign_byte):
+        octets = [cls._MODULUS_HEX[i : i + 2] for i in range(0, len(cls._MODULUS_HEX), 2)]
+        if with_sign_byte:
+            octets.insert(0, "00")
+        lines = ["    " + ":".join(octets[i : i + 15]) + ":" for i in range(0, len(octets), 15)]
+        lines[-1] = lines[-1].rstrip(":")
+        return (
+            "Private-Key: (2048 bit, 2 primes)\nmodulus:\n" + "\n".join(lines) + "\npublicExponent: 65537 (0x10001)\n"
+        ).encode()
+
+    def test_get_boulder_header_without_der_sign_byte(self):
+        """
+        OpenSSL 4 omits the leading "00:" from the modulus dump. Parsing must
+        not depend on it being there - it used to, which broke
+        test_lets_encrypt_sanity on any machine with OpenSSL 4.
+        """
+        header = get_boulder_header(self._openssl_text(with_sign_byte=False))
+        self.assertEqual("RS256", header["alg"])
+        self.assertEqual("RSA", header["jwk"]["kty"])
+
+    def test_get_boulder_header_ignores_der_sign_byte(self):
+        """
+        The "00:" is an ASN.1 artifact, not part of the modulus, so both
+        OpenSSL renderings must produce an identical JWK.
+        """
+        without = get_boulder_header(self._openssl_text(with_sign_byte=False))
+        with_byte = get_boulder_header(self._openssl_text(with_sign_byte=True))
+        self.assertEqual(without["jwk"]["n"], with_byte["jwk"]["n"])
+        self.assertEqual(without["jwk"]["e"], with_byte["jwk"]["e"])
+
+    def test_get_boulder_header_modulus_round_trips(self):
+        """The decoded modulus is the exact 256 bytes, with no sign byte."""
+        import base64
+
+        header = get_boulder_header(self._openssl_text(with_sign_byte=True))
+        raw = base64.urlsafe_b64decode(header["jwk"]["n"] + "=" * (-len(header["jwk"]["n"]) % 4))
+        self.assertEqual(256, len(raw))
+        self.assertEqual(self._MODULUS_HEX, raw.hex())
 
     def test_lets_encrypt_sanity(self):
         # We need a fake account key and crt
