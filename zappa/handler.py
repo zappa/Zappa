@@ -6,8 +6,10 @@ import inspect
 import json
 import logging
 import os
+import shutil
 import sys
 import tarfile
+import tempfile
 import time
 import traceback
 from http import HTTPStatus
@@ -72,138 +74,147 @@ class LambdaHandler:
     def __init__(self, settings_name="zappa_settings", session=None):
         # We haven't cached our settings yet, load the settings and app.
         if not self.settings:
-            # Loading settings from a python module
-            self.settings = importlib.import_module(settings_name)
-            self.settings_name = settings_name
-            self.session = session
-
-            # Custom log level
-            if self.settings.LOG_LEVEL:
-                level = logging.getLevelName(self.settings.LOG_LEVEL)
-                logger.setLevel(level)
-                # https://github.com/zappa/Zappa/issues/1336
-                # @ceturc 2024-08-13
-                # Backwards compatibility to set root logger level after 0.59.0
-                root_logger = logging.getLogger()
-                root_logger.setLevel(level)
-
-            remote_env = getattr(self.settings, "REMOTE_ENV", None)
-            remote_bucket, remote_file = parse_s3_url(remote_env)
-
-            if remote_bucket and remote_file:
-                self.load_remote_settings(remote_bucket, remote_file)
-
-            # Let the system know that this will be a Lambda/Zappa/Stack
-            os.environ["SERVERTYPE"] = "AWS Lambda"
-            os.environ["FRAMEWORK"] = "Zappa"
             try:
-                os.environ["PROJECT"] = self.settings.PROJECT_NAME
-                os.environ["STAGE"] = self.settings.API_STAGE
-            except Exception:  # pragma: no cover
-                pass
+                self._load_settings_and_app(settings_name, session)
+            except BaseException:
+                # Cache nothing, so the next invocation loads again rather than serving
+                # every request with no app.
+                self.settings = None
+                raise
 
-            # Set any locally defined env vars
-            # Environment variable keys can't be Unicode
-            # https://github.com/Miserlou/Zappa/issues/604
-            for key in self.settings.ENVIRONMENT_VARIABLES:
-                os.environ[key] = self.settings.ENVIRONMENT_VARIABLES[key]
+    def _load_settings_and_app(self, settings_name, session):
+        # Loading settings from a python module
+        self.settings = importlib.import_module(settings_name)
+        self.settings_name = settings_name
+        self.session = session
 
-            # Pulling from S3 if given a zip path
-            project_archive_path = getattr(self.settings, "ARCHIVE_PATH", None)
-            if project_archive_path:
-                self.load_remote_project_archive(project_archive_path)
+        # Custom log level
+        if self.settings.LOG_LEVEL:
+            level = logging.getLevelName(self.settings.LOG_LEVEL)
+            logger.setLevel(level)
+            # https://github.com/zappa/Zappa/issues/1336
+            # @ceturc 2024-08-13
+            # Backwards compatibility to set root logger level after 0.59.0
+            root_logger = logging.getLogger()
+            root_logger.setLevel(level)
 
-            # Load compiled library to the PythonPath
-            # checks if we are the slim_handler since this is not needed otherwise
-            # https://github.com/Miserlou/Zappa/issues/776
-            is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
-            if is_slim_handler:
-                included_libraries = getattr(self.settings, "INCLUDE", [])
-                try:
-                    from ctypes import cdll
+        remote_env = getattr(self.settings, "REMOTE_ENV", None)
+        remote_bucket, remote_file = parse_s3_url(remote_env)
 
-                    for library in included_libraries:
-                        try:
-                            cdll.LoadLibrary(os.path.join(os.getcwd(), library))
-                        except OSError:
-                            print("Failed to find library: {}...right filename?".format(library))
-                except ImportError:
-                    print("Failed to import cytpes library")
+        if remote_bucket and remote_file:
+            self.load_remote_settings(remote_bucket, remote_file)
 
-            # This is a non-WSGI application
-            # https://github.com/Miserlou/Zappa/pull/748
-            if not hasattr(self.settings, "APP_MODULE") and not self.settings.DJANGO_SETTINGS:
-                self.app_module = None
-                wsgi_app_function = None
-            # This is probably a normal WSGI app (Or django with overloaded wsgi application)
-            # https://github.com/Miserlou/Zappa/issues/1164
-            elif hasattr(self.settings, "APP_MODULE"):
-                if self.settings.DJANGO_SETTINGS:
-                    sys.path.append("/var/task")
-                    from django.conf import (
-                        ENVIRONMENT_VARIABLE as SETTINGS_ENVIRONMENT_VARIABLE,
-                    )
+        # Let the system know that this will be a Lambda/Zappa/Stack
+        os.environ["SERVERTYPE"] = "AWS Lambda"
+        os.environ["FRAMEWORK"] = "Zappa"
+        try:
+            os.environ["PROJECT"] = self.settings.PROJECT_NAME
+            os.environ["STAGE"] = self.settings.API_STAGE
+        except Exception:  # pragma: no cover
+            pass
 
-                    # add the Lambda root path into the sys.path
-                    self.trailing_slash = True
-                    os.environ[SETTINGS_ENVIRONMENT_VARIABLE] = self.settings.DJANGO_SETTINGS
-                else:
-                    self.trailing_slash = False
+        # Set any locally defined env vars
+        # Environment variable keys can't be Unicode
+        # https://github.com/Miserlou/Zappa/issues/604
+        for key in self.settings.ENVIRONMENT_VARIABLES:
+            os.environ[key] = self.settings.ENVIRONMENT_VARIABLES[key]
 
-                # The app module
-                self.app_module = importlib.import_module(self.settings.APP_MODULE)
+        # Pulling from S3 if given a zip path
+        project_archive_path = getattr(self.settings, "ARCHIVE_PATH", None)
+        if project_archive_path:
+            self.load_remote_project_archive(project_archive_path)
 
-                # The application
-                wsgi_app_function = getattr(self.app_module, self.settings.APP_FUNCTION)
-            # Django gets special treatment.
-            else:
-                try:  # Support both for tests
-                    from zappa.ext.django_zappa import get_django_wsgi
-                except ImportError:  # pragma: no cover
-                    from django_zappa_app import get_django_wsgi
+        # Load compiled library to the PythonPath
+        # checks if we are the slim_handler since this is not needed otherwise
+        # https://github.com/Miserlou/Zappa/issues/776
+        is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
+        if is_slim_handler:
+            included_libraries = getattr(self.settings, "INCLUDE", [])
+            try:
+                from ctypes import cdll
 
-                # Get the Django WSGI app from our extension
-                wsgi_app_function = get_django_wsgi(self.settings.DJANGO_SETTINGS)
+                for library in included_libraries:
+                    try:
+                        cdll.LoadLibrary(os.path.join(os.getcwd(), library))
+                    except OSError:
+                        print("Failed to find library: {}...right filename?".format(library))
+            except ImportError:
+                print("Failed to import cytpes library")
+
+        # This is a non-WSGI application
+        # https://github.com/Miserlou/Zappa/pull/748
+        if not hasattr(self.settings, "APP_MODULE") and not self.settings.DJANGO_SETTINGS:
+            self.app_module = None
+            wsgi_app_function = None
+        # This is probably a normal WSGI app (Or django with overloaded wsgi application)
+        # https://github.com/Miserlou/Zappa/issues/1164
+        elif hasattr(self.settings, "APP_MODULE"):
+            if self.settings.DJANGO_SETTINGS:
+                sys.path.append("/var/task")
+                from django.conf import (
+                    ENVIRONMENT_VARIABLE as SETTINGS_ENVIRONMENT_VARIABLE,
+                )
+
+                # add the Lambda root path into the sys.path
                 self.trailing_slash = True
-
-            # Determine app type: explicit setting, auto-detection, or default to WSGI
-            self.app_type = getattr(self.settings, "APP_TYPE", None)
-            if self.app_type == "asgi" and wsgi_app_function is not None:
-                if not self._is_asgi_app(wsgi_app_function):
-                    logger.warning(
-                        "app_type is 'asgi' but %s.%s does not look like an ASGI callable. "
-                        "Verify your app_function points to an async callable with signature (scope, receive, send).",
-                        self.settings.APP_MODULE,
-                        self.settings.APP_FUNCTION,
-                    )
-                self.asgi_app = wsgi_app_function
-                self.wsgi_app = None
-            elif self.app_type is None and wsgi_app_function is not None and self._is_asgi_app(wsgi_app_function):
-                self.app_type = "asgi"
-                self.asgi_app = wsgi_app_function
-                self.wsgi_app = None
+                os.environ[SETTINGS_ENVIRONMENT_VARIABLE] = self.settings.DJANGO_SETTINGS
             else:
-                self.wsgi_app = ZappaWSGIMiddleware(wsgi_app_function)
+                self.trailing_slash = False
 
-            # Import WebSocket handler module to populate the route registry.
-            # The module path is auto-detected at deploy time and written
-            # into zappa_settings.py as WEBSOCKET_HANDLER_MODULE.
-            # Cache text mimetypes tuple for binary support detection
-            self._text_mimetypes = DEFAULT_TEXT_MIMETYPES
-            additional_text_mimetypes = getattr(self.settings, "ADDITIONAL_TEXT_MIMETYPES", None)
-            if additional_text_mimetypes:
-                self._text_mimetypes += tuple(additional_text_mimetypes)
+            # The app module
+            self.app_module = importlib.import_module(self.settings.APP_MODULE)
 
-            ws_module = getattr(self.settings, "WEBSOCKET_HANDLER_MODULE", None)
-            if ws_module:
-                try:
-                    importlib.import_module(ws_module)
-                except ImportError:
-                    logger.error(
-                        "Failed to import WEBSOCKET_HANDLER_MODULE '%s'. "
-                        "Verify the module is included in your deployment package.",
-                        ws_module,
-                    )
+            # The application
+            wsgi_app_function = getattr(self.app_module, self.settings.APP_FUNCTION)
+        # Django gets special treatment.
+        else:
+            try:  # Support both for tests
+                from zappa.ext.django_zappa import get_django_wsgi
+            except ImportError:  # pragma: no cover
+                from django_zappa_app import get_django_wsgi
+
+            # Get the Django WSGI app from our extension
+            wsgi_app_function = get_django_wsgi(self.settings.DJANGO_SETTINGS)
+            self.trailing_slash = True
+
+        # Determine app type: explicit setting, auto-detection, or default to WSGI
+        self.app_type = getattr(self.settings, "APP_TYPE", None)
+        if self.app_type == "asgi" and wsgi_app_function is not None:
+            if not self._is_asgi_app(wsgi_app_function):
+                logger.warning(
+                    "app_type is 'asgi' but %s.%s does not look like an ASGI callable. "
+                    "Verify your app_function points to an async callable with signature (scope, receive, send).",
+                    self.settings.APP_MODULE,
+                    self.settings.APP_FUNCTION,
+                )
+            self.asgi_app = wsgi_app_function
+            self.wsgi_app = None
+        elif self.app_type is None and wsgi_app_function is not None and self._is_asgi_app(wsgi_app_function):
+            self.app_type = "asgi"
+            self.asgi_app = wsgi_app_function
+            self.wsgi_app = None
+        else:
+            self.wsgi_app = ZappaWSGIMiddleware(wsgi_app_function)
+
+        # Import WebSocket handler module to populate the route registry.
+        # The module path is auto-detected at deploy time and written
+        # into zappa_settings.py as WEBSOCKET_HANDLER_MODULE.
+        # Cache text mimetypes tuple for binary support detection
+        self._text_mimetypes = DEFAULT_TEXT_MIMETYPES
+        additional_text_mimetypes = getattr(self.settings, "ADDITIONAL_TEXT_MIMETYPES", None)
+        if additional_text_mimetypes:
+            self._text_mimetypes += tuple(additional_text_mimetypes)
+
+        ws_module = getattr(self.settings, "WEBSOCKET_HANDLER_MODULE", None)
+        if ws_module:
+            try:
+                importlib.import_module(ws_module)
+            except ImportError:
+                logger.error(
+                    "Failed to import WEBSOCKET_HANDLER_MODULE '%s'. "
+                    "Verify the module is included in your deployment package.",
+                    ws_module,
+                )
 
     def _get_boto_session(self):
         """Return the configured boto3 session, or create a default one.
@@ -230,8 +241,16 @@ class LambdaHandler:
             s3 = boto_session.resource("s3")
             archive_on_s3 = s3.Object(remote_bucket, remote_file).get()
 
-            with tarfile.open(fileobj=archive_on_s3["Body"], mode="r|gz") as t:
-                t.extractall(project_folder)
+            # Extract beside the project folder and rename into place, so a failed download
+            # leaves no partial project for the next invocation to load.
+            partial_folder = tempfile.mkdtemp(dir=os.path.dirname(project_folder))
+            try:
+                with tarfile.open(fileobj=archive_on_s3["Body"], mode="r|gz") as t:
+                    t.extractall(partial_folder)
+            except BaseException:
+                shutil.rmtree(partial_folder, ignore_errors=True)
+                raise
+            os.rename(partial_folder, project_folder)
 
         # Add to project path
         sys.path.insert(0, project_folder)

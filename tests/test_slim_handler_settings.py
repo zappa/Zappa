@@ -1,0 +1,13 @@
+API_STAGE = "dev"
+APP_FUNCTION = "app"
+APP_MODULE = "tests.test_wsgi_script_name_app"
+ARCHIVE_PATH = "s3://lmbda/test_slim_handler_project.tar.gz"
+BINARY_SUPPORT = False
+CONTEXT_HEADER_MAPPINGS = {}
+DEBUG = "True"
+DJANGO_SETTINGS = None
+DOMAIN = "api.example.com"
+ENVIRONMENT_VARIABLES = {}
+LOG_LEVEL = "DEBUG"
+PROJECT_NAME = "test_slim_handler_project"
+COGNITO_TRIGGER_MAPPING = {}
