@@ -1022,6 +1022,20 @@ class Zappa:
         except botocore.exceptions.ClientError:  # pragma: no cover
             return False
 
+    def list_s3_keys(self, bucket_name, prefix=""):
+        """
+        Return the keys in a bucket that start with the given prefix.
+        Returns an empty list if the bucket can't be listed.
+        """
+        keys = []
+        try:
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                keys.extend(obj["Key"] for obj in page.get("Contents", []))
+        except botocore.exceptions.ClientError:  # pragma: no cover
+            return []
+        return keys
+
     def remove_from_s3(self, file_name, bucket_name):
         """
         Given a file name and a bucket, remove it from S3.
