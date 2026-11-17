@@ -4,6 +4,7 @@ Zappa core library. You may also want to look at `cli.py` and `util.py`.
 
 import getpass
 import hashlib
+import io
 import json
 import logging
 import os
@@ -1024,17 +1025,52 @@ class Zappa:
 
     def list_s3_keys(self, bucket_name, prefix=""):
         """
-        Return the keys in a bucket that start with the given prefix.
-        Returns an empty list if the bucket can't be listed.
+        Return (key, size) pairs for the objects in a bucket that start with
+        the given prefix. Returns an empty list if the bucket can't be listed.
         """
         keys = []
         try:
             paginator = self.s3_client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-                keys.extend(obj["Key"] for obj in page.get("Contents", []))
-        except botocore.exceptions.ClientError:  # pragma: no cover
+                keys.extend((obj["Key"], obj.get("Size", 0)) for obj in page.get("Contents", []))
+        except botocore.exceptions.ClientError as e:
+            logger.warning(
+                "Could not list s3://%s/%s (%s), skipping cleanup of old project archives.",
+                bucket_name,
+                prefix,
+                e.response.get("Error", {}).get("Code", "unknown error"),
+            )
             return []
         return keys
+
+    def s3_key_exists(self, bucket_name, key):
+        """
+        Return True if the key exists in the bucket, False if S3 says it doesn't.
+        Other errors (e.g. AccessDenied) are re-raised.
+        """
+        try:
+            self.s3_client.head_object(Bucket=bucket_name, Key=key)
+        except botocore.exceptions.ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+                return False
+            raise
+        return True
+
+    @staticmethod
+    def get_slim_handler_archive_path(handler_zip_bytes):
+        """
+        Return (bucket, key) for the ARCHIVE_PATH baked into a slim_handler
+        zip's zappa_settings.py, or None if the zip isn't a slim handler.
+        """
+        try:
+            with zipfile.ZipFile(io.BytesIO(handler_zip_bytes)) as zf:
+                settings_s = zf.read("zappa_settings.py").decode("utf-8")
+        except (zipfile.BadZipFile, KeyError):
+            return None
+        match = re.search(r"^ARCHIVE_PATH='s3://([^/']+)/([^']+)'", settings_s, re.MULTILINE)
+        if not match:
+            return None
+        return match.group(1), match.group(2)
 
     def remove_from_s3(self, file_name, bucket_name):
         """
@@ -1624,6 +1660,24 @@ class Zappa:
         if response.status_code != 200:
             logger.error(f"Failed to get version {versions_back} of {function_name} code")
             return False
+
+        # A slim handler only holds the handler; the project code lives in the
+        # S3 archive it points at. Make sure that's still there before we swap
+        # the live code, otherwise every cold start fails. See issue #1383.
+        archive = self.get_slim_handler_archive_path(response.content)
+        if archive:
+            archive_bucket, archive_key = archive
+            if archive_key.endswith("_current_project.tar.gz"):
+                logger.warning(
+                    f"Version {revisions[versions_back]} of {function_name} loads its project from "
+                    f"s3://{archive_bucket}/{archive_key}, which always holds the latest deploy. "
+                    "The rolled back handler will run the latest project code."
+                )
+            elif not self.s3_key_exists(archive_bucket, archive_key):
+                raise ValueError(
+                    f"Can't roll back {function_name}: version {revisions[versions_back]} needs the project archive "
+                    f"s3://{archive_bucket}/{archive_key}, which no longer exists. The live version was left as is."
+                )
 
         response = self.lambda_client.update_function_code(
             FunctionName=function_name, ZipFile=response.content, Publish=publish
