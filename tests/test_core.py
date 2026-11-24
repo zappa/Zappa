@@ -271,6 +271,33 @@ class TestZappa(unittest.TestCase):
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
 
+    def test_get_manylinux_python315(self):
+        z = Zappa(runtime="python3.15")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.3.9"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg-binary": "3.3.9"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.15")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "46.0.3"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.15")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
     def test_manylinux_wheel_platform_tag_sort_order(self):
         """Test that wheel filename matching supports both sorted and unsorted platform tag orders.
 
@@ -5275,6 +5302,19 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
         except RuntimeError:
             self.fail()
+
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 15))
+    def test_get_runtime_from_python_version_latest_supported(self, *_):
+        from zappa.utilities import get_runtime_from_python_version
+
+        self.assertEqual(get_runtime_from_python_version(), "python3.15")
+
+    @mock.patch("sys.version_info", new_callable=partial(get_sys_versioninfo, 16))
+    def test_get_runtime_from_python_version_not_yet_supported(self, *_):
+        from zappa.utilities import get_runtime_from_python_version
+
+        with self.assertRaisesRegex(ValueError, "not yet supported"):
+            get_runtime_from_python_version()
 
     def test_wsgi_query_string_unquoted(self):
         event = {
