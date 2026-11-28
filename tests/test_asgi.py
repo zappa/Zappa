@@ -418,6 +418,38 @@ class TestASGI(unittest.TestCase):
         self.assertIn("foo=bar", response["body"])
         self.assertIn("baz=qux", response["body"])
 
+    def test_asgi_v2_with_repeated_query_string(self):
+        """
+        Repeated query parameters must survive the payload format 2.0
+        conversion into the ASGI scope, not be collapsed into "id=18,19,20".
+        https://github.com/zappa/Zappa/issues/1472
+        """
+        lh = LambdaHandler("tests.test_asgi_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/return/request/url",
+            "rawQueryString": "id=18&id=19&id=20",
+            # This is the lossy value API Gateway v2 actually sends alongside it.
+            "queryStringParameters": {"id": "18,19,20"},
+            "headers": {
+                "host": "example.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertIn("?id=18&id=19&id=20", response["body"])
+
     def test_asgi_404(self):
         """Ensure ASGI app returns 404 for unknown routes."""
         lh = LambdaHandler("tests.test_asgi_settings")

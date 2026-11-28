@@ -176,6 +176,42 @@ class TestZappa(unittest.TestCase):
             "https://example.com/return/request/url?multi=value&multi=qs",
         )
 
+    def test_wsgi_script_name_on_v2_event_with_multi_value_querystring(self):
+        """
+        API Gateway payload format 2.0 has no multiValueQueryStringParameters
+        and collapses repeats into a comma-joined queryStringParameters value.
+        The application must still see the repeated parameters.
+        https://github.com/zappa/Zappa/issues/1472
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/return/request/url",
+            "rawQueryString": "multi=value&multi=qs",
+            # This is the lossy value API Gateway v2 actually sends alongside it.
+            "queryStringParameters": {"multi": "value,qs"},
+            "headers": {
+                "host": "example.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(
+            response["body"],
+            "https://example.com/return/request/url?multi=value&multi=qs",
+        )
+
     def test_wsgi_script_name_on_test_request(self):
         """
         Ensure that requests sent by the "Send test request" button behaves
@@ -689,3 +725,168 @@ class TestZappa(unittest.TestCase):
         self.assertIn("SCRIPT_NAME='/dev'", response["body"])
         self.assertIn("PATH_INFO='/debug/wsgi/environ'", response["body"])  # FIXED: stage stripped
         self.assertIn("/dev/debug/wsgi/environ", response["body"])  # Correct single prefix!
+
+    def test_wsgi_v2_custom_domain_no_double_stage(self):
+        """
+        Test that API Gateway v2 with a custom domain mapping doesn't double the
+        stage in URLs (#1409). When a custom domain maps to a stage, API Gateway
+        strips the stage from rawPath, so SCRIPT_NAME should be empty.
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/return/request/url",  # Custom domain: stage already stripped
+            "rawQueryString": "",
+            "headers": {
+                "host": "api.example.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/return/request/url",
+                },
+                "stage": "dev",  # Stage is still present in requestContext
+                "domainName": "api.example.com",
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        # With custom domain, stage is NOT in rawPath, so SCRIPT_NAME should be empty
+        # and the URL should NOT contain /dev prefix
+        self.assertEqual(
+            response["body"],
+            "https://api.example.com/return/request/url",
+        )
+
+    def test_wsgi_v2_custom_domain_route_sharing_stage_prefix(self):
+        """
+        Test that a custom-domain route whose top path segment merely shares a
+        leading substring with the stage name (stage "dev" + path "/devices/...")
+        is not mistaken for direct API Gateway access (#1409). The stage must be
+        matched on a path-segment boundary, not a bare string prefix.
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+
+        event = {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/devices/list",  # Custom domain: stage stripped; starts with "/dev"
+            "rawQueryString": "",
+            "headers": {
+                "host": "api.example.com",
+            },
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/devices/list",
+                },
+                "stage": "dev",
+                "domainName": "api.example.com",
+            },
+            "isBase64Encoded": False,
+            "body": "",
+        }
+        response = lh.handler(event, None)
+
+        self.assertEqual(response["statusCode"], 200)
+        # The "/dev" stage must NOT be stripped from "/devices/list".
+        self.assertEqual(
+            response["body"],
+            "https://api.example.com/devices/list",
+        )
+
+    def test_handler_calls_multiple_functions_for_same_arn(self):
+        """Multiple handlers registered for the same SNS ARN should all be invoked."""
+        LambdaHandler._LambdaHandler__instance = None
+        LambdaHandler.settings = None
+        LambdaHandler.settings_name = None
+
+        lh = LambdaHandler("test_settings")
+
+        # Override AWS_EVENT_MAPPING with two handlers for the same ARN
+        lh.settings.AWS_EVENT_MAPPING = {
+            "arn:aws:sns:1": ["test_settings.aws_sns_event", "test_settings.aws_s3_event"],
+        }
+
+        event = {
+            "Records": [
+                {
+                    "Sns": {
+                        "Message": "Hello from SNS!",
+                        "TopicArn": "arn:aws:sns:1",
+                    },
+                }
+            ],
+        }
+
+        result = lh.handler(event, None)
+        # The last handler's result is returned
+        self.assertIsNotNone(result)
+
+    def test_handler_backward_compat_string_event_mapping(self):
+        """Old-format string values in AWS_EVENT_MAPPING should still work."""
+        LambdaHandler._LambdaHandler__instance = None
+        LambdaHandler.settings = None
+        LambdaHandler.settings_name = None
+
+        lh = LambdaHandler("test_settings")
+
+        # Override with old string format
+        lh.settings.AWS_EVENT_MAPPING = {
+            "arn:aws:sns:1": "test_settings.aws_sns_event",
+        }
+
+        event = {
+            "Records": [
+                {
+                    "Sns": {
+                        "Message": "Hello from SNS!",
+                        "TopicArn": "arn:aws:sns:1",
+                    },
+                }
+            ],
+        }
+
+        result = lh.handler(event, None)
+        self.assertEqual(result, "AWS SNS EVENT")
+
+    def test_keep_warm_scheduled_event_without_handler_module(self):
+        """
+        Keep-warm EventBridge rules encode handler.keep_warm_callback.
+        LambdaHandler construction already loaded the app, so this must
+        not import a top-level handler module (#1469).
+        """
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+        event = {
+            "account": "123456789012",
+            "region": "us-east-1",
+            "detail": {},
+            "detail-type": "Scheduled Event",
+            "source": "aws.events",
+            "version": "0",
+            "time": "2026-08-18T18:04:39Z",
+            "id": "c6c1bea9-5846-4008-9947-57c1c5fb03d5",
+            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-zappa-keep-warm-handler.keep_warm_callback"],
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertIsNone(response)
+
+    def test_scheduled_event_invokes_target_function(self):
+        """User-configured scheduled events still import and run the target."""
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+        event = {
+            "detail-type": "Scheduled Event",
+            "source": "aws.events",
+            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-tests.test_app.schedule_me"],
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response, "Hello!")

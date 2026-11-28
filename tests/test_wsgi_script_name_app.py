@@ -8,6 +8,11 @@ def return_request_url():
     return request.url
 
 
+@app.route("/devices/list", methods=["GET"])  # Top segment shares the "dev" stage string prefix
+def devices_list():
+    return request.url
+
+
 @app.route("/debug/wsgi/environ", methods=["GET"])  # Route without stage prefix (Flask sees clean path)
 def debug_wsgi_environ():
     """Debug endpoint to inspect WSGI environ values"""

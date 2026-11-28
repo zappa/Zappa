@@ -639,14 +639,14 @@ class LambdaHandler:
         """
         if "s3" in record:
             if ":" in record["s3"]["configurationId"]:
-                return record["s3"]["configurationId"].split(":")[-1]
+                return [record["s3"]["configurationId"].split(":")[-1]]
 
         arn = None
         if "Sns" in record:
             try:
                 message = json.loads(record["Sns"]["Message"])
                 if message.get("command"):
-                    return message["command"]
+                    return [message["command"]]
             except ValueError:
                 pass
             arn = record["Sns"].get("TopicArn")
@@ -658,9 +658,15 @@ class LambdaHandler:
             arn = record["s3"]["bucket"]["arn"]
 
         if arn:
-            return self.settings.AWS_EVENT_MAPPING.get(arn)
+            value = self.settings.AWS_EVENT_MAPPING.get(arn)
+            if value is None:
+                return []
+            # Backward compat: old format stores a single string
+            if isinstance(value, str):
+                return [value]
+            return value
 
-        return None
+        return []
 
     def get_function_from_bot_intent_trigger(self, event):
         """
@@ -711,13 +717,21 @@ class LambdaHandler:
                 stage = request_context.get("stage")
 
                 # For API Gateway v2, the stage is included in rawPath and we need to
-                # set script_name so it can be stripped from PATH_INFO
-                # For Function URLs (no stage), leave script_name empty
-                if stage:
-                    # API Gateway v2 with named stage - rawPath includes the stage
+                # set script_name so it can be stripped from PATH_INFO.
+                # When using a custom domain with API mapping, API Gateway already
+                # strips the stage from rawPath, so we detect this and skip setting
+                # script_name to avoid double-stage redirects (#1409).
+                # Match the stage on a path-segment boundary, not a bare string prefix,
+                # so a custom-domain route that merely shares a leading substring with
+                # the stage name (e.g. stage "prod" + path "/products") is not mistaken
+                # for direct access.
+                raw_path = event.get("rawPath", "")
+                stage_prefix = f"/{stage}"
+                if stage and (raw_path == stage_prefix or raw_path.startswith(f"{stage_prefix}/")):
+                    # Direct API Gateway v2 access - rawPath includes the stage
                     script_name = f"/{stage}"
                 else:
-                    # Function URL - no stage
+                    # Function URL or custom domain (stage already stripped)
                     script_name = ""
 
                 # ASGI path
@@ -879,6 +893,12 @@ class LambdaHandler:
         elif event.get("detail-type") == "Scheduled Event":
             whole_function = event["resources"][0].split("/")[-1].split("-")[-1]
 
+            # Keep-warm is scheduled as handler.keep_warm_callback, but that
+            # module only exists when the zip-root handler.py copy is packaged.
+            # LambdaHandler construction already loaded the app. See #1469.
+            if whole_function.rsplit(".", 1)[-1] == "keep_warm_callback":
+                return
+
             # This is a scheduled function.
             if "." in whole_function:
                 app_function = self.import_module_and_get_function(whole_function)
@@ -886,7 +906,7 @@ class LambdaHandler:
                 # Execute the function!
                 return self.run_function(app_function, event, context)
 
-            # Keep-warm / recertify: initialization already done by singleton
+            # Recertify: initialization already done by singleton
 
         # This is a direct command invocation.
         elif event.get("command", None):
@@ -928,11 +948,12 @@ class LambdaHandler:
         elif event.get("Records", None):
             records = event.get("Records")
             result = None
-            whole_function = self.get_function_for_aws_event(records[0])
-            if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
-                result = self.run_function(app_function, event, context)
-                logger.debug(result)
+            functions = self.get_function_for_aws_event(records[0])
+            if functions:
+                for whole_function in functions:
+                    app_function = self.import_module_and_get_function(whole_function)
+                    result = self.run_function(app_function, event, context)
+                    logger.debug(result)
             else:
                 logger.error("Cannot find a function to process the triggered event.")
             return result

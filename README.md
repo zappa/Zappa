@@ -26,6 +26,7 @@
   - [Initial Deployments](#initial-deployments)
   - [Updates](#updates)
     - [Docker Workflows](#docker-workflows)
+      - [Settings that should NOT be used with Docker deployments](#settings-that-should-not-be-used-with-docker-deployments)
   - [Rollback](#rollback)
   - [Scheduling](#scheduling)
     - [Advanced Scheduling](#advanced-scheduling)
@@ -425,6 +426,15 @@ Update Example:
     $ zappa update --docker-image-uri {AWS ACCOUNT ID}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY NAME}:latest
 
 Refer to [the blog post](https://ianwhitestone.work/zappa-serverless-docker/) for more details about how to leverage this functionality, and when you may want to.
+
+##### Settings that should NOT be used with Docker deployments
+
+When deploying with `--docker-image-uri`, the Docker image is responsible for bundling your application code and runtime. A few `zappa_settings` keys only make sense for zip-based deployments and will cause problems if left enabled for a Docker deployment:
+
+- `slim_handler`: This option splits the package into a slim handler and a separate project archive uploaded to S3. When enabled, Zappa writes an `ARCHIVE_PATH` into the generated `zappa_settings.py`, which makes the Lambda handler attempt to download the project archive from S3 at cold start and overlay it on your container's code. With a Docker deployment this either loads stale code from a previous zip deploy, or fails entirely if the archive is missing. **Do not set `slim_handler` for Docker deployments.** See [issue #1341](https://github.com/zappa/Zappa/issues/1341).
+- `runtime`: The Python runtime is determined by the Docker image, so this value is ignored for Docker deployments.
+
+Running `zappa deploy`, `zappa update`, or `zappa save-python-settings-file` with a Docker-targeted configuration will now fail fast when any incompatible setting above is detected. Undeploying a stage that previously used `slim_handler` will also remove the leftover `_current_project.tar.gz` archive from the configured S3 bucket.
 
 If you are using a custom Docker image for your Lambda runtime (e.g. if you want to use a newer version of Python that is not yet supported by Lambda out of the box) and you would like to bypass the Python version check, you can set an environment variable to do so:
 
@@ -1160,7 +1170,17 @@ to change Zappa's behavior. Use these at your own risk!
         // NOTE: Function URLs do NOT include stage names in their paths. Unlike API Gateway v1/v2 which include
         // the stage name in the URL (e.g., /dev/mypath), Function URLs route directly to your app (e.g., /mypath).
         // This means SCRIPT_NAME will be empty for Function URL requests, and PATH_INFO will contain the full path.
+        //
+        // NOTE: When `function_url_enabled` is true with `authorizer: "NONE"`, Zappa attaches TWO
+        // resource-policy statements with `Principal: "*"`: `FunctionURLAllowPublicAccess` for
+        // `lambda:InvokeFunctionUrl` and `FunctionURLAllowPublicAccessInvoke` for `lambda:InvokeFunction`.
+        // Both are required for unsigned calls to succeed; the AWS docs example at
+        // https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html only shows the first statement,
+        // but in practice the URL returns 403 AccessDeniedException without the second (see #1393).
+        // If you are adding a Function URL manually (e.g. outside Zappa) and seeing 403s with NONE
+        // auth, this two-statement shape is the missing piece.
         "apigateway_version": "v1", // optional, API Gateway version to use. Can be "v1" or "v2". Default "v1".
+        "apigateway_lambda_qualifier": "live", // optional, Lambda version or alias for API Gateway integrations. Default null uses the unqualified function ARN, except when `snap_start` or `provisioned_concurrency` is enabled, in which case it defaults to Zappa's managed alias for that feature (see `snap_start`/`provisioned_concurrency` below). Set this only to point at your own alias instead.
         "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
@@ -1168,7 +1188,7 @@ to change Zappa's behavior. Use these at your own risk!
         "async_response_table_read_capacity": 1,  // DynamoDB table read capacity; defaults to 1
         "async_response_table_write_capacity": 1,  // DynamoDB table write capacity; defaults to 1
         "aws_endpoint_urls": { "aws_service_name": "endpoint_url" }, // a dictionary of endpoint_urls that emulate the appropriate service.  Usually used for testing, for instance with `localstack`.
-        "aws_environment_variables" : {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app via AWS Lambdas native environment variables. See also "environment_variables" and "remote_env" . Default {}.
+        "aws_environment_variables" : {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app via AWS Lambdas native environment variables. Unlike "environment_variables", these ARE synced on `zappa update` and visible in the AWS Console/CLI. See also "environment_variables" and "remote_env" . Default {}.
         "aws_kms_key_arn": "your_aws_kms_key_arn", // Your AWS KMS Key ARN
         "aws_region": "aws-region-name", // optional, uses region set in profile or environment variables if not set here,
         "binary_support": true, // Enable automatic MIME-type based response encoding through API Gateway. Default true.
@@ -1204,7 +1224,7 @@ to change Zappa's behavior. Use these at your own risk!
         "django_settings": "your_project.production_settings", // The modular path to your Django project's settings. For Django projects only.
         "domain": "yourapp.yourdomain.com", // Required if you're using a domain
         "base_path": "your-base-path", // Optional base path for API gateway custom domain base path mapping. Default None. Not supported for use with Application Load Balancer event sources.
-        "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. See also "remote_env" and "aws_environment_variables". Default {}.
+        "environment_variables": {"your_key": "your_value"}, // A dictionary of environment variables that will be available to your deployed app. NOT synced to the Lambda's native AWS config on `zappa update` (invisible in the console/CLI) - see "Setting Environment Variables" section below. See also "remote_env" and "aws_environment_variables". Default {}.
         "events": [
             {   // Recurring events
                 "function": "your_module.your_recurring_function", // The function to execute (Pattern: [._A-Za-z0-9]+).
@@ -1244,19 +1264,20 @@ to change Zappa's behavior. Use these at your own risk!
         "lambda_description": "Your Description", // However you want to describe your project for the AWS console. Default "Zappa Deployment".
         "lambda_handler": "your_custom_handler", // The name of Lambda handler. Default: handler.lambda_handler
         "layers": ["arn:aws:lambda:<region>:<account_id>:layer:<layer_name>:<layer_version>"], // optional lambda layers
-        "lambda_concurrency": 10, // Sets the maximum number of simultaneous executions for a function, and reserves capacity for that concurrency level. Default is None.
+        "lambda_concurrency": 10, // Sets the maximum number of simultaneous executions for a function, and reserves capacity for that concurrency level. Default is None. If `provisioned_concurrency` is also set, it cannot exceed this value.
         "lets_encrypt_key": "s3://your-bucket/account.key", // Let's Encrypt account key path. Can either be an S3 path or a local file path.
         "log_level": "DEBUG", // Set the Zappa log level. Can be one of CRITICAL, ERROR, WARNING, INFO and DEBUG. Default: DEBUG
         "manage_roles": true, // Have Zappa automatically create and define IAM execution roles and policies. Default true. If false, you must define your own IAM Role and role_name setting.
         "memory_size": 512, // Lambda function memory in MB. Default 512.
         "ephemeral_storage": { "Size": 512 }, // Lambda function ephemeral_storage size in MB, Default 512, Max 10240
         "efs_config": [{ "Arn": "arn:aws:elasticfilesystem:...:access-point/fsap-...", "LocalMountPath": "/mnt/data" }], // Optional EFS configuration. See EFS section for details.
-        "num_retained_versions":null, // Indicates the number of old versions to retain for the lambda. If absent, keeps all the versions of the function.
+        "num_retained_versions":5, // Number of published Lambda versions to retain. Default 5. Older versions are deleted on `zappa update` to bound code-storage and (when SnapStart is enabled) snapshot-cache cost. Set to `null` to keep all versions. Must be `null` or at least 2 when `snap_start` or `provisioned_concurrency` is enabled, otherwise pruning could try to delete the version Zappa's managed alias still points to.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
         "prebuild_script": "your_module.your_function", // Function to execute before uploading code
         "profile_name": "your-profile-name", // AWS profile credentials to use. Default 'default'. Removing this setting will use the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables instead.
         "project_name": "MyProject", // The name of the project as it appears on AWS. Defaults to a slugified `pwd`.
+        "provisioned_concurrency": 5, // Number of pre-initialized execution environments to keep warm. Default null (disabled). Provisioned concurrency can only be configured on a published version or alias, so Zappa maintains a "provisioned-concurrency" alias automatically: each `zappa update`/`deploy` configures it on the new version, waits for it to become Ready, then repoints the alias (and cleans up the old version's config) — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `snap_start` (AWS doesn't support SnapStart with provisioned concurrency), and cannot exceed `lambda_concurrency` if that's also set.
         "remote_env": "s3://my-project-config-files/filename.json", // optional file in s3 bucket containing a flat json object which will be used to set custom environment variables.
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
@@ -1264,7 +1285,7 @@ to change Zappa's behavior. Use these at your own risk!
         "runtime": "python3.14", // Python runtime to use on Lambda. Can be one of: "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", or "python3.14". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
-        "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None".
+        "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None". SnapStart requires invoking a published version or alias (never `$LATEST`), so Zappa maintains a "snapstart" alias automatically: each `zappa update`/`deploy` publishes a new version, waits for its snapshot to be Active, then repoints the alias — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `provisioned_concurrency` (AWS doesn't support SnapStart with provisioned concurrency).
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
         "tags": { // Attach additional tags to AWS Resources
             "Key": "Value",  // Example Key and value
@@ -1469,6 +1490,8 @@ your_value = os.environ.get('your_key')
 ```
 
 If your project needs to be aware of the type of environment you're deployed to, you'll also be able to get `SERVERTYPE` (AWS Lambda), `FRAMEWORK` (Zappa), `PROJECT` (your project name) and `STAGE` (_dev_, _production_, etc.) variables at any time.
+
+> **Note:** `environment_variables` are baked into the deployed `zappa_settings.py` file and only exported to `os.environ` by Zappa's own handler at request time. They are **not** synchronized with the Lambda's native AWS config on `zappa update` — a key added here won't show up in the AWS Console or `aws lambda get-function-configuration`. Use `aws_environment_variables` if you need that.
 
 #### Remote AWS Environment Variables
 

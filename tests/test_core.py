@@ -18,6 +18,7 @@ from functools import partial
 from io import BytesIO
 from pathlib import Path
 from subprocess import check_output
+from urllib.parse import parse_qs
 
 import botocore
 import botocore.stub
@@ -28,7 +29,14 @@ from click.globals import resolve_color_default
 from packaging import version
 
 from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
-from zappa.core import ALB_LAMBDA_ALIAS, ASSUME_POLICY, ATTACH_POLICY, Zappa
+from zappa.core import (
+    ALB_LAMBDA_ALIAS,
+    ASSUME_POLICY,
+    ATTACH_POLICY,
+    PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+    SNAPSTART_LAMBDA_ALIAS,
+    Zappa,
+)
 from zappa.letsencrypt import (
     create_chained_certificate,
     create_domain_csr,
@@ -820,6 +828,55 @@ class TestZappa(unittest.TestCase):
         self.assertEqual(["Content-Type"], cors_config["AllowHeaders"])
         self.assertEqual(3600, cors_config["MaxAge"])
 
+    def test_create_api_gateway_with_lambda_qualifier(self):
+        """Test API Gateway integrations target a qualified Lambda ARN when configured."""
+        z = Zappa()
+        z.parameter_depth = 1
+        z.integration_response_codes = [200]
+        z.method_response_codes = [200]
+        z.http_methods = ["GET"]
+        z.credentials_arn = "arn:aws:iam::12345:role/ZappaLambdaExecution"
+        lambda_arn = "arn:aws:lambda:us-east-1:12345:function:helloworld"
+        qualified_lambda_arn = lambda_arn + ":live"
+
+        # v1 integration URI should include the qualifier.
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            lambda_qualifier="live",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+        expected_v1_uri = (
+            "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/" + qualified_lambda_arn + "/invocations"
+        )
+        self.assertEqual(
+            expected_v1_uri,
+            parsable_template["Resources"]["GET0"]["Properties"]["Integration"]["Uri"],
+        )
+
+        # v2 integration URI and permission target should include the qualifier.
+        z.create_stack_template(
+            lambda_arn,
+            "helloworld",
+            api_key_required=False,
+            iam_authorization=False,
+            authorizer=None,
+            apigateway_version="v2",
+            lambda_qualifier="live",
+        )
+        parsable_template = json.loads(z.cf_template.to_json())
+        self.assertEqual(
+            qualified_lambda_arn,
+            parsable_template["Resources"]["IntegrationV2"]["Properties"]["IntegrationUri"],
+        )
+        self.assertEqual(
+            qualified_lambda_arn,
+            parsable_template["Resources"]["ApiInvokePermissionV2"]["Properties"]["FunctionName"],
+        )
+
     def test_policy_json(self):
         # ensure the policy docs are valid JSON
         json.loads(ASSUME_POLICY)
@@ -902,6 +959,34 @@ class TestZappa(unittest.TestCase):
         zappa_cli.load_settings("tests/test_settings.yaml")
         self.assertEqual("None", zappa_cli.snap_start)
 
+    def test_apigateway_lambda_qualifier_configuration(self):
+        """Test that API Gateway Lambda qualifier is loaded from settings."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "apigateway_lambda_qualifier_enabled"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual("live", zappa_cli.apigateway_lambda_qualifier)
+
+    def test_apigateway_lambda_qualifier_defaults_to_snapstart_alias(self):
+        """
+        Test that, when SnapStart is enabled and no explicit qualifier is
+        set, API Gateway is automatically pointed at the Zappa-managed
+        SnapStart alias rather than requiring manual configuration.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_no_qualifier"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(SNAPSTART_LAMBDA_ALIAS, zappa_cli.apigateway_lambda_qualifier)
+
+    def test_apigateway_lambda_qualifier_explicit_overrides_snapstart_default(self):
+        """
+        Test that an explicit apigateway_lambda_qualifier setting is not
+        overridden by the SnapStart alias default.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_explicit_qualifier"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual("custom-alias", zappa_cli.apigateway_lambda_qualifier)
+
     @mock.patch("botocore.client")
     def test_snap_start_passed_to_create_lambda_function(self, client):
         """
@@ -923,6 +1008,115 @@ class TestZappa(unittest.TestCase):
         create_call_kwargs = zappa_core.lambda_client.create_function.call_args[1]
         self.assertEqual(create_call_kwargs["SnapStart"], {"ApplyOn": "PublishedVersions"})
 
+    def test_snap_start_creates_alias_after_version_is_active(self):
+        """
+        Test that create_lambda_function waits for the newly published
+        version's SnapStart snapshot to become active before creating the
+        SnapStart alias that points at it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.create_lambda_function(
+                function_name="test",
+                handler="handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="1")
+            create_alias_call = mock.call.create_alias(
+                FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                FunctionVersion="1",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            self.assertIn(create_alias_call, calls)
+            self.assertLess(calls.index(wait_call), calls.index(create_alias_call))
+
+    def test_container_snap_start_creates_alias_after_version_is_active(self):
+        """Test that container-image SnapStart waits before creating the aliases."""
+        z = Zappa()
+        z.credentials_arn = object()
+        image_uri = "123456789.dkr.ecr.us-east-1.amazonaws.com/test:latest"
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.create_lambda_function(
+                function_name="test",
+                handler=None,
+                docker_image_uri=image_uri,
+                snap_start="PublishedVersions",
+                use_alb=True,
+            )
+
+            create_call_kwargs = mock_client.create_function.call_args.kwargs
+            self.assertEqual({"ApplyOn": "PublishedVersions"}, create_call_kwargs["SnapStart"])
+            self.assertEqual("Image", create_call_kwargs["PackageType"])
+            self.assertEqual({"ImageUri": image_uri}, create_call_kwargs["Code"])
+            self.assertNotIn("Handler", create_call_kwargs)
+            self.assertNotIn("Runtime", create_call_kwargs)
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="1")
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            for alias_name in (ALB_LAMBDA_ALIAS, SNAPSTART_LAMBDA_ALIAS):
+                alias_call = mock.call.create_alias(
+                    FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                    FunctionVersion="1",
+                    Name=alias_name,
+                )
+                self.assertIn(alias_call, calls)
+                self.assertLess(calls.index(wait_call), calls.index(alias_call))
+
+    def test_container_snap_start_defers_alb_alias_until_final_version(self):
+        """Test that an image update does not move ALB before SnapStart is ready."""
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.update_function_code.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.update_lambda_function(
+                bucket="bucket",
+                function_name="test",
+                docker_image_uri="123456789.dkr.ecr.us-east-1.amazonaws.com/test:latest",
+                snap_start="PublishedVersions",
+            )
+
+            mock_client.update_alias.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+
+    def test_snap_start_disabled_does_not_create_alias(self):
+        """
+        Test that no SnapStart alias is created when SnapStart is disabled.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+
+            z.create_lambda_function(function_name="test", handler="handler.lambda_handler", snap_start=None)
+
+            for call in mock_client.create_alias.call_args_list:
+                self.assertNotEqual(call.kwargs.get("Name"), SNAPSTART_LAMBDA_ALIAS)
+
     def test_snap_start_publishes_version_after_config_update(self):
         """
         Test that update_lambda_configuration publishes a new version when
@@ -941,7 +1135,7 @@ class TestZappa(unittest.TestCase):
                 "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:2",
                 "Version": "2",
             }
-            # ALB alias does not exist
+            # Neither the ALB nor the SnapStart alias exists yet
             mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
                 {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
                 "GetAlias",
@@ -955,6 +1149,19 @@ class TestZappa(unittest.TestCase):
             )
 
             mock_client.publish_version.assert_called_once_with(FunctionName="test")
+
+            # The version must be confirmed active before it's published anywhere...
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="2")
+            # ...and since the SnapStart alias doesn't exist yet, it's created.
+            create_alias_call = mock.call.create_alias(
+                FunctionName="test",
+                FunctionVersion="2",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            self.assertIn(create_alias_call, calls)
+            self.assertLess(calls.index(wait_call), calls.index(create_alias_call))
 
     def test_snap_start_disabled_does_not_publish_extra_version(self):
         """
@@ -982,7 +1189,8 @@ class TestZappa(unittest.TestCase):
     def test_snap_start_updates_alb_alias_after_publish(self):
         """
         Test that when snap_start publishes a new version, the ALB alias
-        is updated to point to the new version.
+        and the SnapStart alias are both updated to point to the new
+        version, only after its snapshot is confirmed active.
         """
         z = Zappa()
         z.credentials_arn = object()
@@ -996,7 +1204,7 @@ class TestZappa(unittest.TestCase):
                 "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:3",
                 "Version": "3",
             }
-            # ALB alias exists
+            # Both the ALB alias and the SnapStart alias already exist
             mock_client.get_alias.return_value = {
                 "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:current-alb-version",
                 "Name": "current-alb-version",
@@ -1010,11 +1218,526 @@ class TestZappa(unittest.TestCase):
                 snap_start="PublishedVersions",
             )
 
-            mock_client.update_alias.assert_called_once_with(
+            self.assertEqual(mock_client.update_alias.call_count, 2)
+            mock_client.update_alias.assert_any_call(
                 FunctionName="test",
                 FunctionVersion="3",
                 Name="current-alb-version",
             )
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="3",
+                Name=SNAPSTART_LAMBDA_ALIAS,
+            )
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="3")
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            self.assertLess(
+                calls.index(wait_call),
+                calls.index(mock.call.update_alias(FunctionName="test", FunctionVersion="3", Name="current-alb-version")),
+            )
+
+    def test_container_snap_start_updates_both_aliases_after_publish(self):
+        """Test that an image update moves ALB and SnapStart aliases after readiness."""
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Image"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:alias",
+                "Name": ALB_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                snap_start="PublishedVersions",
+            )
+
+            update_kwargs = mock_client.update_function_configuration.call_args.kwargs
+            self.assertEqual({"ApplyOn": "PublishedVersions"}, update_kwargs["SnapStart"])
+            self.assertNotIn("Handler", update_kwargs)
+            self.assertNotIn("Runtime", update_kwargs)
+            self.assertNotIn("Layers", update_kwargs)
+
+            mock_client.update_alias.assert_any_call(FunctionName="test", FunctionVersion="4", Name=ALB_LAMBDA_ALIAS)
+            mock_client.update_alias.assert_any_call(FunctionName="test", FunctionVersion="4", Name=SNAPSTART_LAMBDA_ALIAS)
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="4")
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            for alias_name in (ALB_LAMBDA_ALIAS, SNAPSTART_LAMBDA_ALIAS):
+                alias_call = mock.call.update_alias(FunctionName="test", FunctionVersion="4", Name=alias_name)
+                self.assertLess(calls.index(wait_call), calls.index(alias_call))
+
+    def test_apigateway_lambda_qualifier_defaults_to_provisioned_concurrency_alias(self):
+        """
+        Test that, when provisioned concurrency is enabled and no explicit
+        qualifier is set, API Gateway is automatically pointed at the
+        Zappa-managed provisioned-concurrency alias.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_enabled_no_qualifier"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(PROVISIONED_CONCURRENCY_LAMBDA_ALIAS, zappa_cli.apigateway_lambda_qualifier)
+
+    def test_apigateway_lambda_qualifier_explicit_overrides_provisioned_concurrency_default(self):
+        """
+        Test that an explicit apigateway_lambda_qualifier setting is not
+        overridden by the provisioned-concurrency alias default.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_enabled_explicit_qualifier"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual("custom-alias", zappa_cli.apigateway_lambda_qualifier)
+
+    def test_snap_start_and_provisioned_concurrency_mutually_exclusive_raises(self):
+        """
+        Test that enabling both snap_start and provisioned_concurrency
+        raises at settings-load time, since AWS Lambda doesn't support
+        SnapStart together with provisioned concurrency.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_and_snap_start_conflict"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_provisioned_concurrency_exceeding_reserved_concurrency_raises(self):
+        """
+        Test that provisioned_concurrency > lambda_concurrency (reserved
+        concurrency) raises at settings-load time rather than failing later
+        as an AWS API error.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_exceeds_reserved"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_snap_start_with_low_num_retained_versions_raises(self):
+        """
+        Test that num_retained_versions < 2 raises when snap_start is
+        enabled, since pruning could otherwise delete the version the
+        SnapStart alias still points to.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_num_retained_versions_too_low"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_provisioned_concurrency_with_low_num_retained_versions_raises(self):
+        """
+        Test that num_retained_versions < 2 raises when provisioned
+        concurrency is enabled, for the same pruning-conflict reason.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "provisioned_concurrency_enabled_num_retained_versions_too_low"
+        with self.assertRaises(ClickException):
+            zappa_cli.load_settings("tests/test_settings.yaml")
+
+    def test_snap_start_with_num_retained_versions_of_two_is_allowed(self):
+        """
+        Test that num_retained_versions == 2 is the minimum accepted value
+        when snap_start is enabled.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "snap_start_enabled_num_retained_versions_ok"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(2, zappa_cli.num_retained_versions)
+
+    def test_low_num_retained_versions_allowed_without_managed_alias(self):
+        """
+        Test that num_retained_versions == 1 is still fine when neither
+        snap_start nor provisioned_concurrency is enabled, since the
+        pruning-conflict scenario doesn't apply.
+        """
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_one_without_managed_alias"
+        zappa_cli.load_settings("tests/test_settings.yaml")
+        self.assertEqual(1, zappa_cli.num_retained_versions)
+
+    def test_wait_until_provisioned_concurrency_is_ready_polls_until_ready(self):
+        """
+        Test that the provisioned-concurrency wait helper polls
+        get_provisioned_concurrency_config until Status becomes READY.
+        """
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_provisioned_concurrency_config.side_effect = [
+                {"Status": "IN_PROGRESS"},
+                {"Status": "IN_PROGRESS"},
+                {"Status": "READY"},
+            ]
+            sleeps = []
+
+            z.wait_until_lambda_function_provisioned_concurrency_is_ready(
+                "test", "3", poll_interval=1, sleep_func=sleeps.append
+            )
+
+            self.assertEqual(mock_client.get_provisioned_concurrency_config.call_count, 3)
+            self.assertEqual(sleeps, [1, 1])
+
+    def test_wait_until_provisioned_concurrency_raises_on_failed_status(self):
+        """
+        Test that the provisioned-concurrency wait helper raises when AWS
+        reports the initialization failed, instead of polling forever.
+        """
+        z = Zappa()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_provisioned_concurrency_config.return_value = {
+                "Status": "FAILED",
+                "StatusReason": "Insufficient capacity",
+            }
+
+            with self.assertRaises(RuntimeError):
+                z.wait_until_lambda_function_provisioned_concurrency_is_ready("test", "3", sleep_func=lambda s: None)
+
+    def test_provisioned_concurrency_creates_alias_after_ready(self):
+        """
+        Test that create_lambda_function waits for the version to be active
+        and its provisioned concurrency to be ready before creating the
+        provisioned-concurrency alias that points at it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.create_function.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+                "Version": "1",
+            }
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.create_lambda_function(
+                function_name="test",
+                handler="handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            mock_client.put_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                Qualifier="1",
+                ProvisionedConcurrentExecutions=5,
+            )
+
+            ready_call = mock.call.get_provisioned_concurrency_config(FunctionName="test", Qualifier="1")
+            create_alias_call = mock.call.create_alias(
+                FunctionName="arn:aws:lambda:us-east-1:123:function:test",
+                FunctionVersion="1",
+                Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+            )
+            calls = mock_client.mock_calls
+            self.assertIn(ready_call, calls)
+            self.assertIn(create_alias_call, calls)
+            self.assertLess(calls.index(ready_call), calls.index(create_alias_call))
+
+    def test_provisioned_concurrency_publishes_version_after_config_update(self):
+        """
+        Test that update_lambda_configuration publishes the provisioned-
+        concurrency version AFTER the config update lands, so alias-routed
+        traffic sees the new config (env vars, memory, timeout, etc.)
+        instead of being frozen at the pre-update state.
+        update_lambda_function's code-only version can't guarantee this,
+        since UpdateFunctionConfiguration has no Publish parameter of its
+        own.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            config_call = mock.call.update_function_configuration(**mock_client.update_function_configuration.call_args[1])
+            publish_call = mock.call.publish_version(FunctionName="test")
+            calls = mock_client.mock_calls
+            self.assertIn(config_call, calls)
+            self.assertIn(publish_call, calls)
+            self.assertLess(calls.index(config_call), calls.index(publish_call))
+
+    def test_provisioned_concurrency_migrates_alias_after_update(self):
+        """
+        Test that update_lambda_configuration waits for the newly published
+        version to be active and its provisioned concurrency to be ready
+        before migrating the provisioned-concurrency alias to it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            # No alias exists yet (ALB or provisioned-concurrency)
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            mock_client.put_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="4",
+                ProvisionedConcurrentExecutions=5,
+            )
+            mock_client.create_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="4",
+                Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+            )
+
+            ready_call = mock.call.get_provisioned_concurrency_config(FunctionName="test", Qualifier="4")
+            alias_call = mock.call.create_alias(
+                FunctionName="test", FunctionVersion="4", Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS
+            )
+            calls = mock_client.mock_calls
+            self.assertIn(ready_call, calls)
+            self.assertIn(alias_call, calls)
+            self.assertLess(calls.index(ready_call), calls.index(alias_call))
+
+    def test_provisioned_concurrency_skips_cleanup_on_first_deploy(self):
+        """
+        Test that no old-version provisioned-concurrency cleanup happens
+        when the alias doesn't already exist (e.g. PC was just turned on).
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:1",
+                "Version": "1",
+            }
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            mock_client.delete_provisioned_concurrency_config.assert_not_called()
+
+    def test_provisioned_concurrency_cleans_up_old_version(self):
+        """
+        Test that update_lambda_configuration deletes the previous version's
+        provisioned-concurrency config after migrating the alias to the new
+        version, so nobody keeps paying for capacity nothing routes to.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            mock_client.get_function_configuration.return_value = {"PackageType": "Zip"}
+            mock_client.update_function_configuration.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            }
+            mock_client.publish_version.return_value = {
+                "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test:4",
+                "Version": "4",
+            }
+            # The provisioned-concurrency alias already exists, pointed at version 2
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:provisioned-concurrency",
+                "Name": PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+                "FunctionVersion": "2",
+            }
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.update_lambda_configuration(
+                "arn:aws:lambda:us-east-1:123:function:test",
+                "test",
+                "handler.lambda_handler",
+                provisioned_concurrency=5,
+            )
+
+            mock_client.delete_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="2",
+            )
+
+    def _mock_rollback_prerequisites(self, mock_client, requests_get_mock, new_version="5"):
+        """
+        Configure the lambda_client/requests mocks shared by every
+        rollback_lambda_function_version test: three published versions
+        (plus $LATEST) exist, and rolling back one revision republishes the
+        code as `new_version`.
+        """
+        mock_client.list_versions_by_function.return_value = {
+            "Versions": [
+                {"Version": "1"},
+                {"Version": "2"},
+                {"Version": "3"},
+                {"Version": "$LATEST"},
+            ]
+        }
+        mock_client.get_function.return_value = {"Code": {"Location": "https://example.com/code.zip"}}
+        requests_get_mock.return_value = mock.Mock(status_code=200, content=b"zip-bytes")
+        mock_client.update_function_code.return_value = {
+            "FunctionArn": "arn:aws:lambda:us-east-1:123:function:test",
+            "Version": new_version,
+        }
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_migrates_alb_alias(self, requests_get_mock):
+        """
+        Test that rolling back republishes the old code and migrates the
+        ALB alias to the newly republished version, so ALB-routed traffic
+        actually reflects the rollback.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:current-alb-version",
+                "Name": ALB_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+
+            z.rollback_lambda_function_version("test", versions_back=1)
+
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="5",
+                Name=ALB_LAMBDA_ALIAS,
+            )
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_waits_then_migrates_snap_start_alias(self, requests_get_mock):
+        """
+        Test that rolling back with snap_start enabled waits for the
+        republished version to be active before migrating the SnapStart
+        alias to it.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.side_effect = botocore.exceptions.ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": ""}},
+                "GetAlias",
+            )
+
+            z.rollback_lambda_function_version("test", versions_back=1, snap_start="PublishedVersions")
+
+            wait_call = mock.call.get_waiter("published_version_active").wait(FunctionName="test", Qualifier="5")
+            alias_call = mock.call.create_alias(FunctionName="test", FunctionVersion="5", Name=SNAPSTART_LAMBDA_ALIAS)
+            calls = mock_client.mock_calls
+            self.assertIn(wait_call, calls)
+            self.assertIn(alias_call, calls)
+            self.assertLess(calls.index(wait_call), calls.index(alias_call))
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_configures_provisioned_concurrency_then_migrates_alias(self, requests_get_mock):
+        """
+        Test that rolling back with provisioned concurrency enabled
+        configures PC on the republished version, waits for it to become
+        ready, migrates the provisioned-concurrency alias to it, and cleans
+        up the old version's PC config.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            mock_client.get_alias.return_value = {
+                "AliasArn": "arn:aws:lambda:us-east-1:123:function:test:provisioned-concurrency",
+                "Name": PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+                "FunctionVersion": "3",
+            }
+            mock_client.get_provisioned_concurrency_config.return_value = {"Status": "READY"}
+
+            z.rollback_lambda_function_version("test", versions_back=1, provisioned_concurrency=5)
+
+            mock_client.put_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="5",
+                ProvisionedConcurrentExecutions=5,
+            )
+            mock_client.update_alias.assert_any_call(
+                FunctionName="test",
+                FunctionVersion="5",
+                Name=PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+            )
+            mock_client.delete_provisioned_concurrency_config.assert_called_once_with(
+                FunctionName="test",
+                Qualifier="3",
+            )
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_with_publish_false_skips_alias_migration(self, requests_get_mock):
+        """
+        Test that rolling back with publish=False doesn't touch any alias,
+        wait, or provisioned-concurrency config, since there's no new
+        version for them to point at.
+        """
+        z = Zappa()
+        z.credentials_arn = object()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+
+            z.rollback_lambda_function_version(
+                "test", versions_back=1, publish=False, snap_start="PublishedVersions", provisioned_concurrency=5
+            )
+
+            mock_client.get_alias.assert_not_called()
+            mock_client.update_alias.assert_not_called()
+            mock_client.create_alias.assert_not_called()
+            mock_client.put_provisioned_concurrency_config.assert_not_called()
 
     def test_update_empty_aws_env_hash(self):
         z = Zappa()
@@ -1820,6 +2543,8 @@ class TestZappa(unittest.TestCase):
             self.assertIn("dev", settings)
             self.assertEqual(settings["dev"]["app_function"], "app.app")
             self.assertEqual(settings["dev"]["aws_region"], "us-east-1")
+            # Generated settings should include num_retained_versions default
+            self.assertEqual(settings["dev"]["num_retained_versions"], 5)
 
             # Test settings command with custom stage (no ZAPPA_* env vars)
             with redirect_stdout(io.StringIO()) as f:
@@ -2295,6 +3020,43 @@ class TestZappa(unittest.TestCase):
         with self.assertRaises(ClickException) as context:
             zappa_cli.load_settings("test_settings.json")
         self.assertIn("not unique", str(context.exception))
+
+    def test_load_settings__num_retained_versions_default(self):
+        """Default num_retained_versions is 5 when not set in zappa_settings.json."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_default"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(5, zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_null(self):
+        """num_retained_versions: null preserves the opt-out (keep all versions)."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_null"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertIsNone(zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_explicit(self):
+        """An explicit integer value overrides the default."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_explicit"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(10, zappa_cli.num_retained_versions)
+
+    def test_load_settings__num_retained_versions_invalid_type(self):
+        """A non-int, non-null value raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_invalid_type"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("num_retained_versions", str(context.exception))
+
+    def test_load_settings__num_retained_versions_invalid_value(self):
+        """A value less than 1 raises ClickException."""
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "num_retained_versions_invalid_value"
+        with self.assertRaises(ClickException) as context:
+            zappa_cli.load_settings("test_settings.json")
+        self.assertIn("greater than 0", str(context.exception))
 
     def test_load_settings_yml(self):
         zappa_cli = ZappaCLI()
@@ -3420,6 +4182,69 @@ class TestZappa(unittest.TestCase):
 
         zappa_cli.remove_local_zip()
 
+    def test_docker_deploy_rejects_slim_handler(self):
+        # Issue #1341: slim_handler + Docker produces a stale ARCHIVE_PATH in
+        # the generated zappa_settings.py, so deploy must fail fast.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with self.assertRaises(ClickException) as exc_ctx:
+            zappa_cli.deploy(docker_image_uri="1234.dkr.ecr.us-east-1.amazonaws.com/repo:latest")
+        self.assertIn("slim_handler", str(exc_ctx.exception.message))
+
+    def test_docker_update_rejects_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with self.assertRaises(ClickException) as exc_ctx:
+            zappa_cli.update(docker_image_uri="1234.dkr.ecr.us-east-1.amazonaws.com/repo:latest")
+        self.assertIn("slim_handler", str(exc_ctx.exception.message))
+
+    def test_save_python_settings_file_rejects_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "zappa_settings.py")
+            with self.assertRaises(ClickException) as exc_ctx:
+                zappa_cli.save_python_settings_file(out)
+            self.assertIn("slim_handler", str(exc_ctx.exception.message))
+            self.assertFalse(os.path.exists(out))
+
+    def test_docker_deploy_ok_without_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertFalse(zappa_cli.stage_config.get("slim_handler"))
+        zappa_cli._check_docker_settings_conflicts()
+
+    def test_undeploy_removes_slim_handler_archive(self):
+        # Issue #1341: undeploy must clean up the S3 project archive so a
+        # later redeploy does not load stale code.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.use_alb = False
+        zappa_cli.use_apigateway = False
+
+        zappa_cli.undeploy(no_confirm=True)
+
+        expected_key = "{0}_{1}_current_project.tar.gz".format(zappa_cli.api_stage, zappa_cli.project_name)
+        zappa_cli.zappa.remove_from_s3.assert_called_once_with(expected_key, zappa_cli.s3_bucket_name)
+
+    def test_undeploy_skips_archive_cleanup_without_slim_handler(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.use_alb = False
+        zappa_cli.use_apigateway = False
+
+        zappa_cli.undeploy(no_confirm=True)
+
+        zappa_cli.zappa.remove_from_s3.assert_not_called()
+
     def test_settings_py_generation(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
@@ -4497,6 +5322,89 @@ class TestZappa(unittest.TestCase):
         request = create_wsgi_request(event)
         expected = "query=Jane%26John&otherquery=B&test=hello%2Bm.te%26how%26are%26you"
         self.assertEqual(request["QUERY_STRING"], expected)
+
+    @staticmethod
+    def _v2_event(**overrides):
+        """Minimal API Gateway payload format 2.0 event, for query string tests."""
+        event = {
+            "version": "2.0",
+            "routeKey": "ANY /{proxy+}",
+            "rawPath": "/path/path1",
+            "rawQueryString": "",
+            "headers": {"host": "example.com"},
+            "requestContext": {
+                "http": {
+                    "method": "GET",
+                    "path": "/path/path1",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "50.191.225.98",
+                },
+                "stage": "$default",
+            },
+            "isBase64Encoded": False,
+        }
+        event.update(overrides)
+        return event
+
+    def test_wsgi_v2_repeated_query_params_preserved(self):
+        """
+        API Gateway v2 flattens ?id=18&id=19&id=20 into
+        queryStringParameters {"id": "18,19,20"}. rawQueryString keeps the
+        original repetition and must be what reaches the application.
+        https://github.com/zappa/Zappa/issues/1472
+        """
+        event = self._v2_event(
+            rawQueryString="id=18&id=19&id=20",
+            queryStringParameters={"id": "18,19,20"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "id=18&id=19&id=20")
+        self.assertEqual(parse_qs(request["QUERY_STRING"]), {"id": ["18", "19", "20"]})
+
+    def test_wsgi_v2_literal_comma_in_value_preserved(self):
+        """
+        A comma inside a single value must not be mistaken for a separator.
+        queryStringParameters cannot express the difference; rawQueryString can.
+        """
+        event = self._v2_event(
+            rawQueryString="tags=a%2Cb&tags=c",
+            queryStringParameters={"tags": "a,b,c"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(parse_qs(request["QUERY_STRING"]), {"tags": ["a,b", "c"]})
+
+    def test_wsgi_v2_query_string_not_double_encoded(self):
+        """rawQueryString arrives percent-encoded and must be passed through as-is."""
+        event = self._v2_event(
+            rawQueryString="test=M%26M&query=C%23D&utf=caf%C3%A9",
+            queryStringParameters={"test": "M&M", "query": "C#D", "utf": "café"},
+        )
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "test=M%26M&query=C%23D&utf=caf%C3%A9")
+        self.assertEqual(
+            parse_qs(request["QUERY_STRING"]),
+            {"test": ["M&M"], "query": ["C#D"], "utf": ["café"]},
+        )
+
+    def test_wsgi_v2_empty_query_string(self):
+        """An empty rawQueryString must not fall back to queryStringParameters."""
+        request = create_wsgi_request(self._v2_event())
+        self.assertEqual(request["QUERY_STRING"], "")
+
+    def test_wsgi_v2_without_raw_query_string_falls_back(self):
+        """
+        Invokers other than API Gateway may send a v2-shaped event with no
+        rawQueryString. Fall back to queryStringParameters, honouring lists.
+        """
+        event = self._v2_event(queryStringParameters={"a": "1", "b": "C#D"})
+        del event["rawQueryString"]
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=1&b=C%23D")
+
+        event = self._v2_event(queryStringParameters={"a": ["1", "2"]})
+        del event["rawQueryString"]
+        request = create_wsgi_request(event)
+        self.assertEqual(request["QUERY_STRING"], "a=1&a=2")
 
     @mock.patch("subprocess.Popen")
     def test_create_handler_venv_win32_none_stderror_result(self, popen_mock):

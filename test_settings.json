@@ -3,6 +3,7 @@
        "touch": false,
        "s3_bucket": "lmbda",
        "app_function": "tests.test_app.hello_world",
+       "num_retained_versions": null,
        "use_precompiled_packages": false,
        "callbacks": {
            "settings": "tests.test_app.callback",
@@ -235,5 +236,25 @@
             {"LocalMountPath": "/mnt/data"},
             {"LocalMountPath": "/mnt/data"}
         ]
+     },
+     "num_retained_versions_default": {
+        "s3_bucket": "lmbda",
+        "app_function": "tests.test_app.hello_world"
+     },
+     "num_retained_versions_null": {
+        "extends": "ttt888",
+        "num_retained_versions": null
+     },
+     "num_retained_versions_explicit": {
+        "extends": "ttt888",
+        "num_retained_versions": 10
+     },
+     "num_retained_versions_invalid_type": {
+        "extends": "ttt888",
+        "num_retained_versions": "not_an_int"
+     },
+     "num_retained_versions_invalid_value": {
+        "extends": "ttt888",
+        "num_retained_versions": 0
      }
 }

@@ -37,7 +37,13 @@ from click.globals import push_context
 from dateutil import parser
 
 from . import __version__
-from .core import API_GATEWAY_REGIONS, DEFAULT_AWS_REGION, Zappa
+from .core import (
+    API_GATEWAY_REGIONS,
+    DEFAULT_AWS_REGION,
+    PROVISIONED_CONCURRENCY_LAMBDA_ALIAS,
+    SNAPSTART_LAMBDA_ALIAS,
+    Zappa,
+)
 from .utilities import (
     DEFAULT_EFS_MOUNT_POINT,
     check_new_version_available,
@@ -70,6 +76,7 @@ CUSTOM_SETTINGS = [
 BOTO3_CONFIG_DOCS_URL = "https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration"
 DEFAULT_APP_FUNCTION = "app.app"
 DEFAULT_EXCLUDES = ["boto3", "dateutil", "botocore", "s3transfer", "concurrent"]
+DEFAULT_NUM_RETAINED_VERSIONS = 5
 
 
 ##
@@ -106,6 +113,7 @@ class ZappaCLI:
     lambda_name = None
     lambda_description = None
     lambda_concurrency = None
+    provisioned_concurrency = None
     s3_bucket_name = None
     settings_file = None
     zip_path = None
@@ -115,6 +123,7 @@ class ZappaCLI:
     memory_size = None
     ephemeral_storage = None
     use_apigateway = None
+    apigateway_lambda_qualifier = None
     lambda_handler = None
     django_settings = None
     manage_roles = True
@@ -191,6 +200,23 @@ class ZappaCLI:
         """
         self._stage_config_overrides = getattr(self, "_stage_config_overrides", {})
         self._stage_config_overrides.setdefault(self.api_stage, {})[key] = val
+
+    # slim_handler writes an ARCHIVE_PATH into zappa_settings.py, which causes
+    # the container handler to overlay stale S3 code on the image code. See #1341.
+    DOCKER_INCOMPATIBLE_SETTINGS = ("slim_handler",)
+
+    def _get_slim_handler_archive_name(self):
+        return "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+
+    def _check_docker_settings_conflicts(self):
+        conflicts = [key for key in self.DOCKER_INCOMPATIBLE_SETTINGS if self.stage_config.get(key)]
+        if conflicts:
+            raise ClickException(
+                click.style("Invalid Zappa settings for Docker deployment", fg="red", bold=True)
+                + ": the following setting(s) are not compatible with Docker deployments and must be removed or disabled: "
+                + click.style(", ".join(conflicts), bold=True)
+                + ".\nSee the 'Docker Workflows' section of the README for details."
+            )
 
     def handle(self, argv=None):
         """
@@ -722,6 +748,9 @@ class ZappaCLI:
         print("Generating Zappa settings Python file and saving to {}".format(settings_path))
         if not settings_path.endswith("zappa_settings.py"):
             raise ValueError("Settings file must be named zappa_settings.py")
+        # save-python-settings-file is only used for Docker-based deployments,
+        # so surface conflicting settings (e.g. slim_handler) before writing the file.
+        self._check_docker_settings_conflicts()
         zappa_settings_s = self.get_zappa_settings_string()
         with open(settings_path, "w") as f_out:
             f_out.write(zappa_settings_s)
@@ -776,6 +805,7 @@ class ZappaCLI:
             endpoint_configuration=self.endpoint_configuration,
             apigateway_version=self.apigateway_version,
             stage_name=self.api_stage,
+            lambda_qualifier=self.apigateway_lambda_qualifier,
         )
 
         if not output:
@@ -796,6 +826,9 @@ class ZappaCLI:
         Package your project, upload it to S3, register the Lambda function
         and create the API Gateway routes.
         """
+
+        if docker_image_uri:
+            self._check_docker_settings_conflicts()
 
         if not source_zip or docker_image_uri:
             # Make sure the necessary IAM execution roles are available
@@ -879,7 +912,7 @@ class ZappaCLI:
                     raise ClickException("Unable to upload handler to S3. Quitting.")
 
                 # Copy the project zip to the current project zip
-                current_project_name = "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+                current_project_name = self._get_slim_handler_archive_name()
                 success = self.zappa.copy_on_s3(
                     src_file_name=self.zip_path,
                     dst_file_name=current_project_name,
@@ -921,6 +954,7 @@ class ZappaCLI:
                 use_alb=self.use_alb,
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
+                provisioned_concurrency=self.provisioned_concurrency,
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -974,6 +1008,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                lambda_qualifier=self.apigateway_lambda_qualifier,
                 websocket=self.use_websocket,
             )
 
@@ -1040,6 +1075,9 @@ class ZappaCLI:
         """
         Repackage and update the function code.
         """
+
+        if docker_image_uri:
+            self._check_docker_settings_conflicts()
 
         if not source_zip and not docker_image_uri:
             # Make sure we're in a venv.
@@ -1142,7 +1180,7 @@ class ZappaCLI:
                         raise ClickException("Unable to upload handler to S3. Quitting.")
 
                     # Copy the project zip to the current project zip
-                    current_project_name = "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+                    current_project_name = self._get_slim_handler_archive_name()
                     success = self.zappa.copy_on_s3(
                         src_file_name=self.zip_path,
                         dst_file_name=current_project_name,
@@ -1162,6 +1200,7 @@ class ZappaCLI:
             function_name=self.lambda_name,
             num_revisions=self.num_retained_versions,
             concurrency=self.lambda_concurrency,
+            snap_start=self.snap_start,
         )
         if docker_image_uri:
             kwargs["docker_image_uri"] = docker_image_uri
@@ -1207,6 +1246,7 @@ class ZappaCLI:
             aws_kms_key_arn=self.aws_kms_key_arn,
             layers=self.layers,
             snap_start=self.snap_start,
+            provisioned_concurrency=self.provisioned_concurrency,
             wait=False,
         )
 
@@ -1227,6 +1267,7 @@ class ZappaCLI:
                 endpoint_configuration=self.endpoint_configuration,
                 apigateway_version=self.apigateway_version,
                 stage_name=self.api_stage,
+                lambda_qualifier=self.apigateway_lambda_qualifier,
                 websocket=self.use_websocket,
             )
             self.zappa.update_stack(
@@ -1326,7 +1367,12 @@ class ZappaCLI:
 
         print("Rolling back..")
 
-        self.zappa.rollback_lambda_function_version(self.lambda_name, versions_back=revision)
+        self.zappa.rollback_lambda_function_version(
+            self.lambda_name,
+            versions_back=revision,
+            snap_start=self.snap_start,
+            provisioned_concurrency=self.provisioned_concurrency,
+        )
         print("Done!")
 
     def tail(
@@ -1404,6 +1450,13 @@ class ZappaCLI:
         self.zappa.delete_lambda_function(self.lambda_name)
         if remove_logs:
             self.zappa.remove_lambda_function_logs(self.lambda_name)
+
+        # Remove the slim_handler project archive from S3 so a subsequent
+        # redeploy does not load stale code. See issue #1341.
+        if self.stage_config.get("slim_handler", False):
+            current_project_name = self._get_slim_handler_archive_name()
+            click.echo("Removing slim_handler project archive from S3: " + click.style(current_project_name, bold=True))
+            self.zappa.remove_from_s3(current_project_name, self.s3_bucket_name)
 
         # Delete auto-created EFS resources
         # Check if any EFS entries were auto-created (no Arn in original config)
@@ -2303,6 +2356,7 @@ class ZappaCLI:
                 "runtime": get_venv_from_python_version(),
                 "project_name": self.get_project_name(),
                 "exclude": DEFAULT_EXCLUDES,
+                "num_retained_versions": DEFAULT_NUM_RETAINED_VERSIONS,
             }
         }
 
@@ -2685,13 +2739,13 @@ class ZappaCLI:
         dead_letter_arn = self.stage_config.get("dead_letter_arn", "")
         self.dead_letter_config = {"TargetArn": dead_letter_arn} if dead_letter_arn else {}
         self.cognito = self.stage_config.get("cognito", None)
-        self.num_retained_versions = self.stage_config.get("num_retained_versions", None)
+        # Default bounds Lambda code-storage and SnapStart snapshot-cache cost; null retains all versions.
+        self.num_retained_versions = self.stage_config.get("num_retained_versions", DEFAULT_NUM_RETAINED_VERSIONS)
         self.architecture = self.stage_config.get("architecture", "x86_64")
-        # Check for valid values of num_retained_versions
         if self.num_retained_versions is not None and type(self.num_retained_versions) is not int:
             raise ClickException(
-                "Please supply either an integer or null for num_retained_versions in the zappa_settings.json. Found %s"
-                % type(self.num_retained_versions)
+                "Please supply either an integer or null for num_retained_versions in the zappa_settings.json. "
+                "Use null to retain all published versions. Found %s" % type(self.num_retained_versions)
             )
         elif type(self.num_retained_versions) is int and self.num_retained_versions < 1:
             raise ClickException("The value for num_retained_versions in the zappa_settings.json should be greater than 0.")
@@ -2704,6 +2758,11 @@ class ZappaCLI:
             self.use_apigateway = self.stage_config.get("apigateway_enabled", True)
         self.apigateway_description = self.stage_config.get("apigateway_description", None)
         self.apigateway_version = self.stage_config.get("apigateway_version", "v1")
+        self.apigateway_lambda_qualifier = self.stage_config.get("apigateway_lambda_qualifier", None)
+        if self.apigateway_lambda_qualifier is not None and not isinstance(self.apigateway_lambda_qualifier, str):
+            raise ClickException(
+                "The 'apigateway_lambda_qualifier' setting must be a string " "(Lambda alias or version), or null."
+            )
 
         self.lambda_handler = self.stage_config.get("lambda_handler", "handler.lambda_handler")
         # DEPRECATED. https://github.com/Miserlou/Zappa/issues/456
@@ -2721,6 +2780,18 @@ class ZappaCLI:
         self.cors = self.stage_config.get("cors", False)
         self.lambda_description = self.stage_config.get("lambda_description", "Zappa Deployment")
         self.lambda_concurrency = self.stage_config.get("lambda_concurrency", None)
+        self.provisioned_concurrency = self.stage_config.get("provisioned_concurrency", None)
+        if self.provisioned_concurrency is not None:
+            if (
+                not isinstance(self.provisioned_concurrency, int)
+                or isinstance(self.provisioned_concurrency, bool)
+                or self.provisioned_concurrency < 1
+            ):
+                raise ClickException("The 'provisioned_concurrency' setting must be a positive integer, or null.")
+            if self.lambda_concurrency is not None and self.provisioned_concurrency > self.lambda_concurrency:
+                raise ClickException(
+                    "The 'provisioned_concurrency' setting cannot exceed 'lambda_concurrency' " "(reserved concurrency)."
+                )
         self.environment_variables = self.stage_config.get("environment_variables", {})
         self.aws_environment_variables = self.stage_config.get("aws_environment_variables", {})
         self.check_environment(self.environment_variables)
@@ -2728,6 +2799,36 @@ class ZappaCLI:
         self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.snap_start = self.stage_config.get("snap_start", "None")
+        if self.provisioned_concurrency is not None and self.snap_start and self.snap_start != "None":
+            raise ClickException(
+                "'snap_start' and 'provisioned_concurrency' cannot both be enabled on the same "
+                "function (AWS Lambda does not support SnapStart with provisioned concurrency)."
+            )
+        # SnapStart and provisioned concurrency both require invoking a
+        # version/alias rather than $LATEST. Zappa manages a dedicated alias
+        # for whichever one is enabled (see SNAPSTART_LAMBDA_ALIAS /
+        # PROVISIONED_CONCURRENCY_LAMBDA_ALIAS in zappa/core.py); default API
+        # Gateway to it unless the user opted into their own qualifier.
+        if self.apigateway_lambda_qualifier is None and self.snap_start and self.snap_start != "None":
+            self.apigateway_lambda_qualifier = SNAPSTART_LAMBDA_ALIAS
+        elif self.apigateway_lambda_qualifier is None and self.provisioned_concurrency is not None:
+            self.apigateway_lambda_qualifier = PROVISIONED_CONCURRENCY_LAMBDA_ALIAS
+        # Each deploy publishes an extra version to capture SnapStart/PC's
+        # config, one cycle behind the code-only version; the managed alias
+        # still points at the *previous* cycle's extra version when this
+        # cycle's pruning runs. Retaining fewer than 2 versions can delete
+        # the version that alias still references, causing Lambda to reject
+        # the deletion with a ResourceConflictException.
+        if (
+            self.num_retained_versions is not None
+            and self.num_retained_versions < 2
+            and ((self.snap_start and self.snap_start != "None") or self.provisioned_concurrency is not None)
+        ):
+            raise ClickException(
+                "'num_retained_versions' must be null or at least 2 when 'snap_start' or "
+                "'provisioned_concurrency' is enabled — otherwise version pruning can delete "
+                "the version Zappa's managed alias still points to."
+            )
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
@@ -3120,8 +3221,8 @@ class ZappaCLI:
 
         # If slim handler, path to project zip
         if self.stage_config.get("slim_handler", False):
-            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}_{2!s}_current_project.tar.gz'\n".format(
-                self.s3_bucket_name, self.api_stage, self.project_name
+            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}'\n".format(
+                self.s3_bucket_name, self._get_slim_handler_archive_name()
             )
 
             # since includes are for slim handler add the setting here by joining arbitrary list from zappa_settings file
@@ -3140,7 +3241,7 @@ class ZappaCLI:
             arn = event.get("event_source", {}).get("arn")
             function = event.get("function")
             if arn and function:
-                event_mapping[arn] = function
+                event_mapping.setdefault(arn, []).append(function)
         settings_s = settings_s + "AWS_EVENT_MAPPING={0!s}\n".format(event_mapping)
 
         # Map Lext bot events
