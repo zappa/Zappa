@@ -5520,23 +5520,6 @@ class TestKeepWarmDeprecation(unittest.TestCase):
         echo_calls = " ".join(str(c) for c in mock_echo.call_args_list)
         self.assertNotIn("deprecated", echo_calls)
 
-    def test_keep_warm_callback_deprecation_warning(self):
-        """keep_warm_callback should emit a DeprecationWarning."""
-        import warnings
-
-        from zappa.handler import keep_warm_callback
-
-        mock_context = mock.MagicMock()
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            with mock.patch("zappa.handler.lambda_handler"):
-                keep_warm_callback(event={}, context=mock_context)
-
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[0].category, DeprecationWarning))
-            self.assertIn("deprecated", str(w[0].message))
-
 
 if __name__ == "__main__":
     unittest.main()

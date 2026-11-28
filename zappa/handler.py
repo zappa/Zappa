@@ -1020,15 +1020,6 @@ def keep_warm_callback(event, context):
     Consider using snap_start or provisioned_concurrency instead.
     See https://github.com/zappa/Zappa/issues/1451
     """
-    import warnings
-
-    warnings.warn(
-        "keep_warm is deprecated and will be removed in a future version. "
-        "Use snap_start or provisioned_concurrency instead. "
-        "See https://github.com/zappa/Zappa/issues/1451",
-        DeprecationWarning,
-        stacklevel=1,
-    )
     lambda_handler(event={}, context=context)  # overriding event with an empty one so that web app initialization will
     # be triggered.
 

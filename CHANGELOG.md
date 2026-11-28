@@ -1,5 +1,13 @@
 # Zappa Changelog
 
+## Unreleased
+
+* Deprecate `keep_warm` and change its default from `true` to `false` (#1445, #1451, #1452)
+  - `keep_warm` lowers cold start frequency for a single execution environment; it does not shorten cold starts. Use `snap_start` or `provisioned_concurrency` instead.
+  - Behavior change: stages that do not set `keep_warm` no longer get the keep-warm schedule on `zappa deploy`/`update`/`schedule`. Set `"keep_warm": true` to keep it.
+  - An existing `zappa-keep-warm` rule is removed on the next `zappa update`/`schedule` only when the stage has other `events`; otherwise run `zappa unschedule <stage>` to remove it.
+  - `zappa schedule` prints a deprecation warning when `keep_warm` is enabled.
+
 ## 0.63.0
 
 * Add full SnapStart and provisioned concurrency support via managed Lambda aliases (#1463, #1468)
