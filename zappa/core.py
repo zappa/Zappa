@@ -2932,7 +2932,7 @@ class Zappa:
                 for lckey, lcvalue in value.items():
                     if lckey in LambdaConfig:
                         value[lckey] = LambdaConfig[lckey]
-                logger.debug("value", value)
+                logger.debug("value %s", value)
                 description_kwargs[key] = value
         if "LambdaConfig" not in description_kwargs:
             description_kwargs["LambdaConfig"] = LambdaConfig
@@ -2944,7 +2944,7 @@ class Zappa:
             ].pop("UnusedAccountValidityDays", None)
         result = self.cognito_client.update_user_pool(UserPoolId=user_pool, **description_kwargs)
         if result["ResponseMetadata"]["HTTPStatusCode"] != 200:
-            logger.error("Cognito:  Failed to update user pool", result)
+            logger.error("Cognito:  Failed to update user pool: %s", result)
 
         # Now we need to add a policy to the IAM that allows cognito access
         result = self.create_event_permission(
@@ -2957,7 +2957,7 @@ class Zappa:
             ),
         )
         if result["ResponseMetadata"]["HTTPStatusCode"] != 201:
-            logger.error("Cognito:  Failed to update lambda permission", result)
+            logger.error("Cognito:  Failed to update lambda permission: %s", result)
 
     def delete_stack(self, name, wait=False):
         """
