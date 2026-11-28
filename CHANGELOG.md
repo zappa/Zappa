@@ -1,5 +1,25 @@
 # Zappa Changelog
 
+## 0.63.1
+
+* Add support for the Python 3.15 runtime (#1500, #1491)
+  - `SUPPORTED_VERSIONS` includes Python 3.15, and CI tests against it.
+  - `asyncio.iscoroutinefunction` (deprecated since Python 3.14) is no longer called on Python 3.12+ (#1501, #1504).
+* Fix `slim_handler` execution environments failing every request after a failed cold start (#1493, #1487)
+  - A failed setup, such as an interrupted project archive download, no longer leaves a cached handler with no app; the next invocation loads again.
+  - The project archive is extracted into `/tmp/<project_name>.partial` and renamed into place once extraction succeeds, so a partial download is never loaded.
+  - Behavior change: a setup failure that repeats, such as an app import error, now raises the original error on every invocation. Previously it raised once and later invocations failed with `'NoneType' object is not callable`.
+* Raise a `RuntimeError` naming the archive and `zappa update <stage>` when the `slim_handler` project archive is missing from S3 (#1475, #1477)
+  - README: the project archive is a runtime dependency; do not apply an age-based S3 lifecycle expiration rule to the deploy bucket.
+* Fix `TypeError` when packaging with `--no_venv` and no virtualenv is active; the running interpreter's environment (`sys.prefix`) is packaged (#850, #1478)
+* Fix ASGI app auto-detection (#1505, #1506, #1504)
+  - `async def app(scope, receive, send, **kwargs)` and `async def wrapper(*args, **kwargs)` are detected as ASGI; `async def app(scope, receive, *, send)` is no longer detected.
+  - A `functools.partial` around a callable marked with `asgiref.sync.markcoroutinefunction` is detected on Python 3.9–3.11.
+* `ZAPPA_RUNNING_IN_DOCKER` also skips the upper Python version bound in `get_runtime_from_python_version()`, so the CLI runtime check no longer raises in Docker mode (#1507, #1504)
+* `get_runtime_from_python_version()` and `MINIMUM_SUPPORTED_MINOR_VERSION` derive their bounds from `SUPPORTED_VERSIONS` (#1503, #1504)
+* Docs: SnapStart / provisioned concurrency alias behavior (#1468, #1497)
+* CI: pin the test runner to `ubuntu-24.04` for Python 3.9 (#1489); add a `tests-passed` job covering the whole test matrix (#1502, #1504)
+
 ## 0.63.0
 
 * Add full SnapStart and provisioned concurrency support via managed Lambda aliases (#1463, #1468)
