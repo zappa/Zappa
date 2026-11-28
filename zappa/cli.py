@@ -2782,7 +2782,7 @@ class ZappaCLI:
         self.aws_environment_variables = self.stage_config.get("aws_environment_variables", {})
         self.check_environment(self.environment_variables)
         self.authorizer = self.stage_config.get("authorizer", {})
-        self.runtime = self.stage_config.get("runtime") or get_runtime_from_python_version()
+        self.runtime = self.stage_config.get("runtime", get_runtime_from_python_version())
         self.aws_kms_key_arn = self.stage_config.get("aws_kms_key_arn", "")
         self.snap_start = self.stage_config.get("snap_start", "None")
         if self.provisioned_concurrency is not None and self.snap_start and self.snap_start != "None":

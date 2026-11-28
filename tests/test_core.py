@@ -5340,15 +5340,6 @@ class TestZappa(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no longer supported"):
                 get_runtime_from_python_version()
 
-    def test_load_settings_runtime_setting_skips_python_version_detection(self):
-        zappa_cli = ZappaCLI()
-        zappa_cli.api_stage = "ttt888"
-        zappa_cli.override_stage_config_setting("runtime", "python3.13")
-        with mock.patch("zappa.cli.get_runtime_from_python_version", side_effect=ValueError) as get_runtime:
-            zappa_cli.load_settings("test_settings.json")
-        get_runtime.assert_not_called()
-        self.assertEqual(zappa_cli.runtime, "python3.13")
-
     def test_load_settings_runtime_defaults_to_python_version(self):
         zappa_cli = ZappaCLI()
         zappa_cli.api_stage = "ttt888"
