@@ -511,8 +511,10 @@ class Zappa:
         # Calling this function in some environments without this can cause.. funkiness.
         import pip  # noqa: 547
 
-        if not venv:
-            venv = self.get_current_venv()
+        current_venv = venv or self.get_current_venv()
+        # Without a virtualenv (`--no_venv`), package the running interpreter's environment.
+        # Related: https://github.com/zappa/Zappa/issues/850
+        venv = current_venv or Path(sys.prefix)
 
         build_time = str(int(time.time()))
         cwd = Path.cwd()
@@ -568,7 +570,10 @@ class Zappa:
             # Slim handler does not take the project files.
             if minify:
                 # Related: https://github.com/Miserlou/Zappa/issues/744
-                excludes: list[str] = ZIP_EXCLUDES + exclude + [split_venv[-1]]  # type: ignore
+                # The interpreter environment (e.g. `/usr/local`) is excluded by name only when it is inside the project.
+                # Otherwise a project folder with the same name (`local`) would be left out of the package.
+                venv_excludes = [split_venv[-1]] if current_venv or cwd in venv.parents else []
+                excludes: list[str] = ZIP_EXCLUDES + exclude + venv_excludes  # type: ignore
                 copytree(
                     cwd,
                     temp_project_path,
