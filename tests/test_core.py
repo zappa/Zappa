@@ -5304,6 +5304,7 @@ class TestZappa(unittest.TestCase):
         except RuntimeError:
             self.fail()
 
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "False"})
     def test_unsupported_newer_version_error(self):
         from importlib import reload
 
@@ -5319,11 +5320,40 @@ class TestZappa(unittest.TestCase):
             with self.subTest(minor=minor), mock.patch("sys.version_info", get_sys_versioninfo(minor)):
                 self.assertEqual(get_runtime_from_python_version(), f"python{major}.{minor}")
 
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "False"})
     def test_get_runtime_from_python_version_not_yet_supported(self):
         _, newest_minor = max(SUPPORTED_VERSIONS)
         with mock.patch("sys.version_info", get_sys_versioninfo(newest_minor + 1)):
             with self.assertRaisesRegex(ValueError, "not yet supported"):
                 get_runtime_from_python_version()
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "True"})
+    def test_get_runtime_from_python_version_newer_version_when_in_docker(self):
+        major, newest_minor = max(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(newest_minor + 1)):
+            self.assertEqual(get_runtime_from_python_version(), f"python{major}.{newest_minor + 1}")
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "True"})
+    def test_get_runtime_from_python_version_no_longer_supported_when_in_docker(self):
+        _, oldest_minor = min(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(oldest_minor - 1)):
+            with self.assertRaisesRegex(ValueError, "no longer supported"):
+                get_runtime_from_python_version()
+
+    def test_load_settings_runtime_setting_skips_python_version_detection(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.override_stage_config_setting("runtime", "python3.13")
+        with mock.patch("zappa.cli.get_runtime_from_python_version", side_effect=ValueError) as get_runtime:
+            zappa_cli.load_settings("test_settings.json")
+        get_runtime.assert_not_called()
+        self.assertEqual(zappa_cli.runtime, "python3.13")
+
+    def test_load_settings_runtime_defaults_to_python_version(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(zappa_cli.runtime, get_runtime_from_python_version())
 
     def test_get_runtime_from_python_version_no_longer_supported(self):
         _, oldest_minor = min(SUPPORTED_VERSIONS)

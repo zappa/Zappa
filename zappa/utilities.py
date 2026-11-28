@@ -18,7 +18,7 @@ import boto3
 import botocore
 import durationpy
 
-from . import SUPPORTED_VERSIONS
+from . import SUPPORTED_VERSIONS, running_in_docker
 
 LOG = logging.getLogger(__name__)
 
@@ -253,12 +253,16 @@ def get_venv_from_python_version() -> str:
 
 
 def get_runtime_from_python_version() -> str:
-    """Return the AWS Lambda runtime string for the current Python version."""
+    """
+    Return the AWS Lambda runtime string for the current Python version.
+    ZAPPA_RUNNING_IN_DOCKER allows versions newer than SUPPORTED_VERSIONS, as in zappa/__init__.py.
+    https://github.com/zappa/Zappa/issues/1507
+    """
     python_version = sys.version_info[:2]
     major, minor = python_version
     if python_version < min(SUPPORTED_VERSIONS):
         raise ValueError(f"Python {major}.{minor} is no longer supported.")
-    if python_version > max(SUPPORTED_VERSIONS):
+    if python_version > max(SUPPORTED_VERSIONS) and not running_in_docker():
         raise ValueError(f"Python {major}.{minor} is not yet supported.")
     return f"python{major}.{minor}"
 
