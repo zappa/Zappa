@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import collections
 import importlib
@@ -37,6 +38,16 @@ except ImportError:  # pragma: no cover
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Coroutine-function check used by `LambdaHandler._is_asgi_app()`. https://github.com/zappa/Zappa/issues/1501
+# Python < 3.12: `asgiref.sync.markcoroutinefunction` sets the `_is_coroutine` marker,
+# which only `asyncio.iscoroutinefunction` honours.
+# Python 3.12+: `inspect.markcoroutinefunction` replaces that marker, and `asyncio.iscoroutinefunction` is deprecated.
+# TODO: use `inspect.iscoroutinefunction` directly once Python 3.11 support is dropped.
+if hasattr(inspect, "markcoroutinefunction"):
+    iscoroutinefunction = inspect.iscoroutinefunction
+else:
+    iscoroutinefunction = asyncio.iscoroutinefunction  # type: ignore[assignment]
 
 # Lightweight response object for common_log (avoids class-per-request overhead)
 _LogResponse = collections.namedtuple("_LogResponse", ["status_code", "content"])
@@ -391,10 +402,10 @@ class LambdaHandler:
         if not callable(app):
             return False
         # If it's a class instance, check __call__
-        if hasattr(app, "__call__") and not inspect.isfunction(app) and not inspect.iscoroutinefunction(app):
+        if hasattr(app, "__call__") and not inspect.isfunction(app) and not iscoroutinefunction(app):
             callable_obj = app.__call__
 
-        if inspect.iscoroutinefunction(callable_obj):
+        if iscoroutinefunction(callable_obj):
             try:
                 sig = inspect.signature(callable_obj)
                 # ASGI apps take 3 params: scope, receive, send
