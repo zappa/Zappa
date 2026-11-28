@@ -255,7 +255,7 @@ def get_runtime_from_python_version() -> str:
     major, minor = sys.version_info[:2]
     if major < 3 or minor < 9:
         raise ValueError(f"Python {major}.{minor} is no longer supported.")
-    if minor > 14:
+    if minor > 15:
         raise ValueError(f"Python {major}.{minor} is not yet supported.")
     return f"python{major}.{minor}"
 

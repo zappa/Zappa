@@ -1,7 +1,7 @@
 import unittest
 from typing import Any, Tuple
 
-from mock import Mock
+from mock import Mock, patch
 
 from zappa.handler import LambdaHandler
 from zappa.utilities import merge_headers
@@ -808,8 +808,8 @@ class TestZappa(unittest.TestCase):
 
         lh = LambdaHandler("test_settings")
 
-        # Override AWS_EVENT_MAPPING with two handlers for the same ARN
-        lh.settings.AWS_EVENT_MAPPING = {
+        # Two handlers for the same ARN; patched so the shared settings module is restored
+        mapping = {
             "arn:aws:sns:1": ["test_settings.aws_sns_event", "test_settings.aws_s3_event"],
         }
 
@@ -824,7 +824,8 @@ class TestZappa(unittest.TestCase):
             ],
         }
 
-        result = lh.handler(event, None)
+        with patch.object(lh.settings, "AWS_EVENT_MAPPING", mapping):
+            result = lh.handler(event, None)
         # The last handler's result is returned
         self.assertIsNotNone(result)
 
@@ -836,8 +837,8 @@ class TestZappa(unittest.TestCase):
 
         lh = LambdaHandler("test_settings")
 
-        # Override with old string format
-        lh.settings.AWS_EVENT_MAPPING = {
+        # Old string format; patched so the shared settings module is restored
+        mapping = {
             "arn:aws:sns:1": "test_settings.aws_sns_event",
         }
 
@@ -852,7 +853,8 @@ class TestZappa(unittest.TestCase):
             ],
         }
 
-        result = lh.handler(event, None)
+        with patch.object(lh.settings, "AWS_EVENT_MAPPING", mapping):
+            result = lh.handler(event, None)
         self.assertEqual(result, "AWS SNS EVENT")
 
     def test_keep_warm_scheduled_event_without_handler_module(self):

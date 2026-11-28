@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import collections
 import importlib
@@ -395,7 +394,7 @@ class LambdaHandler:
         if hasattr(app, "__call__") and not inspect.isfunction(app) and not inspect.iscoroutinefunction(app):
             callable_obj = app.__call__
 
-        if asyncio.iscoroutinefunction(callable_obj):
+        if inspect.iscoroutinefunction(callable_obj):
             try:
                 sig = inspect.signature(callable_obj)
                 # ASGI apps take 3 params: scope, receive, send
