@@ -107,6 +107,7 @@
   - [Endpoint Configuration](#endpoint-configuration)
     - [Example Private API Gateway configuration](#example-private-api-gateway-configuration)
   - [Cold Starts (Experimental)](#cold-starts-experimental)
+  - [SnapStart and Provisioned Concurrency](#snapstart-and-provisioned-concurrency)
   - [Lambda Test Console Usage](#lambda-test-console-usage)
     - [`raw_command`](#raw_command)
     - [`manage`](#manage)
@@ -451,6 +452,10 @@ ENV ZAPPA_RUNNING_IN_DOCKER=True
 You can also `rollback` the deployed code to a previous version by supplying the number of revisions to return to. For instance, to rollback to the version deployed 3 versions ago:
 
     $ zappa rollback production -n 3
+
+`rollback` publishes the selected version's code as a new version and moves the Zappa-managed aliases (`current-alb-version`, `snapstart`, `provisioned-concurrency`) to it.
+
+With `snap_start` or `provisioned_concurrency` enabled, each `zappa update` publishes two versions (the code, then the configuration), so `-n 1` selects the current deploy's own code and `-n 2` selects the previous deploy. Each rollback publishes one more version, which shifts the count for the next rollback. List the published versions with `aws lambda list-versions-by-function` before rolling back. See [SnapStart and Provisioned Concurrency](#snapstart-and-provisioned-concurrency).
 
 ### Scheduling
 
@@ -1180,7 +1185,7 @@ to change Zappa's behavior. Use these at your own risk!
         // If you are adding a Function URL manually (e.g. outside Zappa) and seeing 403s with NONE
         // auth, this two-statement shape is the missing piece.
         "apigateway_version": "v1", // optional, API Gateway version to use. Can be "v1" or "v2". Default "v1".
-        "apigateway_lambda_qualifier": "live", // optional, Lambda version or alias for API Gateway integrations. Default null uses the unqualified function ARN, except when `snap_start` or `provisioned_concurrency` is enabled, in which case it defaults to Zappa's managed alias for that feature (see `snap_start`/`provisioned_concurrency` below). Set this only to point at your own alias instead.
+        "apigateway_lambda_qualifier": "live", // optional, Lambda version or alias for API Gateway integrations. Default null: the unqualified function ARN, or Zappa's managed alias when `snap_start` or `provisioned_concurrency` is enabled. Zappa does not create or move an alias named here. See [SnapStart and Provisioned Concurrency](#snapstart-and-provisioned-concurrency).
         "architecture": "x86_64", // optional, Set Lambda Architecture, defaults to x86_64. For Graviton 2 use: arm64
         "async_source": "sns", // Source of async tasks. Defaults to "lambda"
         "async_resources": true, // Create the SNS topic and DynamoDB table to use. Defaults to true.
@@ -1277,7 +1282,7 @@ to change Zappa's behavior. Use these at your own risk!
         "prebuild_script": "your_module.your_function", // Function to execute before uploading code
         "profile_name": "your-profile-name", // AWS profile credentials to use. Default 'default'. Removing this setting will use the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables instead.
         "project_name": "MyProject", // The name of the project as it appears on AWS. Defaults to a slugified `pwd`.
-        "provisioned_concurrency": 5, // Number of pre-initialized execution environments to keep warm. Default null (disabled). Provisioned concurrency can only be configured on a published version or alias, so Zappa maintains a "provisioned-concurrency" alias automatically: each `zappa update`/`deploy` configures it on the new version, waits for it to become Ready, then repoints the alias (and cleans up the old version's config) — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `snap_start` (AWS doesn't support SnapStart with provisioned concurrency), and cannot exceed `lambda_concurrency` if that's also set.
+        "provisioned_concurrency": 5, // Number of pre-initialized execution environments to keep warm. Default null (disabled). Cannot be combined with `snap_start`, and cannot exceed `lambda_concurrency`. See [SnapStart and Provisioned Concurrency](#snapstart-and-provisioned-concurrency).
         "remote_env": "s3://my-project-config-files/filename.json", // optional file in s3 bucket containing a flat json object which will be used to set custom environment variables.
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
@@ -1285,7 +1290,7 @@ to change Zappa's behavior. Use these at your own risk!
         "runtime": "python3.15", // Python runtime to use on Lambda. Can be one of: "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", "python3.14", or "python3.15". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
-        "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None". SnapStart requires invoking a published version or alias (never `$LATEST`), so Zappa maintains a "snapstart" alias automatically: each `zappa update`/`deploy` publishes a new version, waits for its snapshot to be Active, then repoints the alias — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `provisioned_concurrency` (AWS doesn't support SnapStart with provisioned concurrency).
+        "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None". Cannot be combined with `provisioned_concurrency`. See [SnapStart and Provisioned Concurrency](#snapstart-and-provisioned-concurrency).
         "settings_file": "~/Projects/MyApp/settings/dev_settings.py", // Server side settings file location,
         "tags": { // Attach additional tags to AWS Resources
             "Key": "Value",  // Example Key and value
@@ -2184,7 +2189,35 @@ apigateway_resource_policy.json:
 
 ### Cold Starts (Experimental)
 
-Lambda may provide additional resources than provisioned during cold start initialization. Set `INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True` to instantiate the lambda handler on import. This is an experimental feature - if startup time is critical, look into using Provisioned Concurrency.
+Lambda may provide additional resources than provisioned during cold start initialization. Set `INSTANTIATE_LAMBDA_HANDLER_ON_IMPORT=True` to instantiate the lambda handler on import. This is an experimental feature - if startup time is critical, look into using [SnapStart or Provisioned Concurrency](#snapstart-and-provisioned-concurrency).
+
+### SnapStart and Provisioned Concurrency
+
+SnapStart and provisioned concurrency only apply to a published Lambda version or alias, never to `$LATEST`. When `snap_start` or `provisioned_concurrency` is set, Zappa manages an alias and points API Gateway (REST, HTTP API, WebSocket) at it:
+
+| Setting | Managed alias |
+|---|---|
+| `snap_start` | `snapstart` |
+| `provisioned_concurrency` | `provisioned-concurrency` |
+
+The two settings cannot be combined (AWS does not support SnapStart with provisioned concurrency), and `provisioned_concurrency` cannot exceed `lambda_concurrency`.
+
+On each `zappa update`, Zappa:
+
+1. uploads the code and publishes a version,
+2. updates the function configuration and publishes a second version that captures it,
+3. waits for that version to become Active (with `snap_start`, this is when its snapshot is ready),
+4. with `provisioned_concurrency`: configures provisioned concurrency on that version and waits up to 600 seconds for it to become Ready,
+5. repoints the managed alias, and the `current-alb-version` alias when an ALB is used,
+6. with `provisioned_concurrency`: removes the previous version's provisioned concurrency.
+
+Things to know:
+
+- **Cost during an update.** Between steps 4 and 6 both the previous and the new version hold provisioned concurrency.
+- **What the alias covers.** Only API Gateway and ALB traffic goes through an alias. Function URLs, scheduled `events`, `keep_warm`, event sources, and async tasks invoke `$LATEST`, so they get no SnapStart or provisioned concurrency benefit ([#1482](https://github.com/zappa/Zappa/issues/1482)).
+- **Custom `apigateway_lambda_qualifier`.** Zappa does not create or move an alias you name there. Create it before deploying and repoint it after each `zappa update`.
+- **Version retention.** `num_retained_versions` must be `null` or at least 2, because each update publishes two versions.
+- **Rollback.** See [Rollback](#rollback) for how the two versions per update affect `-n`.
 
 ### Lambda Test Console Usage
 
