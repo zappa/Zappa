@@ -45,6 +45,16 @@ jobs:
           format: cobertura
           debug: true
 
+  tests-passed:
+    # Single status check covering every Python version in the test matrix, for branch protection.
+    # https://github.com/zappa/Zappa/issues/1502
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every matrix job succeeded
+        run: test "${{ needs.test.result }}" = "success"
+
   coverage:
     needs: test
     runs-on: ubuntu-latest
