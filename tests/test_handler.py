@@ -1,3 +1,8 @@
+import io
+import os
+import shutil
+import sys
+import tarfile
 import unittest
 import uuid
 from types import SimpleNamespace
@@ -918,3 +923,70 @@ class TestZappa(unittest.TestCase):
         response = lh.handler(event, None)
 
         self.assertEqual(response, "Hello!")
+
+    def test_failed_setup_loads_again_on_next_invocation(self):
+        """
+        A cold start whose project download fails must not leave a handler with
+        no app: the next invocation loads again.
+        """
+        with patch.object(LambdaHandler, "load_remote_project_archive", side_effect=[IOError("read failed"), True]) as load:
+            with self.assertRaises(IOError):
+                LambdaHandler("tests.test_slim_handler_settings")
+            self.assertIsNone(LambdaHandler._LambdaHandler__instance.settings)
+
+            lh = LambdaHandler("tests.test_slim_handler_settings")
+
+        self.assertEqual(load.call_count, 2)
+        self.assertIsNotNone(lh.wsgi_app)
+
+    def _project_archive(self):
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w:gz") as t:
+            content = b"VALUE = 1\n" * 10000
+            info = tarfile.TarInfo("project_module.py")
+            info.size = len(content)
+            t.addfile(info, io.BytesIO(content))
+        return archive.getvalue()
+
+    def _load_archive(self, archive_bytes):
+        lh = LambdaHandler.__new__(LambdaHandler)
+        lh.settings = Mock(PROJECT_NAME="test_slim_handler_project")
+        lh.session = Mock()
+        lh.session.resource.return_value.Object.return_value.get.return_value = {"Body": io.BytesIO(archive_bytes)}
+        project_folder = "/tmp/test_slim_handler_project"
+        cwd, path = os.getcwd(), list(sys.path)
+        # Cleanups run last first: leave the folder before removing it.
+        self.addCleanup(shutil.rmtree, project_folder, True)
+        self.addCleanup(setattr, sys, "path", path)
+        self.addCleanup(os.chdir, cwd)
+        return lh, project_folder
+
+    def test_failed_archive_download_leaves_no_project_folder(self):
+        archive = self._project_archive()
+        lh, project_folder = self._load_archive(archive[: len(archive) // 2])
+
+        with self.assertRaises((tarfile.TarError, EOFError, OSError)):
+            lh.load_remote_project_archive("s3://lmbda/test_slim_handler_project.tar.gz")
+
+        self.assertFalse(os.path.isdir(project_folder))
+        self.assertFalse(os.path.exists(f"{project_folder}.partial"))
+
+    def test_archive_download_replaces_partial_folder_of_killed_attempt(self):
+        lh, project_folder = self._load_archive(self._project_archive())
+        partial_folder = f"{project_folder}.partial"
+        self.addCleanup(shutil.rmtree, partial_folder, True)
+        os.makedirs(partial_folder)
+        with open(os.path.join(partial_folder, "stale_module.py"), "w") as stale:
+            stale.write("VALUE = 0\n")
+
+        lh.load_remote_project_archive("s3://lmbda/test_slim_handler_project.tar.gz")
+
+        self.assertEqual(os.listdir(project_folder), ["project_module.py"])
+        self.assertFalse(os.path.exists(partial_folder))
+
+    def test_archive_download_extracts_project_folder(self):
+        lh, project_folder = self._load_archive(self._project_archive())
+
+        lh.load_remote_project_archive("s3://lmbda/test_slim_handler_project.tar.gz")
+
+        self.assertTrue(os.path.isfile(os.path.join(project_folder, "project_module.py")))
