@@ -58,6 +58,7 @@
 - [Advanced Settings](#advanced-settings)
     - [YAML Settings](#yaml-settings)
 - [Advanced Usage](#advanced-usage)
+  - [Blue/Green Promotion](#bluegreen-promotion)
   - [Keeping The Server Warm](#keeping-the-server-warm)
     - [Serving Static Files / Binary Uploads](#serving-static-files--binary-uploads)
   - [Enabling CORS](#enabling-cors)
@@ -1271,13 +1272,15 @@ to change Zappa's behavior. Use these at your own risk!
         "memory_size": 512, // Lambda function memory in MB. Default 512.
         "ephemeral_storage": { "Size": 512 }, // Lambda function ephemeral_storage size in MB, Default 512, Max 10240
         "efs_config": [{ "Arn": "arn:aws:elasticfilesystem:...:access-point/fsap-...", "LocalMountPath": "/mnt/data" }], // Optional EFS configuration. See EFS section for details.
-        "num_retained_versions":5, // Number of published Lambda versions to retain. Default 5. Older versions are deleted on `zappa update` to bound code-storage and (when SnapStart is enabled) snapshot-cache cost. Set to `null` to keep all versions. Must be `null` or at least 2 when `snap_start` or `provisioned_concurrency` is enabled, otherwise pruning could try to delete the version Zappa's managed alias still points to.
+        "num_retained_versions":5, // Number of published Lambda versions to retain. Default 5. Older versions are deleted on `zappa update` to bound code-storage and (when SnapStart is enabled) snapshot-cache cost. Set to `null` to keep all versions. Versions that a Lambda alias still points to are skipped, regardless of this setting (this needs `lambda:ListAliases` on the deploying credentials; without it Zappa warns and prunes by position instead). Pruning is best-effort — a version it cannot delete is left in place rather than failing the deploy. Must be `null` or at least 2 when `snap_start` or `provisioned_concurrency` is enabled.
         "payload_compression": true, // Whether or not to enable API gateway payload compression (default: true)
         "payload_minimum_compression_size": 0, // The threshold size (in bytes) below which payload compression will not be applied (default: 0)
         "prebuild_script": "your_module.your_function", // Function to execute before uploading code
         "profile_name": "your-profile-name", // AWS profile credentials to use. Default 'default'. Removing this setting will use the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables instead.
         "project_name": "MyProject", // The name of the project as it appears on AWS. Defaults to a slugified `pwd`.
         "provisioned_concurrency": 5, // Number of pre-initialized execution environments to keep warm. Default null (disabled). Provisioned concurrency can only be configured on a published version or alias, so Zappa maintains a "provisioned-concurrency" alias automatically: each `zappa update`/`deploy` configures it on the new version, waits for it to become Ready, then repoints the alias (and cleans up the old version's config) — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `snap_start` (AWS doesn't support SnapStart with provisioned concurrency), and cannot exceed `lambda_concurrency` if that's also set.
+        "release_commands": ["migrate --noinput"], // optional list of commands to run against the newly published version before Zappa's managed alias is promoted to it. Requires `snap_start` or `provisioned_concurrency` (those are what create the alias to gate). For Django projects each string is run as a management command, exactly like `zappa manage`; otherwise each string is a dotted function path, exactly like `zappa invoke`. Runs in order, aborts the deploy on the first failure, and the alias is only promoted if all of them succeed. See "Blue/Green Promotion" below — migrations must be backwards compatible. Default [].
+        "release_health_check": "/health", // optional, opt-in. Smoke-tests the newly published version before promoting Zappa's managed alias to it, by invoking that version directly with a synthetic GET of the given path. This is its own path — it does not reuse `touch_path`, and setting it does not change what the post-deploy touch does. Requires a 2xx: a 3xx or 4xx fails the deploy, because it means the request was never served. Accepts a path string, or a dict for more control: `{"path": "/health", "retries": 3, "interval": 5, "delay": 0}`, where `retries` is additional attempts after the first, `interval` is seconds between them, and `delay` is seconds to wait before the first. Only 5xx responses and failed invocations are retried. Requires `snap_start` or `provisioned_concurrency`. Default: disabled.
         "remote_env": "s3://my-project-config-files/filename.json", // optional file in s3 bucket containing a flat json object which will be used to set custom environment variables.
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
@@ -1337,6 +1340,48 @@ Similarly, you can supply a `zappa_settings.toml` file:
 ```
 
 ## Advanced Usage
+
+### Blue/Green Promotion
+
+When `snap_start` or `provisioned_concurrency` is enabled, Zappa publishes a new Lambda version on every deploy and holds it behind a managed alias, only repointing that alias once the version is confirmed ready. `release_commands` and `release_health_check` let you gate that promotion.
+
+Both are opt-in and both require a managed alias — Zappa raises if you set either without `snap_start` or `provisioned_concurrency`, since without one there is no held-back version to gate. Setting neither leaves your deploys exactly as they are today.
+
+```javascript
+{
+    "production": {
+        "snap_start": "PublishedVersions",
+        "release_commands": ["migrate --noinput"],
+        "release_health_check": "/health"
+    }
+}
+```
+
+The sequence on `zappa update` becomes:
+
+1. Upload the code and publish a new version.
+2. Wait for the version to become active (and for its SnapStart snapshot, if enabled).
+3. Run each of `release_commands` against the **new version**, by direct qualified invoke, in order.
+4. Smoke-test the new version with a synthetic GET of the `release_health_check` path.
+5. Only if every step succeeded, promote the alias to the new version.
+
+If step 3 or 4 fails, the alias is never repointed: the previous version keeps serving traffic, no provisioned concurrency is configured on the new version, and Zappa exits non-zero after printing the failing invocation's logs. The new version stays published so you can inspect it.
+
+A few things are worth understanding before relying on this.
+
+**Migrations must be backwards compatible.** Between a migration finishing and the alias being promoted, the *old* code is serving live traffic against the *new* schema. This is inherent to promoting after migrating, not a bug in Zappa — the alternative is downtime. Use expand/contract migrations: add columns and tables in the deploy that ships the code which can tolerate them, and only drop or rename in a later deploy.
+
+**`$LATEST` is not gated.** Zappa's managed alias covers API Gateway (via `apigateway_lambda_qualifier`) and, if you use one, the ALB alias. Everything else still invokes the function unqualified and therefore runs the new code the moment it is uploaded, before your release commands have run: scheduled `events`, SQS/DynamoDB/Kinesis event source mappings, S3 and SNS notifications, Lambda Function URLs, Cognito triggers, and async tasks (which self-invoke via `AWS_LAMBDA_FUNCTION_NAME`). If those paths matter to you, keep them tolerant of running either version.
+
+**Release commands inherit the function's `timeout`,** and Lambda's ceiling is 15 minutes. A migration that can exceed that needs to run somewhere other than the Lambda — Zappa cannot gate on what it cannot invoke. They must also be synchronous: a command that internally uses Zappa's `@task` decorator returns immediately and runs the real work in a *different* Lambda, so the gate would wave it through having proved nothing.
+
+**The health check only passes on a 2xx.** A 3xx means your app redirected instead of running the view, and a 4xx means it refused or couldn't route the request; neither proves the version works, so both fail the deploy immediately rather than retrying. The most common cause of a hard failure is pointing it at a path your app doesn't serve. Zappa sends the request as HTTPS, so `SECURE_SSL_REDIRECT` (and Flask-Talisman, and `force_ssl`) won't redirect it, and it sends your custom `domain` as the Host when one is configured and the `execute-api` hostname otherwise — keep whichever you use in `ALLOWED_HOSTS`, since a `400 DisallowedHost` fails the deploy.
+
+**It is deliberately separate from `touch_path`.** `touch_path` is fetched over the real endpoint *after* promotion, so it exercises API Gateway's authorizer, binary media handling and any WAF. The health check runs *before* promotion and can only reach the new version by direct invoke, so it necessarily bypasses all of that. Keeping them separate means you can point the gate at a deep readiness endpoint without changing what the post-deploy touch does — and leaves `touch_path` behaviour untouched for everyone not using the gate.
+
+**5xx responses and failed invocations are retried; everything else is not.** A new version's first request can fail for reasons that clear on a second attempt, so those are worth another try. A 3xx or 4xx returns the same answer every time, so retrying it only delays a failure you already have. Tune with `{"path": "/health", "retries": 3, "interval": 5}`, and use `delay` to wait before the first attempt.
+
+**Rollback does not re-run release commands.** `zappa rollback` repoints the managed alias at an older version but leaves your schema alone, because reversing a migration automatically is considerably more dangerous than the problem it would solve. Roll schema changes back yourself, deliberately.
 
 ### Keeping The Server Warm
 
@@ -1615,6 +1660,11 @@ By default, AWS Lambda will attempt to retry an event based (non-API Gateway, e.
 
 You can specify which _local_ profile to use for deploying your Zappa application by defining
 the `profile_name` setting, which will correspond to a profile in your AWS credentials file.
+
+For the permissions that profile needs, see [example/policy/deploy.json](example/policy/deploy.json),
+a sample policy covering the AWS actions Zappa calls during a deployment. Note that it is a
+starting point rather than a least-privilege policy: it grants on `"Resource": ["*"]`, and you
+should scope it down to your own function, bucket and API before using it in production.
 
 #### Custom AWS IAM Roles and Policies for Execution
 

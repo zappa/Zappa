@@ -1,5 +1,23 @@
 # Zappa Changelog
 
+## Unreleased
+
+* Add `release_commands` and `release_health_check` to gate managed-alias promotion
+  - Both are opt-in and default to off; existing deploys are unaffected.
+  - Both require `snap_start` or `provisioned_concurrency` and raise otherwise, since without a managed alias there is no held-back version to gate.
+  - `release_commands` runs each command against the newly published version before the alias is promoted; a failure leaves the previous version serving.
+  - `release_health_check` takes its own path and passes only on a 2xx. It does not reuse `touch_path`, so `touch_path` behavior is unchanged.
+  - Only alias-routed traffic is gated — scheduled events, event source mappings, Function URLs and async tasks still run the new code immediately. See "Blue/Green Promotion" in the README.
+* Fix `ResourceConflictException` when version pruning hits a version an alias points to (#960)
+  - Pruning now skips versions an alias references, and is best-effort throughout: anything it cannot delete is logged and left in place.
+  - Upgrading clears a deployment already stuck on this; no manual alias surgery needed.
+  - Needs `lambda:ListAliases` on the deploying credentials. Without it Zappa warns and prunes by position, as before.
+  - Retained versions can exceed `num_retained_versions` when an alias holds an older one.
+* Add the Lambda actions Zappa calls to the sample deployment policy (`example/policy/deploy.json`)
+  - Adds the alias and provisioned-concurrency actions that 0.63.0's managed-alias support requires but the sample never listed; following it and enabling `snap_start` failed at `create_alias`.
+  - Also adds `PutFunctionConcurrency`, `TagResource` and the `*FunctionUrlConfig` actions.
+  - Now linked from "Custom AWS IAM Roles and Policies for Deployment" in the README.
+
 ## 0.63.0
 
 * Add full SnapStart and provisioned concurrency support via managed Lambda aliases (#1463, #1468)

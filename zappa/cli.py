@@ -46,6 +46,7 @@ from .core import (
 )
 from .utilities import (
     DEFAULT_EFS_MOUNT_POINT,
+    build_synthetic_http_event,
     check_new_version_available,
     detect_django_settings,
     detect_flask_apps,
@@ -133,6 +134,13 @@ class ZappaCLI:
     xray_tracing = False
     aws_kms_key_arn = ""
     snap_start = None
+    has_managed_alias = False
+    release_commands = None
+    # Normalized by parse_release_health_check() to a dict of options, or None
+    # when disabled. `retries` counts attempts *after* the first, so the
+    # default is up to 4 invocations.
+    release_health_check = None
+    RELEASE_HEALTH_CHECK_DEFAULTS = {"retries": 3, "interval": 5, "delay": 0}
     context_header_mappings = None
     additional_text_mimetypes = None
     tags = []  # type: ignore[var-annotated]
@@ -955,6 +963,7 @@ class ZappaCLI:
                 layers=self.layers,
                 concurrency=self.lambda_concurrency,
                 provisioned_concurrency=self.provisioned_concurrency,
+                pre_promotion_hook=self.get_pre_promotion_hook(),
             )
             kwargs["function_name"] = self.lambda_name
             if docker_image_uri:
@@ -1247,6 +1256,7 @@ class ZappaCLI:
             layers=self.layers,
             snap_start=self.snap_start,
             provisioned_concurrency=self.provisioned_concurrency,
+            pre_promotion_hook=self.get_pre_promotion_hook(),
             wait=False,
         )
 
@@ -2799,12 +2809,12 @@ class ZappaCLI:
             self.apigateway_lambda_qualifier = SNAPSTART_LAMBDA_ALIAS
         elif self.apigateway_lambda_qualifier is None and self.provisioned_concurrency is not None:
             self.apigateway_lambda_qualifier = PROVISIONED_CONCURRENCY_LAMBDA_ALIAS
-        # Each deploy publishes an extra version to capture SnapStart/PC's
-        # config, one cycle behind the code-only version; the managed alias
-        # still points at the *previous* cycle's extra version when this
-        # cycle's pruning runs. Retaining fewer than 2 versions can delete
-        # the version that alias still references, causing Lambda to reject
-        # the deletion with a ResourceConflictException.
+        # Pruning runs before the managed alias is repointed, so the alias
+        # always lags at least one version behind at that moment. Retaining
+        # at least 2 keeps it inside the retained window. Pruning also skips
+        # aliased versions outright, but that lookup needs lambda:ListAliases
+        # and degrades to a no-op without it - so this floor is the margin
+        # that still holds when it does.
         if (
             self.num_retained_versions is not None
             and self.num_retained_versions < 2
@@ -2812,9 +2822,45 @@ class ZappaCLI:
         ):
             raise ClickException(
                 "'num_retained_versions' must be null or at least 2 when 'snap_start' or "
-                "'provisioned_concurrency' is enabled — otherwise version pruning can delete "
-                "the version Zappa's managed alias still points to."
+                "'provisioned_concurrency' is enabled — Zappa's managed alias lags a version "
+                "behind when pruning runs, and this keeps it inside the retained window."
             )
+
+        # Blue/green promotion gate. Only meaningful where Zappa manages an
+        # alias, which today is the SnapStart / provisioned-concurrency path -
+        # otherwise there is nothing held back to gate, since callers invoke
+        # $LATEST directly.
+        self.has_managed_alias = (self.snap_start is not None and self.snap_start != "None") or (
+            self.provisioned_concurrency is not None
+        )
+        self.release_commands = self.stage_config.get("release_commands", [])
+        if not isinstance(self.release_commands, (list, tuple)) or isinstance(self.release_commands, str):
+            raise ClickException("The 'release_commands' setting must be a list of strings.")
+        self.release_commands = list(self.release_commands)
+        for release_command in self.release_commands:
+            if not isinstance(release_command, str) or not release_command.strip():
+                raise ClickException("Each entry in 'release_commands' must be a non-empty string.")
+        if self.release_commands and not self.has_managed_alias:
+            raise ClickException(
+                "The 'release_commands' setting requires 'snap_start' or 'provisioned_concurrency' "
+                "to be enabled. Those are what make Zappa publish a new version and hold it behind "
+                "a managed alias, which is the only thing release commands can gate. Without one, "
+                "new code goes live the moment it is uploaded and there is nothing to promote."
+            )
+        # Opt-in like release_commands, and subject to the same requirement:
+        # without a managed alias there is no held-back version to check.
+        # Normalized to a dict of options, or None when not configured, so
+        # the falsy check in get_pre_promotion_hook keeps working either way.
+        self.release_health_check = self.parse_release_health_check(self.stage_config.get("release_health_check", None))
+        if self.release_health_check and not self.has_managed_alias:
+            raise ClickException(
+                "The 'release_health_check' setting requires 'snap_start' or "
+                "'provisioned_concurrency' to be enabled, for the same reason as "
+                "'release_commands': without a managed alias there is no held-back version to "
+                "check before promoting. To check the live endpoint after a deploy, use "
+                "'touch_path' instead."
+            )
+
         self.context_header_mappings = self.stage_config.get("context_header_mappings", {})
         self.xray_tracing = self.stage_config.get("xray_tracing", False)
         self.desired_role_arn = self.stage_config.get("role_arn")
@@ -3628,6 +3674,291 @@ class ZappaCLI:
 
         sys.stdout = open(os.devnull, "w")
         sys.stderr = open(os.devnull, "w")
+
+    @classmethod
+    def parse_release_health_check(cls, raw):
+        """
+        Normalize the `release_health_check` setting to a dict of options, or
+        None when it isn't configured.
+
+        Opt-in and self-contained: it carries its own `path` rather than
+        borrowing `touch_path`, so enabling it never changes what the
+        post-deploy touch does, and leaving it unset never adds a gate to a
+        deploy that didn't ask for one.
+
+        Accepts a path string as shorthand, or a dict with `path` plus any of
+        retries/interval/delay.
+        """
+        if raw is None or raw is False:
+            return None
+        if raw is True:
+            raise ClickException(
+                "The 'release_health_check' setting needs a path to check - it does not reuse "
+                '\'touch_path\'. Use a string ("release_health_check": "/health") or a dict '
+                '("release_health_check": {"path": "/health"}).'
+            )
+        if isinstance(raw, str):
+            raw = {"path": raw}
+        if not isinstance(raw, dict):
+            raise ClickException(
+                "The 'release_health_check' setting must be a path string, a dict with a 'path' " "key, or false."
+            )
+
+        # Reject typos rather than silently ignoring them - a misspelled
+        # 'retrys' that quietly does nothing is the same class of failure as a
+        # health check that passes without checking anything.
+        valid_keys = set(cls.RELEASE_HEALTH_CHECK_DEFAULTS) | {"path"}
+        unknown = sorted(set(raw) - valid_keys)
+        if unknown:
+            raise ClickException(
+                "Unknown key(s) in 'release_health_check': {}. Valid keys are: {}.".format(
+                    ", ".join(unknown), ", ".join(sorted(valid_keys))
+                )
+            )
+
+        config = dict(cls.RELEASE_HEALTH_CHECK_DEFAULTS)
+        config.update(raw)
+
+        path = config.get("path")
+        if not isinstance(path, str) or not path.strip():
+            raise ClickException("'release_health_check' requires a non-empty 'path' string to check.")
+        config["path"] = path.strip()
+
+        retries = config["retries"]
+        if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+            raise ClickException("'release_health_check' retries must be an integer of 0 or more.")
+        for key in ("interval", "delay"):
+            value = config[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise ClickException(f"'release_health_check' {key} must be a number of 0 or more.")
+        if retries and config["interval"] <= 0:
+            raise ClickException("'release_health_check' interval must be greater than 0 when retries are enabled.")
+
+        return config
+
+    def get_pre_promotion_hook(self):
+        """
+        Return a callable to gate the managed alias's promotion on, or None if
+        there is nothing to gate.
+
+        The returned hook is handed the newly published version and raises to
+        abort the deploy, leaving the alias - and therefore live traffic - on
+        the previous version.
+        """
+        if not self.has_managed_alias:
+            return None
+        if not self.release_commands and not self.release_health_check:
+            return None
+
+        def pre_promotion_hook(version):
+            if self.release_commands:
+                self.run_release_commands(version)
+            if self.release_health_check:
+                self.health_check_version(version)
+            click.echo("Promoting version " + click.style(str(version), bold=True) + " to the managed alias..")
+
+        return pre_promotion_hook
+
+    def build_release_command_payload(self, release_command):
+        """
+        Map a release command string onto the invocation payload the Lambda
+        handler understands, mirroring the existing CLI verbs: Django projects
+        get the `zappa manage` payload, everything else gets the dotted-path
+        payload `zappa invoke` sends by default.
+        """
+        if self.django_settings:
+            return {"manage": release_command}
+        return {"command": release_command}
+
+    def run_release_commands(self, version):
+        """
+        Run each configured release command against the newly published
+        version by qualified invoke, before any alias points at it.
+
+        Fails fast: the first command to error aborts, and later commands do
+        not run. Note the schema a migration applies is visible to the *old*
+        code still serving traffic until the alias is promoted, so release
+        commands must be backwards compatible with the running version.
+        """
+        # Can't use hjson
+        import json as json
+
+        for release_command in self.release_commands:
+            click.echo(
+                "Running release command "
+                + click.style(release_command, bold=True)
+                + " on version "
+                + click.style(str(version), bold=True)
+                + ".."
+            )
+            response = self.zappa.invoke_lambda_function(
+                self.lambda_name,
+                json.dumps(self.build_release_command_payload(release_command)),
+                invocation_type="RequestResponse",
+                qualifier=version,
+            )
+
+            if "FunctionError" in response:
+                print(self.format_lambda_response(response, not (self.vargs or {}).get("no_color", False)))
+                raise ClickException(
+                    click.style("Release command failed: ", fg="red", bold=True)
+                    + click.style(release_command, bold=True)
+                    + ".\nThe alias was not promoted — version "
+                    + click.style(str(version), bold=True)
+                    + " is published but not serving traffic, and the previous version is still live."
+                )
+
+    def build_health_check_event(self, path):
+        """
+        Build the synthetic request used to smoke-test a new version.
+        """
+
+        # The Host header decides the SCRIPT_NAME the handler derives, so it
+        # has to match how real traffic reaches the app. Fall back to no Host
+        # on a first deploy, where the API doesn't exist yet - the handler
+        # derives the same SCRIPT_NAME from its absence as it does for an
+        # execute-api host.
+        host = self.stage_config.get("domain", None)
+        if not host and self.use_apigateway:
+            api_id = self.zappa.get_api_id(self.lambda_name, apigateway_version=self.apigateway_version)
+            if api_id:
+                host = "{}.execute-api.{}.amazonaws.com".format(api_id, self.zappa.boto_session.region_name)
+
+        return build_synthetic_http_event(
+            path=path,
+            apigateway_version=self.apigateway_version,
+            stage=self.api_stage,
+            host=host,
+        )
+
+    @staticmethod
+    def evaluate_health_check_response(response, check_path):
+        """
+        Classify one health check invocation as (passed, retryable, detail).
+
+        Only a 2xx passes: the gate exists to prove the new version actually
+        served the request. A 3xx means the view never ran and a 4xx means the
+        app refused or couldn't route it, so neither proves anything - and
+        neither will change on a retry, so they fail immediately. A 5xx or a
+        broken invocation can be transient (most notably Postgres raising
+        "cached plan must not change result type" once on a connection opened
+        before a migration, then recovering), so those are retried.
+        """
+        # Can't use hjson
+        import json as json
+
+        if "FunctionError" in response:
+            return False, True, "raised an unhandled exception"
+
+        # format_lambda_response only renders LogResult, so read the payload
+        # directly to get at the status code the handler returned.
+        payload = response["Payload"].read()
+        try:
+            result = json.loads(payload)
+        except ValueError:
+            return False, True, "returned a response that could not be parsed: {}".format(payload[:200])
+
+        status_code = result.get("statusCode") if isinstance(result, dict) else None
+        if status_code is None:
+            return (
+                False,
+                True,
+                (
+                    "did not return an HTTP response, so the 'release_health_check' path ({}) is "
+                    "probably not handled by your app".format(check_path)
+                ),
+            )
+
+        status_code = int(status_code)
+        if 200 <= status_code < 300:
+            return True, False, str(status_code)
+
+        if 300 <= status_code < 400:
+            location = (result.get("headers") or {}).get("Location", "")
+            return (
+                False,
+                False,
+                (
+                    "returned {}{}, so your app redirected instead of serving the request and the "
+                    "check never reached it".format(status_code, " to '{}'".format(location) if location else "")
+                ),
+            )
+
+        if status_code == 404:
+            return (
+                False,
+                False,
+                (
+                    "returned 404, so '{}' is not a path your app serves. Point "
+                    "'release_health_check' at one that is, or remove the setting to turn the "
+                    "gate off".format(check_path)
+                ),
+            )
+
+        if 400 <= status_code < 500:
+            return False, False, ("returned {}, so your app rejected the request before serving it".format(status_code))
+
+        return False, True, "returned {}".format(status_code)
+
+    def health_check_version(self, version, sleep_func=time.sleep):
+        """
+        Smoke-test the newly published version by invoking it directly with a
+        synthetic API Gateway event for the configured `release_health_check`
+        path, before any alias points at it.
+
+        This is deliberately a smoke test, not an integration test: a direct
+        invoke bypasses API Gateway's authorizer, binary media handling and
+        WAF. It only answers "does this version serve a request", which is
+        what the alias promotion needs to know.
+        """
+        # Can't use hjson
+        import json as json
+
+        config = self.release_health_check
+        check_path = config["path"]
+        payload = json.dumps(self.build_health_check_event(check_path))
+
+        if config["delay"]:
+            click.echo("Waiting {}s before health checking version {}..".format(config["delay"], version))
+            sleep_func(config["delay"])
+
+        attempts = config["retries"] + 1
+        for attempt in range(1, attempts + 1):
+            click.echo(
+                "Health checking version "
+                + click.style(str(version), bold=True)
+                + " with a GET of "
+                + click.style(check_path, bold=True)
+                + (" (attempt {}/{})".format(attempt, attempts) if attempts > 1 else "")
+                + ".."
+            )
+            response = self.zappa.invoke_lambda_function(
+                self.lambda_name,
+                payload,
+                invocation_type="RequestResponse",
+                qualifier=version,
+            )
+            passed, retryable, detail = self.evaluate_health_check_response(response, check_path)
+
+            if passed:
+                click.echo("Health check passed (" + click.style(detail, fg="green", bold=True) + ").")
+                return
+
+            if not retryable or attempt == attempts:
+                print(self.format_lambda_response(response, not (self.vargs or {}).get("no_color", False)))
+                raise ClickException(
+                    click.style("Health check failed: ", fg="red", bold=True)
+                    + "version "
+                    + click.style(str(version), bold=True)
+                    + " "
+                    + detail
+                    + ".\nThe alias was not promoted — version "
+                    + click.style(str(version), bold=True)
+                    + " is published but not serving traffic, and the previous version is still live."
+                )
+
+            click.echo("  {}; retrying in {}s..".format(detail, config["interval"]))
+            sleep_func(config["interval"])
 
     def touch_endpoint(self, endpoint_url):
         """

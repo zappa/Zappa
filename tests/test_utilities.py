@@ -16,6 +16,7 @@ from zappa.utilities import (
     EventSourceMappingMixin,
     InvalidAwsLambdaName,
     S3EventSource,
+    build_synthetic_http_event,
     conflicts_with_a_neighbouring_module,
     contains_python_files_or_subdirs,
     detect_django_settings,
@@ -558,3 +559,102 @@ class TestMergeSnsFilterPolicies(unittest.TestCase):
     def test_both_empty(self):
         result = merge_sns_filter_policies({}, {})
         self.assertIsNone(result)
+
+
+class TestBuildSyntheticHttpEvent(unittest.TestCase):
+    """
+    The synthetic event is invoked against a freshly published Lambda version
+    to smoke-test it before an alias is promoted, so it has to be shaped
+    exactly like a real API Gateway event - the handler dispatches on specific
+    keys and indexes others directly.
+    """
+
+    def test_v1_event_shape(self):
+        event = build_synthetic_http_event(path="/health", apigateway_version="v1", stage="dev")
+        # LambdaHandler.handler dispatches v1/REST on the presence of httpMethod.
+        self.assertEqual("GET", event["httpMethod"])
+        # Real v1 events exclude the stage from "path".
+        self.assertEqual("/health", event["path"])
+        self.assertEqual("dev", event["requestContext"]["stage"])
+        self.assertNotIn("version", event)
+
+    def test_v2_event_shape(self):
+        event = build_synthetic_http_event(path="/health", apigateway_version="v2", stage="dev")
+        # LambdaHandler.handler dispatches v2 on version == "2.0".
+        self.assertEqual("2.0", event["version"])
+        # Direct API Gateway v2 access includes the stage in rawPath, and the
+        # handler matches it on a path-segment boundary to set SCRIPT_NAME.
+        self.assertEqual("/dev/health", event["rawPath"])
+        self.assertEqual("dev", event["requestContext"]["stage"])
+        self.assertEqual("GET", event["requestContext"]["http"]["method"])
+        self.assertNotIn("httpMethod", event)
+
+    def test_path_is_normalized(self):
+        self.assertEqual("/health", build_synthetic_http_event(path="health")["path"])
+
+    def test_v2_root_path_does_not_lose_its_slash(self):
+        event = build_synthetic_http_event(path="/", apigateway_version="v2", stage="dev")
+        self.assertEqual("/dev", event["rawPath"])
+
+    def test_host_header_included_when_known(self):
+        event = build_synthetic_http_event(host="example.com")
+        self.assertEqual("example.com", event["headers"]["Host"])
+
+        event_v2 = build_synthetic_http_event(apigateway_version="v2", host="example.com")
+        # v2 headers arrive lowercase from API Gateway.
+        self.assertEqual("example.com", event_v2["headers"]["host"])
+
+    def test_host_header_omitted_when_unknown(self):
+        """On a first deploy the API doesn't exist yet, so there is no host."""
+        self.assertNotIn("Host", build_synthetic_http_event()["headers"])
+        self.assertNotIn("host", build_synthetic_http_event(apigateway_version="v2")["headers"])
+
+    def test_forwarded_headers_always_present(self):
+        """
+        Real API Gateway always sends these, and create_wsgi_request falls
+        back to http/80 without them - which makes an app with
+        SECURE_SSL_REDIRECT answer 301 and never run the view.
+        """
+        headers = build_synthetic_http_event(host="example.com")["headers"]
+        self.assertEqual("https", headers["X-Forwarded-Proto"])
+        self.assertEqual("443", headers["X-Forwarded-Port"])
+
+        # v2 headers arrive lowercase from API Gateway.
+        headers_v2 = build_synthetic_http_event(apigateway_version="v2", host="example.com")["headers"]
+        self.assertEqual("https", headers_v2["x-forwarded-proto"])
+        self.assertEqual("443", headers_v2["x-forwarded-port"])
+
+    def test_forwarded_headers_present_without_a_host(self):
+        """They aren't conditional on knowing the host."""
+        self.assertEqual("https", build_synthetic_http_event()["headers"]["X-Forwarded-Proto"])
+        self.assertEqual("https", build_synthetic_http_event(apigateway_version="v2")["headers"]["x-forwarded-proto"])
+
+    def test_v1_event_builds_a_wsgi_request(self):
+        """
+        The event has to survive create_wsgi_request without a KeyError -
+        otherwise the health check would report a failure that is really just
+        a malformed event.
+        """
+        from zappa.wsgi import create_wsgi_request
+
+        event = build_synthetic_http_event(path="/health", stage="dev", host="example.com")
+        environ = create_wsgi_request(event)
+        self.assertEqual("GET", environ["REQUEST_METHOD"])
+        self.assertEqual("/health", environ["PATH_INFO"])
+        self.assertEqual("example.com", environ["HTTP_HOST"])
+        # Without these the app sees a plaintext request and may redirect
+        # instead of serving, making the health check prove nothing.
+        self.assertEqual("https", environ["wsgi.url_scheme"])
+        self.assertEqual("443", environ["SERVER_PORT"])
+
+    def test_v2_event_builds_a_wsgi_request(self):
+        from zappa.wsgi import create_wsgi_request
+
+        event = build_synthetic_http_event(path="/health", apigateway_version="v2", stage="dev", host="example.com")
+        # The handler passes script_name="/dev" for direct v2 access, which is
+        # what strips the stage back off PATH_INFO.
+        environ = create_wsgi_request(event, script_name="/dev")
+        self.assertEqual("GET", environ["REQUEST_METHOD"])
+        self.assertEqual("/health", environ["PATH_INFO"])
+        self.assertEqual("https", environ["wsgi.url_scheme"])
+        self.assertEqual("443", environ["SERVER_PORT"])
