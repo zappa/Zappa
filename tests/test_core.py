@@ -50,7 +50,11 @@ from zappa.letsencrypt import (
     register_account,
     sign_certificate,
 )
-from zappa.utilities import DEFAULT_EFS_MOUNT_POINT, get_runtime_from_python_version
+from zappa.utilities import (
+    DEFAULT_EFS_MOUNT_POINT,
+    get_runtime_from_python_version,
+    get_venv_from_python_version,
+)
 from zappa.wsgi import common_log, create_wsgi_request
 
 from .utils import get_sys_versioninfo
@@ -119,6 +123,27 @@ class TestZappa(unittest.TestCase):
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
+
+    def test_create_lambda_package_without_venv_keeps_project_folder_named_like_prefix(self):
+        # Interpreter environment `<root>/usr/local` must not exclude the project folder `local`
+        handler_file = os.path.realpath(__file__)
+        current_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="zappa_test") as tempdir:
+            prefix = Path(tempdir) / "usr" / "local"
+            (prefix / "lib" / get_venv_from_python_version() / "site-packages").mkdir(parents=True)
+            project = Path(tempdir) / "project"
+            (project / "local").mkdir(parents=True)
+            (project / "local" / "module.py").write_text("VALUE = 1\n")
+            try:
+                os.chdir(project)
+                with mock.patch("zappa.core.Zappa.get_current_venv", return_value=None), mock.patch(
+                    "zappa.core.Zappa.get_installed_packages", return_value={}
+                ), mock.patch.object(sys, "prefix", str(prefix)):
+                    path = Zappa(runtime="python3.13").create_lambda_zip(handler_file=handler_file)
+                with zipfile.ZipFile(path) as lambda_zip:
+                    self.assertIn("local/module.py", lambda_zip.namelist())
+            finally:
+                os.chdir(current_dir)
 
     def test_get_manylinux_python39(self):
         z = Zappa(runtime="python3.9")
