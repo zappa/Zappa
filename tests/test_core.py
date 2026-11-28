@@ -28,6 +28,7 @@ from click.exceptions import ClickException
 from click.globals import resolve_color_default
 from packaging import version
 
+from zappa import SUPPORTED_VERSIONS
 from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
 from zappa.core import (
     ALB_LAMBDA_ALIAS,
@@ -49,7 +50,7 @@ from zappa.letsencrypt import (
     register_account,
     sign_certificate,
 )
-from zappa.utilities import DEFAULT_EFS_MOUNT_POINT
+from zappa.utilities import DEFAULT_EFS_MOUNT_POINT, get_runtime_from_python_version
 from zappa.wsgi import common_log, create_wsgi_request
 
 from .utils import get_sys_versioninfo
@@ -277,6 +278,33 @@ class TestZappa(unittest.TestCase):
             return_value=mock_installed_packages,
         ):
             z = Zappa(runtime="python3.14")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+    def test_get_manylinux_python315(self):
+        z = Zappa(runtime="python3.15")
+        self.assertIsNotNone(z.get_cached_manylinux_wheel("psycopg-binary", "3.3.9"))
+        self.assertIsNone(z.get_cached_manylinux_wheel("derp_no_such_thing", "0.0"))
+
+        # mock with a known manylinux wheel package so that code for downloading them gets invoked
+        mock_installed_packages = {"psycopg-binary": "3.3.9"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.15")
+            path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
+            self.assertTrue(os.path.isfile(path))
+            os.remove(path)
+
+        # same, but with an ABI3 package
+        mock_installed_packages = {"cryptography": "46.0.3"}
+        with mock.patch(
+            "zappa.core.Zappa.get_installed_packages",
+            return_value=mock_installed_packages,
+        ):
+            z = Zappa(runtime="python3.15")
             path = z.create_lambda_zip(handler_file=os.path.realpath(__file__))
             self.assertTrue(os.path.isfile(path))
             os.remove(path)
@@ -5285,6 +5313,54 @@ class TestZappa(unittest.TestCase):
             reload(zappa)
         except RuntimeError:
             self.fail()
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "False"})
+    def test_unsupported_newer_version_error(self):
+        from importlib import reload
+
+        _, newest_minor = max(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(newest_minor + 1)):
+            with self.assertRaises(RuntimeError):
+                import zappa
+
+                reload(zappa)
+
+    def test_get_runtime_from_python_version_supported(self):
+        for major, minor in SUPPORTED_VERSIONS:
+            with self.subTest(minor=minor), mock.patch("sys.version_info", get_sys_versioninfo(minor)):
+                self.assertEqual(get_runtime_from_python_version(), f"python{major}.{minor}")
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "False"})
+    def test_get_runtime_from_python_version_not_yet_supported(self):
+        _, newest_minor = max(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(newest_minor + 1)):
+            with self.assertRaisesRegex(ValueError, "not yet supported"):
+                get_runtime_from_python_version()
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "True"})
+    def test_get_runtime_from_python_version_newer_version_when_in_docker(self):
+        major, newest_minor = max(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(newest_minor + 1)):
+            self.assertEqual(get_runtime_from_python_version(), f"python{major}.{newest_minor + 1}")
+
+    @mock.patch.dict(os.environ, {"ZAPPA_RUNNING_IN_DOCKER": "True"})
+    def test_get_runtime_from_python_version_no_longer_supported_when_in_docker(self):
+        _, oldest_minor = min(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(oldest_minor - 1)):
+            with self.assertRaisesRegex(ValueError, "no longer supported"):
+                get_runtime_from_python_version()
+
+    def test_load_settings_runtime_defaults_to_python_version(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "ttt888"
+        zappa_cli.load_settings("test_settings.json")
+        self.assertEqual(zappa_cli.runtime, get_runtime_from_python_version())
+
+    def test_get_runtime_from_python_version_no_longer_supported(self):
+        _, oldest_minor = min(SUPPORTED_VERSIONS)
+        with mock.patch("sys.version_info", get_sys_versioninfo(oldest_minor - 1)):
+            with self.assertRaisesRegex(ValueError, "no longer supported"):
+                get_runtime_from_python_version()
 
     def test_wsgi_query_string_unquoted(self):
         event = {
