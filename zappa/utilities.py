@@ -18,6 +18,8 @@ import boto3
 import botocore
 import durationpy
 
+from . import SUPPORTED_VERSIONS
+
 LOG = logging.getLogger(__name__)
 
 
@@ -252,10 +254,11 @@ def get_venv_from_python_version() -> str:
 
 def get_runtime_from_python_version() -> str:
     """Return the AWS Lambda runtime string for the current Python version."""
-    major, minor = sys.version_info[:2]
-    if major < 3 or minor < 9:
+    python_version = sys.version_info[:2]
+    major, minor = python_version
+    if python_version < min(SUPPORTED_VERSIONS):
         raise ValueError(f"Python {major}.{minor} is no longer supported.")
-    if minor > 15:
+    if python_version > max(SUPPORTED_VERSIONS):
         raise ValueError(f"Python {major}.{minor} is not yet supported.")
     return f"python{major}.{minor}"
 
