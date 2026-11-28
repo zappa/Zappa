@@ -530,6 +530,46 @@ class TestASGI(unittest.TestCase):
 
         self.assertFalse(LambdaHandler._is_asgi_app(marked_not_asgi))
 
+        # functools.partial of a marked sync function, 3 params remaining → ASGI
+        @markcoroutinefunction
+        def marked_app_with_config(config, scope, receive, send):
+            pass
+
+        self.assertTrue(LambdaHandler._is_asgi_app(functools.partial(marked_app_with_config, {})))
+
+    def test_is_asgi_app_detection_parameter_kinds(self):
+        """_is_asgi_app accepts callables that can be called as app(scope, receive, send)."""
+
+        # **kwargs does not take a positional argument → ASGI
+        async def asgi_app_with_kwargs(scope, receive, send, **kwargs):
+            pass
+
+        self.assertTrue(LambdaHandler._is_asgi_app(asgi_app_with_kwargs))
+
+        # *args absorbs the 3 arguments (e.g. a decorator without functools.wraps) → ASGI
+        async def asgi_app_wrapper(*args, **kwargs):
+            pass
+
+        self.assertTrue(LambdaHandler._is_asgi_app(asgi_app_wrapper))
+
+        # *args with more than 3 required positional params → not ASGI
+        async def too_many_required(scope, receive, send, extra, *args):
+            pass
+
+        self.assertFalse(LambdaHandler._is_asgi_app(too_many_required))
+
+        # Required keyword-only param cannot be passed positionally → not ASGI
+        async def keyword_only_send(scope, receive, *, send):
+            pass
+
+        self.assertFalse(LambdaHandler._is_asgi_app(keyword_only_send))
+
+        # Optional 4th param → ASGI
+        async def asgi_app_with_default(scope, receive, send, extra=None):
+            pass
+
+        self.assertTrue(LambdaHandler._is_asgi_app(asgi_app_with_default))
+
     def test_asgi_v1_binary_support_gzip(self):
         """Ensure v1 ASGI handler handles gzip binary support."""
         lh = LambdaHandler("tests.test_asgi_binary_support_settings")
