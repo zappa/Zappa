@@ -1014,7 +1014,12 @@ def lambda_handler(event, context):  # pragma: no cover
 
 
 def keep_warm_callback(event, context):
-    """Method is triggered by the CloudWatch event scheduled when keep_warm setting is set to true."""
+    """Deprecated: Method is triggered by the CloudWatch event scheduled when keep_warm setting is set to true.
+
+    keep_warm does not reduce cold start duration — only frequency for a single execution environment.
+    Consider using snap_start or provisioned_concurrency instead.
+    See https://github.com/zappa/Zappa/issues/1451
+    """
     lambda_handler(event={}, context=context)  # overriding event with an empty one so that web app initialization will
     # be triggered.
 
