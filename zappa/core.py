@@ -2934,11 +2934,8 @@ class Zappa:
             ):
                 description_kwargs[key] = value
             elif key == "LambdaConfig":
-                for lckey, lcvalue in value.items():
-                    if lckey in LambdaConfig:
-                        value[lckey] = LambdaConfig[lckey]
-                logger.debug("value", value)
-                description_kwargs[key] = value
+                description_kwargs[key] = {**value, **LambdaConfig}
+                logger.debug("LambdaConfig: %s", description_kwargs[key])
         if "LambdaConfig" not in description_kwargs:
             description_kwargs["LambdaConfig"] = LambdaConfig
         if "TemporaryPasswordValidityDays" in description_kwargs["Policies"]["PasswordPolicy"]:

@@ -5576,5 +5576,98 @@ class TestUploadToS3ErrorHandling(unittest.TestCase):
         z.s3_client.create_bucket.assert_not_called()
 
 
+class TestUpdateCognito(unittest.TestCase):
+    """Tests for Zappa.update_cognito LambdaConfig merging (#1494)"""
+
+    def _make_zappa(self, user_pool_description):
+        z = Zappa(aws_region="us-east-1", load_credentials=False)
+        z.cognito_client = mock.MagicMock()
+        z.cognito_client.describe_user_pool.return_value = {"UserPool": user_pool_description}
+        z.cognito_client.update_user_pool.return_value = {"ResponseMetadata": {"HTTPStatusCode": 200}}
+        z.sts_client = mock.MagicMock()
+        z.sts_client.get_caller_identity.return_value = {"Account": "123456789012"}
+        z.lambda_client = mock.MagicMock()
+        z.lambda_client.add_permission.return_value = {"ResponseMetadata": {"HTTPStatusCode": 201}}
+        return z
+
+    def test_update_cognito_merges_new_trigger_with_existing_lambda_config(self):
+        existing_arn = "arn:aws:lambda:us-east-1:123456789012:function:existing-pre-signup"
+        new_arn = "arn:aws:lambda:us-east-1:123456789012:function:my-lambda"
+        existing_lambda_config = {"PreSignUp": existing_arn}
+        z = self._make_zappa(
+            {
+                "LambdaConfig": existing_lambda_config,
+                "Policies": {"PasswordPolicy": {"MinimumLength": 8}},
+                "AdminCreateUserConfig": {"UnusedAccountValidityDays": 7},
+            }
+        )
+
+        with self.assertLogs("zappa.core", level="DEBUG"):
+            z.update_cognito("my-lambda", "us-east-1_PoolId", ["PostConfirmation"], new_arn)
+
+        z.cognito_client.update_user_pool.assert_called_once_with(
+            UserPoolId="us-east-1_PoolId",
+            LambdaConfig={"PreSignUp": existing_arn, "PostConfirmation": new_arn},
+            Policies={"PasswordPolicy": {"MinimumLength": 8, "TemporaryPasswordValidityDays": 7}},
+            AdminCreateUserConfig={},
+        )
+        self.assertEqual(existing_lambda_config, {"PreSignUp": existing_arn})
+        z.lambda_client.add_permission.assert_called_once()
+        perm_kwargs = z.lambda_client.add_permission.call_args.kwargs
+        self.assertEqual(perm_kwargs["FunctionName"], "my-lambda")
+        self.assertEqual(perm_kwargs["Principal"], "cognito-idp.amazonaws.com")
+        self.assertEqual(perm_kwargs["SourceArn"], "arn:aws:cognito-idp:us-east-1:123456789012:userpool/us-east-1_PoolId")
+        self.assertEqual(perm_kwargs["SourceAccount"], "123456789012")
+
+    def test_update_cognito_overwrites_existing_trigger_and_preserves_others(self):
+        old_pre_signup_arn = "arn:aws:lambda:us-east-1:123456789012:function:old-pre-signup"
+        custom_msg_arn = "arn:aws:lambda:us-east-1:123456789012:function:custom-message"
+        new_arn = "arn:aws:lambda:us-east-1:123456789012:function:my-lambda"
+        existing_lambda_config = {"PreSignUp": old_pre_signup_arn, "CustomMessage": custom_msg_arn}
+        z = self._make_zappa(
+            {
+                "LambdaConfig": existing_lambda_config,
+                "Policies": {"PasswordPolicy": {"TemporaryPasswordValidityDays": 7}},
+                "AdminCreateUserConfig": {"UnusedAccountValidityDays": 7},
+            }
+        )
+
+        z.update_cognito("my-lambda", "us-east-1_PoolId", ["PreSignUp", "PostConfirmation"], new_arn)
+
+        z.cognito_client.update_user_pool.assert_called_once_with(
+            UserPoolId="us-east-1_PoolId",
+            LambdaConfig={
+                "PreSignUp": new_arn,
+                "CustomMessage": custom_msg_arn,
+                "PostConfirmation": new_arn,
+            },
+            Policies={"PasswordPolicy": {"TemporaryPasswordValidityDays": 7}},
+            AdminCreateUserConfig={},
+        )
+        self.assertEqual(
+            existing_lambda_config,
+            {"PreSignUp": old_pre_signup_arn, "CustomMessage": custom_msg_arn},
+        )
+
+    def test_update_cognito_initializes_lambda_config_when_absent_or_empty(self):
+        new_arn = "arn:aws:lambda:us-east-1:123456789012:function:my-lambda"
+        for extra in ({}, {"LambdaConfig": {}}):
+            user_pool = {
+                "Policies": {"PasswordPolicy": {"TemporaryPasswordValidityDays": 7}},
+                "AdminCreateUserConfig": {},
+                **extra,
+            }
+            z = self._make_zappa(user_pool)
+
+            z.update_cognito("my-lambda", "us-east-1_PoolId", ["PreSignUp", "PostConfirmation"], new_arn)
+
+            z.cognito_client.update_user_pool.assert_called_once_with(
+                UserPoolId="us-east-1_PoolId",
+                LambdaConfig={"PreSignUp": new_arn, "PostConfirmation": new_arn},
+                Policies={"PasswordPolicy": {"TemporaryPasswordValidityDays": 7}},
+                AdminCreateUserConfig={},
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
