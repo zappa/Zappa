@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
@@ -45,6 +45,16 @@ jobs:
           format: cobertura
           debug: true
 
+  tests-passed:
+    # Single status check covering every Python version in the test matrix, for branch protection.
+    # https://github.com/zappa/Zappa/issues/1502
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every matrix job succeeded
+        run: test "${{ needs.test.result }}" = "success"
+
   coverage:
     needs: test
     runs-on: ubuntu-latest
@@ -57,5 +67,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
           format: cobertura
-          carryforward: "run-3.9,run-3.10,run-3.11,run-3.12,run-3.13,run-3.14"
+          carryforward: "run-3.9,run-3.10,run-3.11,run-3.12,run-3.13,run-3.14,run-3.15"
           debug: true

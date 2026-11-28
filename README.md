@@ -216,7 +216,7 @@ Zappa also lets you build hybrid event-driven applications with **free SSL certi
 
 | Constraint | Detail |
 |---|---|
-| Python versions | 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 |
+| Python versions | 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
 | Package size | 50MB zip limit; use [`slim_handler: true`](#large-projects) for larger projects |
 | Lambda timeout | Default 30s, max 900s; [API Gateway hard-limits at 30s](#application-load-balancer-event-source) (use ALB for longer) |
 | Concurrent executions | AWS default 1000; [request increase](#raising-aws-service-limits) via support ticket |
@@ -230,7 +230,7 @@ Zappa also lets you build hybrid event-driven applications with **free SSL certi
 
 ## Installation and Configuration
 
-_Before you begin, make sure you are running Python 3.9/3.10/3.11/3.12/3.13/3.14 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
+_Before you begin, make sure you are running Python 3.9/3.10/3.11/3.12/3.13/3.14/3.15 and you have a valid AWS account and your [AWS credentials file](https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs) is properly installed._
 
 **Zappa** can easily be installed through pip, like so:
 
@@ -691,7 +691,7 @@ For instance, suppose you have a basic application in a file called "my_app.py",
 
 Any remote print statements made and the value the function returned will then be printed to your local console.
 
-You can also invoke interpretable Python 3.9/3.10/3.11/3.12/3.13/3.14 strings directly by using `--raw`, like so:
+You can also invoke interpretable Python 3.9/3.10/3.11/3.12/3.13/3.14/3.15 strings directly by using `--raw`, like so:
 
     $ zappa invoke production "print(1 + 2 + 3)" --raw
 
@@ -1282,7 +1282,7 @@ to change Zappa's behavior. Use these at your own risk!
         "role_name": "MyLambdaRole", // Name of Zappa execution role. Default <project_name>-<env>-ZappaExecutionRole. To use a different, pre-existing policy, you must also set manage_roles to false.
         "role_arn": "arn:aws:iam::12345:role/app-ZappaLambdaExecutionRole", // ARN of Zappa execution role. Default to None. To use a different, pre-existing policy, you must also set manage_roles to false. This overrides role_name. Use with temporary credentials via GetFederationToken.
         "route53_enabled": true, // Have Zappa update your Route53 Hosted Zones when certifying with a custom domain. Default true.
-        "runtime": "python3.14", // Python runtime to use on Lambda. Can be one of: "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", or "python3.14". Defaults to whatever the current Python being used is.
+        "runtime": "python3.15", // Python runtime to use on Lambda. Can be one of: "python3.9", "python3.10", "python3.11", "python3.12", "python3.13", "python3.14", or "python3.15". Defaults to whatever the current Python being used is.
         "s3_bucket": "dev-bucket", // Zappa zip bucket,
         "slim_handler": false, // Useful if project >50M. Set true to just upload a small handler to Lambda and load actual project from S3 at runtime. Default false.
         "snap_start": "PublishedVersions", // Enable Lambda SnapStart for faster cold starts. Can be "PublishedVersions" or "None". Default "None". SnapStart requires invoking a published version or alias (never `$LATEST`), so Zappa maintains a "snapstart" alias automatically: each `zappa update`/`deploy` publishes a new version, waits for its snapshot to be Active, then repoints the alias — and points API Gateway at it via `apigateway_lambda_qualifier` unless you've overridden that setting. Cannot be combined with `provisioned_concurrency` (AWS doesn't support SnapStart with provisioned concurrency).
