@@ -1655,6 +1655,83 @@ class TestZappa(unittest.TestCase):
             "Version": new_version,
         }
 
+    @staticmethod
+    def _slim_handler_zip(archive_path):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("zappa_settings.py", "SLIM_HANDLER=True\nARCHIVE_PATH='{0}'\n".format(archive_path))
+        return buf.getvalue()
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_aborts_when_slim_handler_archive_is_gone(self, requests_get_mock):
+        z = Zappa()
+        z.credentials_arn = object()
+        z.s3_client = mock.MagicMock()
+        z.s3_client.head_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+        )
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            requests_get_mock.return_value.content = self._slim_handler_zip("s3://bucket/test-100.tar.gz")
+
+            with self.assertRaises(ValueError) as ctx:
+                z.rollback_lambda_function_version("test", versions_back=1)
+
+            self.assertIn("s3://bucket/test-100.tar.gz", str(ctx.exception))
+            z.s3_client.head_object.assert_called_once_with(Bucket="bucket", Key="test-100.tar.gz")
+            mock_client.update_function_code.assert_not_called()
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_proceeds_when_slim_handler_archive_exists(self, requests_get_mock):
+        z = Zappa()
+        z.credentials_arn = object()
+        z.s3_client = mock.MagicMock()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            requests_get_mock.return_value.content = self._slim_handler_zip("s3://bucket/test-100.tar.gz")
+
+            z.rollback_lambda_function_version("test", versions_back=1)
+
+            mock_client.update_function_code.assert_called_once()
+
+    @mock.patch("zappa.core.requests.get")
+    def test_rollback_warns_for_current_project_archive(self, requests_get_mock):
+        z = Zappa()
+        z.credentials_arn = object()
+        z.s3_client = mock.MagicMock()
+
+        with mock.patch.object(z, "lambda_client") as mock_client:
+            self._mock_rollback_prerequisites(mock_client, requests_get_mock)
+            requests_get_mock.return_value.content = self._slim_handler_zip("s3://bucket/dev_proj_current_project.tar.gz")
+
+            with self.assertLogs("zappa.core", level="WARNING") as logs:
+                z.rollback_lambda_function_version("test", versions_back=1)
+
+            self.assertIn("latest project code", "\n".join(logs.output))
+            z.s3_client.head_object.assert_not_called()
+            mock_client.update_function_code.assert_called_once()
+
+    def test_list_s3_keys_returns_sizes(self):
+        z = Zappa()
+        z.s3_client = mock.MagicMock()
+        z.s3_client.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": "a-1.tar.gz", "Size": 5}]},
+            {"Contents": [{"Key": "a-2.tar.gz", "Size": 7}]},
+        ]
+        self.assertEqual(z.list_s3_keys("bucket", prefix="a-"), [("a-1.tar.gz", 5), ("a-2.tar.gz", 7)])
+
+    def test_list_s3_keys_warns_on_error(self):
+        z = Zappa()
+        z.s3_client = mock.MagicMock()
+        z.s3_client.get_paginator.return_value.paginate.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": ""}}, "ListObjectsV2"
+        )
+        with self.assertLogs("zappa.core", level="WARNING") as logs:
+            self.assertEqual(z.list_s3_keys("bucket", prefix="a-"), [])
+        self.assertIn("AccessDenied", "\n".join(logs.output))
+
     @mock.patch("zappa.core.requests.get")
     def test_rollback_migrates_alb_alias(self, requests_get_mock):
         """
@@ -4259,6 +4336,121 @@ class TestZappa(unittest.TestCase):
 
         expected_key = "{0}_{1}_current_project.tar.gz".format(zappa_cli.api_stage, zappa_cli.project_name)
         zappa_cli.zappa.remove_from_s3.assert_called_once_with(expected_key, zappa_cli.s3_bucket_name)
+
+    def test_slim_handler_archive_path_is_per_deploy(self):
+        # Issue #1383: each handler must point at its own project archive,
+        # otherwise a rollback restores the old handler but loads new code.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zip_path = "{0}-1700000000.tar.gz".format(zappa_cli.lambda_name)
+
+        settings_s = zappa_cli.get_zappa_settings_string()
+
+        self.assertIn(
+            "ARCHIVE_PATH='s3://{0}/{1}-1700000000.tar.gz'".format(zappa_cli.s3_bucket_name, zappa_cli.lambda_name),
+            settings_s,
+        )
+        self.assertNotIn("_current_project.tar.gz", settings_s)
+
+    def test_slim_handler_keeps_archives_for_retained_versions(self):
+        # Issue #1383: the per-deploy archive must outlive the upload so older
+        # Lambda versions can still load it, pruned to num_retained_versions.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.num_retained_versions = 2
+        name = zappa_cli.lambda_name
+        zappa_cli.zip_path = "{0}-400.tar.gz".format(name)
+        zappa_cli.handler_path = "handler_{0}-400.zip".format(name)
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.list_s3_keys.return_value = [
+            ("{0}-300.tar.gz".format(name), 10),
+            ("{0}-100.tar.gz".format(name), 10),
+            ("{0}-400.tar.gz".format(name), 10),
+            ("{0}-200.tar.gz".format(name), 10),
+            ("{0}-extra-50.tar.gz".format(name), 10),
+            ("handler_{0}-400.zip".format(name), 10),
+        ]
+
+        zappa_cli.remove_uploaded_zip()
+
+        removed = [c.args[0] for c in zappa_cli.zappa.remove_from_s3.call_args_list]
+        self.assertEqual(
+            sorted(removed),
+            sorted(["handler_{0}-400.zip".format(name), "{0}-100.tar.gz".format(name), "{0}-200.tar.gz".format(name)]),
+        )
+
+    def test_slim_handler_warns_when_archives_are_never_pruned(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.num_retained_versions = None
+        name = zappa_cli.lambda_name
+        zappa_cli.zip_path = "{0}-200.tar.gz".format(name)
+        zappa_cli.handler_path = "handler_{0}-200.zip".format(name)
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.list_s3_keys.return_value = [
+            ("{0}-100.tar.gz".format(name), 1024),
+            ("{0}-200.tar.gz".format(name), 1024),
+        ]
+
+        with mock.patch("zappa.cli.click.echo") as echo:
+            zappa_cli.remove_uploaded_zip()
+
+        removed = [c.args[0] for c in zappa_cli.zappa.remove_from_s3.call_args_list]
+        self.assertEqual(removed, ["handler_{0}-200.zip".format(name)])
+        output = " ".join(str(c.args[0]) for c in echo.call_args_list)
+        self.assertIn("num_retained_versions is null", output)
+        self.assertIn("2 on S3, 2.0KiB total", output)
+
+    def test_package_keeps_current_project_archive_path(self):
+        # `zappa package` uploads nothing, so the packaged slim handler keeps
+        # pointing at the shared _current_project.tar.gz key.
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zip_path = "{0}-1700000000.tar.gz".format(zappa_cli.lambda_name)
+
+        def fake_create_package(output=None):
+            self.settings_s = zappa_cli.get_zappa_settings_string()
+
+        with mock.patch.object(zappa_cli, "check_venv"), mock.patch.object(
+            zappa_cli, "create_package", side_effect=fake_create_package
+        ), mock.patch("zappa.cli.os.path.getsize", return_value=1), mock.patch("zappa.cli.click.echo"):
+            zappa_cli.package()
+
+        self.assertIn(
+            "ARCHIVE_PATH='s3://{0}/{1}'".format(zappa_cli.s3_bucket_name, zappa_cli._get_slim_handler_archive_name()),
+            self.settings_s,
+        )
+
+    def test_rollback_reports_missing_archive(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.zappa.rollback_lambda_function_version.side_effect = ValueError("archive gone")
+
+        with self.assertRaises(ClickException) as ctx:
+            zappa_cli.rollback(1)
+        self.assertIn("archive gone", str(ctx.exception))
+
+    def test_undeploy_removes_versioned_slim_handler_archives(self):
+        zappa_cli = ZappaCLI()
+        zappa_cli.api_stage = "slim_handler"
+        zappa_cli.load_settings("test_settings.json")
+        zappa_cli.zappa = mock.MagicMock()
+        zappa_cli.use_alb = False
+        zappa_cli.use_apigateway = False
+        name = zappa_cli.lambda_name
+        zappa_cli.zappa.list_s3_keys.return_value = [("{0}-100.tar.gz".format(name), 1), ("{0}-200.tar.gz".format(name), 1)]
+
+        zappa_cli.undeploy(no_confirm=True)
+
+        removed = [c.args[0] for c in zappa_cli.zappa.remove_from_s3.call_args_list]
+        self.assertIn("{0}-100.tar.gz".format(name), removed)
+        self.assertIn("{0}-200.tar.gz".format(name), removed)
 
     def test_undeploy_skips_archive_cleanup_without_slim_handler(self):
         zappa_cli = ZappaCLI()

@@ -118,6 +118,7 @@ class ZappaCLI:
     settings_file = None
     zip_path = None
     handler_path = None
+    package_only = False
     vpc_config = None
     efs_config = None  # List of EFS configurations
     memory_size = None
@@ -207,6 +208,19 @@ class ZappaCLI:
 
     def _get_slim_handler_archive_name(self):
         return "{0!s}_{1!s}_current_project.tar.gz".format(self.api_stage, self.project_name)
+
+    def _get_slim_handler_versioned_archives(self):
+        """
+        Return (key, size) for the per-deploy slim_handler project archives
+        kept on S3 for this function, oldest first. See issue #1383.
+        """
+        pattern = re.compile(r"^{0}-(\d+)\.tar\.gz$".format(re.escape(self.lambda_name)))
+        archives = []
+        for key, size in self.zappa.list_s3_keys(self.s3_bucket_name, prefix=self.lambda_name + "-"):
+            match = pattern.match(key)
+            if match:
+                archives.append((int(match.group(1)), key, size))
+        return [(key, size) for _, key, size in sorted(archives)]
 
     def _check_docker_settings_conflicts(self):
         conflicts = [key for key in self.DOCKER_INCOMPATIBLE_SETTINGS if self.stage_config.get(key)]
@@ -764,6 +778,9 @@ class ZappaCLI:
 
         # force not to delete the local zip
         self.override_stage_config_setting("delete_local_zip", False)
+        # A packaged slim handler keeps pointing at the shared
+        # _current_project.tar.gz key, since `package` doesn't upload anything.
+        self.package_only = True
         # Execute the prebuild script
         if self.prebuild_script:
             self.execute_prebuild_script()
@@ -779,6 +796,14 @@ class ZappaCLI:
             + size
             + ")"
         )
+        if self.stage_config.get("slim_handler", False):
+            click.echo(
+                "The slim handler loads its project from "
+                + click.style(
+                    "s3://{0}/{1}".format(self.s3_bucket_name, self._get_slim_handler_archive_name()),
+                    bold=True,
+                )
+            )
 
     def template(self, lambda_arn, role_arn, output=None, json=False):
         """
@@ -1367,12 +1392,15 @@ class ZappaCLI:
 
         print("Rolling back..")
 
-        self.zappa.rollback_lambda_function_version(
-            self.lambda_name,
-            versions_back=revision,
-            snap_start=self.snap_start,
-            provisioned_concurrency=self.provisioned_concurrency,
-        )
+        try:
+            self.zappa.rollback_lambda_function_version(
+                self.lambda_name,
+                versions_back=revision,
+                snap_start=self.snap_start,
+                provisioned_concurrency=self.provisioned_concurrency,
+            )
+        except ValueError as e:
+            raise ClickException(str(e))
         print("Done!")
 
     def tail(
@@ -1457,6 +1485,8 @@ class ZappaCLI:
             current_project_name = self._get_slim_handler_archive_name()
             click.echo("Removing slim_handler project archive from S3: " + click.style(current_project_name, bold=True))
             self.zappa.remove_from_s3(current_project_name, self.s3_bucket_name)
+            for archive, _ in self._get_slim_handler_versioned_archives():
+                self.zappa.remove_from_s3(archive, self.s3_bucket_name)
 
         # Delete auto-created EFS resources
         # Check if any EFS entries were auto-created (no Arn in original config)
@@ -3207,9 +3237,14 @@ class ZappaCLI:
 
         # If slim handler, path to project zip
         if self.stage_config.get("slim_handler", False):
-            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}'\n".format(
-                self.s3_bucket_name, self._get_slim_handler_archive_name()
-            )
+            # Point each deploy at its own archive rather than the shared
+            # "current" one, so a rolled back handler loads matching code.
+            # See issue #1383.
+            if self.zip_path and not self.package_only:
+                archive_name = os.path.basename(self.zip_path)
+            else:
+                archive_name = self._get_slim_handler_archive_name()
+            settings_s += "ARCHIVE_PATH='s3://{0!s}/{1!s}'\n".format(self.s3_bucket_name, archive_name)
 
             # since includes are for slim handler add the setting here by joining arbitrary list from zappa_settings file
             # and tell the handler we are the slim_handler
@@ -3289,10 +3324,23 @@ class ZappaCLI:
 
         # Remove the uploaded zip from S3, because it is now registered..
         if self.stage_config.get("delete_s3_zip", True):
-            self.zappa.remove_from_s3(self.zip_path, self.s3_bucket_name)
             if self.stage_config.get("slim_handler", False):
                 # Need to keep the project zip as the slim handler uses it.
                 self.zappa.remove_from_s3(self.handler_path, self.s3_bucket_name)
+                # Keep only as many project archives as there are retained
+                # Lambda versions, so rollbacks still find their code.
+                archives = self._get_slim_handler_versioned_archives()
+                if self.num_retained_versions:
+                    for archive, _ in archives[: -self.num_retained_versions]:
+                        self.zappa.remove_from_s3(archive, self.s3_bucket_name)
+                else:
+                    click.echo(
+                        click.style("Warning!", fg="red", bold=True)
+                        + " num_retained_versions is null, so no slim_handler project archives will be deleted"
+                        + " ({0} on S3, {1} total).".format(len(archives), human_size(sum(size for _, size in archives)))
+                    )
+            else:
+                self.zappa.remove_from_s3(self.zip_path, self.s3_bucket_name)
 
     def on_exit(self):
         """
