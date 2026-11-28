@@ -3921,6 +3921,63 @@ class TestZappa(unittest.TestCase):
         )
         self.assertListEqual(zones["HostedZones"], [{"Id": "zone1"}, {"Id": "zone2"}])
 
+    def _get_cognito_zappa(self, update_user_pool_status=200, add_permission_status=201):
+        zappa_core = Zappa(
+            boto_session=mock.Mock(),
+            profile_name="test",
+            aws_region="test",
+            load_credentials=False,
+        )
+        zappa_core.cognito_client = mock.Mock()
+        zappa_core.sts_client = mock.Mock()
+        zappa_core.lambda_client = mock.Mock()
+        zappa_core.cognito_client.describe_user_pool.return_value = {
+            "UserPool": {
+                "Policies": {"PasswordPolicy": {}},
+                "AdminCreateUserConfig": {},
+                "LambdaConfig": {"PreSignUp": "old-lambda-arn"},
+            }
+        }
+        zappa_core.cognito_client.update_user_pool.return_value = {
+            "ResponseMetadata": {"HTTPStatusCode": update_user_pool_status}
+        }
+        zappa_core.lambda_client.add_permission.return_value = {"ResponseMetadata": {"HTTPStatusCode": add_permission_status}}
+        return zappa_core
+
+    def test_update_cognito_logs_lambda_config(self):
+        """
+        Regression test for https://github.com/zappa/Zappa/issues/1492
+        """
+        zappa_core = self._get_cognito_zappa()
+        with self.assertLogs("zappa.core", level="DEBUG") as logs:
+            zappa_core.update_cognito("test-lambda", "test-pool", ["PreSignUp"], "new-lambda-arn")
+        self.assertIn("DEBUG:zappa.core:value {'PreSignUp': 'new-lambda-arn'}", logs.output)
+
+    def test_update_cognito_logs_update_user_pool_failure_response(self):
+        """
+        Regression test for https://github.com/zappa/Zappa/issues/1492
+        """
+        zappa_core = self._get_cognito_zappa(update_user_pool_status=500)
+        with self.assertLogs("zappa.core", level="ERROR") as logs:
+            zappa_core.update_cognito("test-lambda", "test-pool", ["PreSignUp"], "new-lambda-arn")
+        self.assertIn(
+            "ERROR:zappa.core:Cognito:  Failed to update user pool: {'ResponseMetadata': {'HTTPStatusCode': 500}}",
+            logs.output,
+        )
+
+    def test_update_cognito_logs_lambda_permission_failure(self):
+        """
+        create_event_permission() returns None on failure.
+        Regression test for https://github.com/zappa/Zappa/issues/1492
+        """
+        zappa_core = self._get_cognito_zappa(add_permission_status=500)
+        with self.assertLogs("zappa.core", level="ERROR") as logs:
+            zappa_core.update_cognito("test-lambda", "test-pool", ["PreSignUp"], "new-lambda-arn")
+        self.assertIn(
+            "ERROR:zappa.core:Cognito:  Failed to update lambda permission for test-lambda on user pool test-pool",
+            logs.output,
+        )
+
     def test_event_name(self):
         zappa = Zappa()
         truncated = zappa.get_event_name(

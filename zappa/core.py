@@ -2956,8 +2956,9 @@ class Zappa:
                 user_pool,
             ),
         )
-        if result["ResponseMetadata"]["HTTPStatusCode"] != 201:
-            logger.error("Cognito:  Failed to update lambda permission: %s", result)
+        # create_event_permission() returns None on failure
+        if not result:
+            logger.error("Cognito:  Failed to update lambda permission for %s on user pool %s", lambda_name, user_pool)
 
     def delete_stack(self, name, wait=False):
         """
