@@ -10,7 +10,6 @@ import os
 import shutil
 import sys
 import tarfile
-import tempfile
 import time
 import traceback
 from http import HTTPStatus
@@ -286,7 +285,10 @@ class LambdaHandler:
 
             # Extract beside the project folder and rename into place, so a failed download
             # leaves no partial project for the next invocation to load.
-            partial_folder = tempfile.mkdtemp(dir=os.path.dirname(project_folder))
+            # The fixed name limits leftovers to one folder when the process is killed mid-extract (e.g. a timeout).
+            partial_folder = f"{project_folder}.partial"
+            shutil.rmtree(partial_folder, ignore_errors=True)
+            os.makedirs(partial_folder)
             try:
                 with tarfile.open(fileobj=archive_on_s3["Body"], mode="r|gz") as t:
                     t.extractall(partial_folder)

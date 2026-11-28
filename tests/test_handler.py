@@ -938,13 +938,25 @@ class TestZappa(unittest.TestCase):
     def test_failed_archive_download_leaves_no_project_folder(self):
         archive = self._project_archive()
         lh, project_folder = self._load_archive(archive[: len(archive) // 2])
-        before = set(os.listdir(os.path.dirname(project_folder)))
 
         with self.assertRaises((tarfile.TarError, EOFError, OSError)):
             lh.load_remote_project_archive("s3://lmbda/test_slim_handler_project.tar.gz")
 
         self.assertFalse(os.path.isdir(project_folder))
-        self.assertEqual(set(os.listdir(os.path.dirname(project_folder))), before)
+        self.assertFalse(os.path.exists(f"{project_folder}.partial"))
+
+    def test_archive_download_replaces_partial_folder_of_killed_attempt(self):
+        lh, project_folder = self._load_archive(self._project_archive())
+        partial_folder = f"{project_folder}.partial"
+        self.addCleanup(shutil.rmtree, partial_folder, True)
+        os.makedirs(partial_folder)
+        with open(os.path.join(partial_folder, "stale_module.py"), "w") as stale:
+            stale.write("VALUE = 0\n")
+
+        lh.load_remote_project_archive("s3://lmbda/test_slim_handler_project.tar.gz")
+
+        self.assertEqual(os.listdir(project_folder), ["project_module.py"])
+        self.assertFalse(os.path.exists(partial_folder))
 
     def test_archive_download_extracts_project_folder(self):
         lh, project_folder = self._load_archive(self._project_archive())
