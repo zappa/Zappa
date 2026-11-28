@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any, Tuple
 
 from botocore.exceptions import ClientError
-from mock import Mock
+from mock import Mock, patch
 
 from zappa.handler import LambdaHandler
 from zappa.utilities import merge_headers
@@ -811,8 +811,8 @@ class TestZappa(unittest.TestCase):
 
         lh = LambdaHandler("test_settings")
 
-        # Override AWS_EVENT_MAPPING with two handlers for the same ARN
-        lh.settings.AWS_EVENT_MAPPING = {
+        # Two handlers for the same ARN; patched so the shared settings module is restored
+        mapping = {
             "arn:aws:sns:1": ["test_settings.aws_sns_event", "test_settings.aws_s3_event"],
         }
 
@@ -827,7 +827,8 @@ class TestZappa(unittest.TestCase):
             ],
         }
 
-        result = lh.handler(event, None)
+        with patch.object(lh.settings, "AWS_EVENT_MAPPING", mapping):
+            result = lh.handler(event, None)
         # The last handler's result is returned
         self.assertIsNotNone(result)
 
@@ -839,8 +840,8 @@ class TestZappa(unittest.TestCase):
 
         lh = LambdaHandler("test_settings")
 
-        # Override with old string format
-        lh.settings.AWS_EVENT_MAPPING = {
+        # Old string format; patched so the shared settings module is restored
+        mapping = {
             "arn:aws:sns:1": "test_settings.aws_sns_event",
         }
 
@@ -855,7 +856,8 @@ class TestZappa(unittest.TestCase):
             ],
         }
 
-        result = lh.handler(event, None)
+        with patch.object(lh.settings, "AWS_EVENT_MAPPING", mapping):
+            result = lh.handler(event, None)
         self.assertEqual(result, "AWS SNS EVENT")
 
     def test_keep_warm_scheduled_event_without_handler_module(self):
@@ -881,19 +883,6 @@ class TestZappa(unittest.TestCase):
 
         self.assertIsNone(response)
 
-    def test_scheduled_event_invokes_target_function(self):
-        """User-configured scheduled events still import and run the target."""
-        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
-        event = {
-            "detail-type": "Scheduled Event",
-            "source": "aws.events",
-            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-tests.test_app.schedule_me"],
-        }
-
-        response = lh.handler(event, None)
-
-        self.assertEqual(response, "Hello!")
-
     def _slim_handler_with_get_error(self, code):
         # Bypass the LambdaHandler singleton; only settings and session are used here
         lh = object.__new__(LambdaHandler)
@@ -916,3 +905,16 @@ class TestZappa(unittest.TestCase):
         lh = self._slim_handler_with_get_error("AccessDenied")
         with self.assertRaises(ClientError):
             lh.load_remote_project_archive("s3://bucket/dev_proj_current_project.tar.gz")
+
+    def test_scheduled_event_invokes_target_function(self):
+        """User-configured scheduled events still import and run the target."""
+        lh = LambdaHandler("tests.test_wsgi_script_name_settings")
+        event = {
+            "detail-type": "Scheduled Event",
+            "source": "aws.events",
+            "resources": ["arn:aws:events:us-east-1:123456789012:rule/myapp-prod-tests.test_app.schedule_me"],
+        }
+
+        response = lh.handler(event, None)
+
+        self.assertEqual(response, "Hello!")

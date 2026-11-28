@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import collections
+import functools
 import importlib
 import inspect
 import json
@@ -38,6 +39,48 @@ except ImportError:  # pragma: no cover
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Coroutine-function check used by `LambdaHandler._is_asgi_app()`. https://github.com/zappa/Zappa/issues/1501
+# Python < 3.12: `asgiref.sync.markcoroutinefunction` sets the `_is_coroutine` marker,
+# which only `asyncio.iscoroutinefunction` honours.
+# Python 3.12+: `inspect.markcoroutinefunction` replaces that marker.
+# `asyncio.iscoroutinefunction` is deprecated since Python 3.14 and is not called on 3.12+.
+# TODO: use `inspect.iscoroutinefunction` directly once Python 3.11 support is dropped.
+if hasattr(inspect, "markcoroutinefunction"):
+    iscoroutinefunction = inspect.iscoroutinefunction
+else:
+    iscoroutinefunction = asyncio.iscoroutinefunction  # type: ignore[assignment]
+
+POSITIONAL_PARAMETER_KINDS = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+ASGI_APP_ARGUMENT_COUNT = 3  # scope, receive, send
+
+
+def is_coroutine_function(obj: Any) -> bool:
+    """
+    `iscoroutinefunction` that looks through `functools.partial`.
+    `asyncio.iscoroutinefunction` (Python < 3.12) does not find the `_is_coroutine` marker behind a partial.
+    https://github.com/zappa/Zappa/issues/1506
+    """
+    while isinstance(obj, functools.partial):
+        obj = obj.func
+    return iscoroutinefunction(obj)
+
+
+def accepts_asgi_arguments(signature: inspect.Signature) -> bool:
+    """
+    Whether a callable with the given signature can be called as `app(scope, receive, send)`.
+    https://github.com/zappa/Zappa/issues/1505
+    """
+    # Exclude 'self' for unbound methods
+    parameters = [p for p in signature.parameters.values() if p.name != "self"]
+    required = [p for p in parameters if p.default is inspect.Parameter.empty]
+    if any(p.kind is inspect.Parameter.KEYWORD_ONLY for p in required):
+        return False
+    required_positional_count = len([p for p in required if p.kind in POSITIONAL_PARAMETER_KINDS])
+    if any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in parameters):
+        return required_positional_count <= ASGI_APP_ARGUMENT_COUNT
+    return required_positional_count == ASGI_APP_ARGUMENT_COUNT
+
 
 # Lightweight response object for common_log (avoids class-per-request overhead)
 _LogResponse = collections.namedtuple("_LogResponse", ["status_code", "content"])
@@ -405,16 +448,12 @@ class LambdaHandler:
         if not callable(app):
             return False
         # If it's a class instance, check __call__
-        if hasattr(app, "__call__") and not inspect.isfunction(app) and not inspect.iscoroutinefunction(app):
+        if hasattr(app, "__call__") and not inspect.isfunction(app) and not is_coroutine_function(app):
             callable_obj = app.__call__
 
-        if asyncio.iscoroutinefunction(callable_obj):
+        if is_coroutine_function(callable_obj):
             try:
-                sig = inspect.signature(callable_obj)
-                # ASGI apps take 3 params: scope, receive, send
-                # Exclude 'self' for bound methods
-                params = [p for p in sig.parameters.values() if p.name != "self" and p.default is inspect.Parameter.empty]
-                return len(params) == 3
+                return accepts_asgi_arguments(inspect.signature(callable_obj))
             except (ValueError, TypeError):
                 pass
         return False
